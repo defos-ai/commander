@@ -12,7 +12,7 @@ import (
 
 const DefaultQuestionTimeout = operations.DefaultQuestionTimeout
 
-func (r *Runner) Ask(ctx context.Context, command commands.AskQuestionCommand) (operations.Question, error) {
+func (r *Worker) Ask(ctx context.Context, command commands.AskQuestionCommand) (operations.Question, error) {
 	if err := command.Validate(); err != nil {
 		return operations.Question{}, err
 	}
@@ -42,7 +42,7 @@ func (r *Runner) Ask(ctx context.Context, command commands.AskQuestionCommand) (
 	})
 }
 
-func (r *Runner) Answer(ctx context.Context, command commands.AnswerQuestionCommand) (operations.Operation, error) {
+func (r *Worker) Answer(ctx context.Context, command commands.AnswerQuestionCommand) (operations.Operation, error) {
 	if err := command.Validate(); err != nil {
 		return operations.Operation{}, err
 	}

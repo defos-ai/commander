@@ -45,8 +45,8 @@ Configure providers in [`default/cli/`](default/cli/). Use the
 ### Agent selection
 
 The default is `runner.RoundRobinSelector{}`. To change selection, implement
-[`runner.AgentSelector`](../../framework/controller/runner/agent_selector.go)
-and pass it in `runner.Config.AgentSelector`. Return an eligible agent ID or
+[`runner.AgentSelector`](../../framework/controller/workers/runner/agent_selector.go)
+and pass it in `runner.Dependencies.AgentSelector`. Return an eligible agent ID or
 an empty ID to defer work. [Task affinity](../../docs/features/missions.md#task-affinity)
 still applies.
 

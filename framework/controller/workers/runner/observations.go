@@ -22,7 +22,7 @@ type taskObservation struct {
 
 // observeInterruptedTasks checks original executions independently of agent
 // readiness and operation completion. It never authorizes a new dispatch.
-func (r *Runner) observeInterruptedTasks() {
+func (r *Worker) observeInterruptedTasks() {
 	if r.ctx.Err() != nil {
 		return
 	}
@@ -62,7 +62,7 @@ func (r *Runner) observeInterruptedTasks() {
 	}
 }
 
-func (r *Runner) observeTask(task operations.Task) {
+func (r *Worker) observeTask(task operations.Task) {
 	ctx, cancel := context.WithTimeout(r.ctx, taskObservationTimeout)
 	defer cancel()
 	call := actions.ActionCall{ActionName: task.ActionName, Input: task.Input,

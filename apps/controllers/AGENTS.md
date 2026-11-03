@@ -8,7 +8,7 @@
 - Keep framework scheduling and recovery in [framework/controller](../../framework/controller/).
   A host supplies dependencies and policies; it must not duplicate the runner's
   owner loop or introduce its own operation mutation path.
-- `runner.NewRunner` completes recovery synchronously and starts no execution
+- `runner.New` completes recovery synchronously and starts no execution
   loop. Start its blocking, single-use `Run` explicitly and monitor its return.
   Keep constructor and Run lifetimes detached from the host's shutdown signal so
   command intake stops before runner shutdown; do not detach individual operations.
@@ -39,7 +39,7 @@
 
 ## Selection and durable work
 
-- [runner.AgentSelector](../../framework/controller/runner/agent_selector.go)
+- [runner.AgentSelector](../../framework/controller/workers/runner/agent_selector.go)
   chooses only among supplied eligible candidates. Affinity, readiness, capacity
   checks and durable dispatch reservation remain the runner's responsibility.
 - Selection runs serially in the owner loop. Return promptly, honor cancellation,

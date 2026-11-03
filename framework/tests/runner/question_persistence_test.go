@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/defos-ai/commander/framework/comms/clients/controller/commands"
-	"github.com/defos-ai/commander/framework/controller/runner"
+	"github.com/defos-ai/commander/framework/controller/workers/runner"
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	fakes "github.com/defos-ai/commander/framework/tests/fakes/runner"
@@ -91,7 +91,7 @@ func TestUncertainQuestionWritePreservesDecisionThroughRecovery(t *testing.T) {
 			}
 			config.OperationStore = store
 			exec, calls := fakes.ControlledExecutor()
-			first, err := runner.NewRunner(t.Context(), exec, config)
+			first, err := runner.New(t.Context(), exec, config)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -195,7 +195,7 @@ func TestAnswersAfterOperatorWindowResumeLinkedDecision(t *testing.T) {
 	}
 }
 
-func operationAwaitingDecision(t *testing.T, r *runner.Runner, calls <-chan fakes.Invocation) operations.Operation {
+func operationAwaitingDecision(t *testing.T, r *runner.Worker, calls <-chan fakes.Invocation) operations.Operation {
 	t.Helper()
 	op := fixtures.Start(t, r)
 	fixtures.Assign(t, r, op.ID, "inspect")

@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/defos-ai/commander/framework/comms/clients/controller/commands"
-	"github.com/defos-ai/commander/framework/controller/runner"
+	"github.com/defos-ai/commander/framework/controller/workers/runner"
 	"github.com/defos-ai/commander/framework/domain"
 	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/domain/missions/policies"
@@ -144,7 +144,7 @@ func TestUncertainCompletionDraftRequiresRecoveryWithoutReplacement(t *testing.T
 	config.ReportStore = reports
 	config.OperationStore = &fakes.UncertainWriteStore{OperationStore: config.OperationStore,
 		AfterSaveCompletionDraft: func(operations.Operation) error { return operations.ErrWriteUncertain }}
-	first, err := runner.NewRunner(t.Context(), fakes.Executor{}, config)
+	first, err := runner.New(t.Context(), fakes.Executor{}, config)
 	if err != nil {
 		t.Fatal(err)
 	}

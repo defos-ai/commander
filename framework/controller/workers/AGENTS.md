@@ -31,6 +31,10 @@ subscription.
 - [Sharing](sharing/worker.go) owns its bounded queue and best-effort forwarding.
   Read accepted records and observe recipients through `AgentReader`; never
   mutate coordination state or change accepted execution outcomes on failure.
+- [Runner](runner/worker.go) owns operation scheduling and recovery. It now lives
+  here but remains outside the controller's assembled worker list: hosts still
+  start and join its single-use `Run` explicitly. Preserve the existing shutdown
+  order until controller ownership is introduced separately.
 
 `coordination.Worker.Apply` scopes event and secret mutation to its owner loop.
 Keep the supplied state inside that synchronous callback; events bind a local

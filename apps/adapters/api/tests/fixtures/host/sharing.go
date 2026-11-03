@@ -19,7 +19,7 @@ import (
 	"github.com/defos-ai/commander/framework/agent/action"
 	controllercommands "github.com/defos-ai/commander/framework/comms/clients/controller/commands"
 	"github.com/defos-ai/commander/framework/controller"
-	"github.com/defos-ai/commander/framework/controller/runner"
+	"github.com/defos-ai/commander/framework/controller/workers/runner"
 	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/artifacts"
 	"github.com/defos-ai/commander/framework/domain/operations"
@@ -42,7 +42,7 @@ type SharingStack struct {
 	Controller *controller.Controller
 	analyzers  map[string]*fakes.SharingAnalyzer
 	agents     []sharingAgent
-	runner     *runner.Runner
+	runner     *runner.Worker
 	runnerDone chan error
 	server     *httptest.Server
 	client     *http.Client
@@ -104,7 +104,7 @@ func NewSharingStack(t *testing.T) *SharingStack {
 		ActionStore: config.ActionStore, OperationStore: config.OperationStore,
 	})
 	require(err)
-	s.runner, err = runner.NewRunner(ctx, s.Controller, runner.Config{MissionStore: config.MissionStore,
+	s.runner, err = runner.New(ctx, s.Controller, runner.Dependencies{MissionStore: config.MissionStore,
 		OperationStore: config.OperationStore, ReportStore: config.ReportStore, AgentCatalog: s.Controller, TaskTimeout: 20 * time.Second})
 	require(err)
 	s.runnerDone = make(chan error, 1)

@@ -158,7 +158,7 @@ domain entity. Change guidance lives in [AGENTS.md](AGENTS.md).
 
 [Agent]: ../agent/
 [Controller]: ../controller/
-[Runner]: ../controller/runner/
+[Runner]: ../controller/workers/runner/
 [Queries]: ../queries/
 [Secret service]: ../secrets/
 [Session coordinator]: ../sessions/

@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/defos-ai/commander/framework/comms/clients/controller/commands"
-	"github.com/defos-ai/commander/framework/controller/runner"
+	"github.com/defos-ai/commander/framework/controller/workers/runner"
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/executions"
 	"github.com/defos-ai/commander/framework/domain/operations"
@@ -195,7 +195,7 @@ func TestLateExecutionOutcomeWaitsForUncertainWriteRecovery(t *testing.T) {
 			return errors.Join(operations.ErrWriteUncertain, failure)
 		}}
 	execution := fakes.NewLateExecution()
-	first, err := runner.NewRunner(t.Context(), execution.Executor(), config)
+	first, err := runner.New(t.Context(), execution.Executor(), config)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -11,9 +11,9 @@ const (
 	runnerStopped
 )
 
-// Run owns execution once per Runner. Recovery completes during construction;
+// Run owns execution once per Worker. Recovery completes during construction;
 // cancellation stops admission and joins calls before returning saved errors.
-func (r *Runner) Run(ctx context.Context) error {
+func (r *Worker) Run(ctx context.Context) error {
 	if ctx == nil {
 		return errors.New("runner execution requires a context")
 	}
@@ -40,7 +40,7 @@ func (r *Runner) Run(ctx context.Context) error {
 // Close suspends observation while preserving unfinished operations for restart.
 // Cancel is the separate, explicit operation-level cancellation action.
 // Close is safe to call again after a shutdown timeout.
-func (r *Runner) Close(ctx context.Context) error {
+func (r *Worker) Close(ctx context.Context) error {
 	r.cancel()
 	if r.runState.CompareAndSwap(runnerIdle, runnerStopped) {
 		close(r.done)

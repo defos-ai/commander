@@ -14,7 +14,7 @@ import (
 
 // recover restores state before the runner becomes available to callers. It
 // never dispatches commands. Stored results and questions remain authoritative.
-func (r *Runner) recover(ctx context.Context) error {
+func (r *Worker) recover(ctx context.Context) error {
 	records, err := r.store.List(ctx)
 	if err != nil {
 		return fmt.Errorf("load operations for recovery: %w", err)
@@ -47,7 +47,7 @@ func (r *Runner) recover(ctx context.Context) error {
 	return nil
 }
 
-func (r *Runner) resumeTasks() {
+func (r *Worker) resumeTasks() {
 	for _, state := range r.states {
 		for _, task := range state.operation.Clone().Tasks {
 			if task.Status == operations.TaskRunning {
@@ -60,7 +60,7 @@ func (r *Runner) resumeTasks() {
 	r.observeInterruptedTasks()
 }
 
-func (r *Runner) recoverTask(task operations.Task, allowDispatch bool) {
+func (r *Worker) recoverTask(task operations.Task, allowDispatch bool) {
 	deadline := *task.DeadlineAt
 	if !deadline.After(time.Now()) {
 		// An expired running task may already have a durable result. Bound this

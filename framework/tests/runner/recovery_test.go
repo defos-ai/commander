@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/defos-ai/commander/framework/comms/clients/controller/commands"
-	"github.com/defos-ai/commander/framework/controller/runner"
+	"github.com/defos-ai/commander/framework/controller/workers/runner"
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/executions"
 	"github.com/defos-ai/commander/framework/domain/missions"
@@ -80,7 +80,7 @@ func TestUncertainAssignmentWriteSuspendsUntilRecovery(t *testing.T) {
 		return errors.Join(operations.ErrWriteUncertain, failure)
 	}}
 	exec, calls := fakes.ControlledExecutor()
-	first, err := runner.NewRunner(t.Context(), exec, config)
+	first, err := runner.New(t.Context(), exec, config)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,7 +153,7 @@ func TestUncertainDispatchWriteSuspendsUntilRecovery(t *testing.T) {
 		return nil
 	}}
 	exec, calls := fakes.ControlledExecutor()
-	first, err := runner.NewRunner(t.Context(), fakes.DurableExecutor{Executor: exec}, config)
+	first, err := runner.New(t.Context(), fakes.DurableExecutor{Executor: exec}, config)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -188,7 +188,7 @@ func TestUncertainDispatchWriteSuspendsUntilRecovery(t *testing.T) {
 		t.Fatalf("uncertain write lost the saved reservation: %+v, %v", stored, err)
 	}
 
-	restarted, err := runner.NewRunner(t.Context(), fakes.DurableExecutor{Executor: exec}, config)
+	restarted, err := runner.New(t.Context(), fakes.DurableExecutor{Executor: exec}, config)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -236,7 +236,7 @@ func TestUncertainDispatchWithoutCommitSuspendsUntilRecovery(t *testing.T) {
 		return attempted, operations.ErrWriteUncertain
 	}}
 	exec, calls := fakes.ControlledExecutor()
-	first, err := runner.NewRunner(t.Context(), exec, config)
+	first, err := runner.New(t.Context(), exec, config)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -320,7 +320,7 @@ func TestUncertainResultWritePreservesAutomaticChildrenUntilRecovery(t *testing.
 		recoveries.Add(1)
 		return actions.ActionOutput{}, errors.New("unexpected recovery of completed work")
 	}
-	first, err := runner.NewRunner(t.Context(), exec, config)
+	first, err := runner.New(t.Context(), exec, config)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -425,7 +425,7 @@ func TestUncertainResolutionWritePreservesChildrenUntilRecovery(t *testing.T) {
 		recoveries.Add(1)
 		return actions.ActionOutput{}, errors.New("unexpected recovery of completed work")
 	}
-	first, err := runner.NewRunner(t.Context(), exec, config)
+	first, err := runner.New(t.Context(), exec, config)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -526,7 +526,7 @@ func TestUncertainCreateRetainsOperationForRecovery(t *testing.T) {
 	config := fixtures.Config()
 	config.OperationStore = &fakes.UncertainWriteStore{OperationStore: config.OperationStore, CreateError: operations.ErrWriteUncertain}
 	exec, calls := fakes.ControlledExecutor()
-	first, err := runner.NewRunner(t.Context(), exec, config)
+	first, err := runner.New(t.Context(), exec, config)
 	if err != nil {
 		t.Fatal(err)
 	}

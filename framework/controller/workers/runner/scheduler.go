@@ -15,14 +15,14 @@ import (
 	runtimeSessions "github.com/defos-ai/commander/framework/sessions"
 )
 
-func (r *Runner) signalScheduler() {
+func (r *Worker) signalScheduler() {
 	select {
 	case r.wake <- struct{}{}:
 	default:
 	}
 }
 
-func (r *Runner) dispatchQueued() {
+func (r *Worker) dispatchQueued() {
 	ctx, cancel := context.WithTimeout(r.ctx, 5*time.Second)
 	defer cancel()
 	records, err := r.catalog.Agents(ctx)
@@ -101,7 +101,7 @@ func (r *Runner) dispatchQueued() {
 	}
 }
 
-func (r *Runner) selectAgent(ctx context.Context, operation operations.Operation, task operations.Task, records []agentmodel.Agent, used map[string]int) (string, error) {
+func (r *Worker) selectAgent(ctx context.Context, operation operations.Operation, task operations.Task, records []agentmodel.Agent, used map[string]int) (string, error) {
 	var scopes []sessions.Scope
 	if r.sessions != nil {
 		var err error

@@ -42,7 +42,7 @@ type AgentCatalog interface {
 	Agents(context.Context) ([]agentmodel.Agent, error)
 }
 
-type Config struct {
+type Dependencies struct {
 	Sessions      runtimeSessions.Coordinator
 	AgentCatalog  AgentCatalog
 	AgentSelector AgentSelector
@@ -66,7 +66,7 @@ type operationState struct {
 	err            error
 }
 
-type Runner struct {
+type Worker struct {
 	sessions       runtimeSessions.Coordinator
 	ctx            context.Context
 	cancel         context.CancelFunc
@@ -92,7 +92,7 @@ type Runner struct {
 	runState       atomic.Uint32
 }
 
-func NewRunner(ctx context.Context, executor ActionExecutor, config Config) (*Runner, error) {
+func New(ctx context.Context, executor ActionExecutor, config Dependencies) (*Worker, error) {
 	if ctx == nil || executor == nil {
 		return nil, errors.New("runner requires a context and action executor")
 	}
@@ -130,7 +130,7 @@ func NewRunner(ctx context.Context, executor ActionExecutor, config Config) (*Ru
 		config.Logger = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
 	lifetime, cancel := context.WithCancel(ctx)
-	r := &Runner{sessions: config.Sessions, catalog: config.AgentCatalog, capacity: config.Capacity, wake: make(chan struct{}, 1), requests: make(chan func()), results: make(chan taskResult), ctx: lifetime, cancel: cancel, executor: executor, store: config.OperationStore,
+	r := &Worker{sessions: config.Sessions, catalog: config.AgentCatalog, capacity: config.Capacity, wake: make(chan struct{}, 1), requests: make(chan func()), results: make(chan taskResult), ctx: lifetime, cancel: cancel, executor: executor, store: config.OperationStore,
 		missions: config.MissionStore, reports: config.ReportStore, selector: config.AgentSelector, logger: config.Logger, states: make(map[string]*operationState), taskTimeout: config.TaskTimeout, done: make(chan struct{})}
 	if err := r.recover(ctx); err != nil {
 		cancel()

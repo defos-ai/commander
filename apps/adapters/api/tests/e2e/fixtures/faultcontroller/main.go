@@ -12,7 +12,7 @@ import (
 	faultcontrollerfakes "github.com/defos-ai/commander/apps/adapters/api/tests/fakes/faultcontroller"
 	"github.com/defos-ai/commander/framework/controller"
 	"github.com/defos-ai/commander/framework/controller/consumers/adapter"
-	"github.com/defos-ai/commander/framework/controller/runner"
+	"github.com/defos-ai/commander/framework/controller/workers/runner"
 	"github.com/defos-ai/commander/framework/domain/controllers"
 	fsactions "github.com/defos-ai/commander/providers/fs/actions"
 	"github.com/defos-ai/commander/providers/fs/agents"
@@ -51,7 +51,7 @@ func run() (result error) {
 		defer done()
 		_ = coordination.Close(shutdown)
 	}()
-	execution := must(runner.NewRunner(context.Background(), coordination, runner.Config{
+	execution := must(runner.New(context.Background(), coordination, runner.Dependencies{
 		MissionStore: must(missions.NewMissionFsStore(root)), OperationStore: operationStore,
 		ReportStore: must(reports.NewReportFsStore(os.Getenv("STORAGE_URL"))), AgentCatalog: coordination, Sessions: coordination.RuntimeSessions(),
 	}))

@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/defos-ai/commander/framework/comms/clients/controller/commands"
-	"github.com/defos-ai/commander/framework/controller/runner"
+	"github.com/defos-ai/commander/framework/controller/workers/runner"
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/missions"
@@ -17,19 +17,19 @@ import (
 
 const AgentID = "review-agent-00000001"
 
-func Config() runner.Config {
+func Config() runner.Dependencies {
 	catalog := &fakes.AgentCatalog{}
 	catalog.Set(ReadyAgent(AgentID))
-	return runner.Config{
+	return runner.Dependencies{
 		AgentCatalog:   catalog,
 		MissionStore:   fakes.NewMissionStore(missions.Mission{Name: "review", Objectives: []string{"Review a document"}, InputSchema: json.RawMessage(`{}`), OutputSchema: json.RawMessage(`{}`)}),
 		OperationStore: fakes.NewOperationStore(),
 		ReportStore:    fakes.ReportStore{},
 	}
 }
-func NewRunner(t *testing.T, config runner.Config, e fakes.Executor) *runner.Runner {
+func NewRunner(t *testing.T, config runner.Dependencies, e fakes.Executor) *runner.Worker {
 	t.Helper()
-	r, err := runner.NewRunner(t.Context(), e, config)
+	r, err := runner.New(t.Context(), e, config)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,7 +38,7 @@ func NewRunner(t *testing.T, config runner.Config, e fakes.Executor) *runner.Run
 	return r
 }
 
-func StartRunner(t *testing.T, r *runner.Runner) (context.CancelFunc, <-chan error) {
+func StartRunner(t *testing.T, r *runner.Worker) (context.CancelFunc, <-chan error) {
 	t.Helper()
 	ctx, cancel := context.WithCancel(t.Context())
 	result, stopped := make(chan error, 1), make(chan struct{})
@@ -60,7 +60,7 @@ func StartRunner(t *testing.T, r *runner.Runner) (context.CancelFunc, <-chan err
 	return cancel, result
 }
 
-func CloseRunner(t *testing.T, r *runner.Runner) {
+func CloseRunner(t *testing.T, r *runner.Worker) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -68,7 +68,7 @@ func CloseRunner(t *testing.T, r *runner.Runner) {
 		t.Errorf("close runner: %v", err)
 	}
 }
-func Start(t *testing.T, r *runner.Runner) operations.Operation {
+func Start(t *testing.T, r *runner.Worker) operations.Operation {
 	t.Helper()
 	op, err := r.Start(t.Context(), commands.StartOperationCommand{MissionName: "review", Input: json.RawMessage(`{}`)})
 	if err != nil {
@@ -76,7 +76,7 @@ func Start(t *testing.T, r *runner.Runner) operations.Operation {
 	}
 	return op
 }
-func Assign(t *testing.T, r *runner.Runner, opID, action string) operations.Task {
+func Assign(t *testing.T, r *runner.Worker, opID, action string) operations.Task {
 	t.Helper()
 	task, err := r.Assign(t.Context(), commands.AssignTaskCommand{OperationID: opID, ActionName: action, Input: json.RawMessage(`{}`)})
 	if err != nil {
@@ -94,7 +94,7 @@ func Receive(t *testing.T, calls <-chan fakes.Invocation) fakes.Invocation {
 		return fakes.Invocation{}
 	}
 }
-func AwaitOperation(t *testing.T, r *runner.Runner, id string, ready func(operations.Operation) bool) operations.Operation {
+func AwaitOperation(t *testing.T, r *runner.Worker, id string, ready func(operations.Operation) bool) operations.Operation {
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
 	for {

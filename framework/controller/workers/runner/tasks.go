@@ -15,7 +15,7 @@ import (
 
 // Assign returns immediately after recording the task. Work belongs to the
 // runner lifetime, so ending an MCP command does not interrupt accepted work.
-func (r *Runner) Assign(ctx context.Context, command commands.AssignTaskCommand) (operations.Task, error) {
+func (r *Worker) Assign(ctx context.Context, command commands.AssignTaskCommand) (operations.Task, error) {
 	if err := command.Validate(); err != nil {
 		return operations.Task{}, err
 	}
@@ -57,7 +57,7 @@ func (r *Runner) Assign(ctx context.Context, command commands.AssignTaskCommand)
 	})
 }
 
-func (r *Runner) runTask(task operations.Task, call actionmodel.ActionCall) {
+func (r *Worker) runTask(task operations.Task, call actionmodel.ActionCall) {
 	ctx, cancel := context.WithDeadline(r.ctx, *task.DeadlineAt)
 	defer cancel()
 	var result actionmodel.ActionOutput
@@ -70,7 +70,7 @@ func (r *Runner) runTask(task operations.Task, call actionmodel.ActionCall) {
 	r.results <- taskResult{task: task, output: result, err: runErr}
 }
 
-func (r *Runner) finishTask(s *operationState, task operations.Task, result actionmodel.ActionOutput, runErr error) {
+func (r *Worker) finishTask(s *operationState, task operations.Task, result actionmodel.ActionOutput, runErr error) {
 	if s.err != nil {
 		return
 	}
@@ -122,7 +122,7 @@ func (r *Runner) finishTask(s *operationState, task operations.Task, result acti
 	r.observeAccepted(saveCtx, s)
 }
 
-func (r *Runner) retryResults() {
+func (r *Worker) retryResults() {
 	for _, result := range r.pendingResults {
 		r.finishTask(r.states[result.task.OperationID], result.task, result.output, result.err)
 	}

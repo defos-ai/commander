@@ -11,7 +11,7 @@ import (
 // requestContext lets shutdown interrupt request-owned store operations, even
 // when their caller used a background context. Final shutdown/result persistence
 // deliberately uses separate bounded contexts and does not call this helper.
-func (r *Runner) requestContext(ctx context.Context) (context.Context, func()) {
+func (r *Worker) requestContext(ctx context.Context) (context.Context, func()) {
 	request, cancel := context.WithCancel(ctx)
 	stop := context.AfterFunc(r.ctx, cancel)
 	if r.ctx.Err() != nil {
@@ -37,7 +37,7 @@ func (s *operationState) acceptUpdate(next operations.Operation, err error) erro
 	return err
 }
 
-func (r *Runner) state(operationID string) (*operationState, error) {
+func (r *Worker) state(operationID string) (*operationState, error) {
 	s, exists := r.states[operationID]
 	if !exists {
 		return nil, operations.ErrUnknownOperation
@@ -45,7 +45,7 @@ func (r *Runner) state(operationID string) (*operationState, error) {
 	return s, nil
 }
 
-func (r *Runner) activeState(ctx context.Context, operationID string) (*operationState, error) {
+func (r *Worker) activeState(ctx context.Context, operationID string) (*operationState, error) {
 	s, err := r.state(operationID)
 	if errors.Is(err, operations.ErrUnknownOperation) {
 		// Recovery omits finished operations without outstanding work from memory.

@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/defos-ai/commander/framework/controller/runner"
+	"github.com/defos-ai/commander/framework/controller/workers/runner"
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/artifacts"
@@ -108,7 +108,7 @@ func TestRecoveryWriteFailurePreventsStartupExecution(t *testing.T) {
 				executions.Add(1)
 				return fixtures.Output("inspect"), nil
 			}
-			r, err := runner.NewRunner(t.Context(), fakes.Executor{Run: unexpected, Recover: unexpected}, config)
+			r, err := runner.New(t.Context(), fakes.Executor{Run: unexpected, Recover: unexpected}, config)
 			if r != nil {
 				fixtures.CloseRunner(t, r)
 			}
@@ -149,7 +149,7 @@ func TestPreflightWriteFailureKeepsSavedTaskQueued(t *testing.T) {
 				config.OperationStore = blocked
 			}
 			exec, calls := fakes.ControlledExecutor()
-			first, err := runner.NewRunner(t.Context(), exec, config)
+			first, err := runner.New(t.Context(), exec, config)
 			if err != nil {
 				t.Fatal(err)
 			}

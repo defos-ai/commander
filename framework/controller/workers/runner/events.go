@@ -13,7 +13,7 @@ type operationView struct {
 	stopped   bool
 }
 
-func (r *Runner) view(operationID string) (operationView, error) {
+func (r *Worker) view(operationID string) (operationView, error) {
 	state, err := r.state(operationID)
 	if err != nil {
 		return operationView{}, err
@@ -24,7 +24,7 @@ func (r *Runner) view(operationID string) (operationView, error) {
 	return operationView{operation: state.operation.Clone(), changed: state.changed}, nil
 }
 
-func (r *Runner) snapshot(ctx context.Context, operationID string) (operationView, error) {
+func (r *Worker) snapshot(ctx context.Context, operationID string) (operationView, error) {
 	view, err := submit(ctx, r, func(context.Context) (operationView, error) {
 		return r.view(operationID)
 	})
@@ -46,7 +46,7 @@ func (r *Runner) snapshot(ctx context.Context, operationID string) (operationVie
 }
 
 // Events waits outside the coordination loop, so a long poll cannot block writes.
-func (r *Runner) Events(ctx context.Context, operationID string, after uint64, wait bool) ([]operations.Event, error) {
+func (r *Worker) Events(ctx context.Context, operationID string, after uint64, wait bool) ([]operations.Event, error) {
 	for {
 		view, err := r.snapshot(ctx, operationID)
 		if err != nil {
@@ -69,7 +69,7 @@ func (r *Runner) Events(ctx context.Context, operationID string, after uint64, w
 	}
 }
 
-func (r *Runner) WaitTask(ctx context.Context, operationID, taskID string) (operations.Task, error) {
+func (r *Worker) WaitTask(ctx context.Context, operationID, taskID string) (operations.Task, error) {
 	for {
 		view, err := r.snapshot(ctx, operationID)
 		if err != nil {

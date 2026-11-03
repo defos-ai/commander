@@ -10,7 +10,8 @@
   belong to applications.
 - Start with [`agent`](agent/) for execution and discovery,
   [`controller`](controller/) for inventory and dispatch, and
-  [`controller/runner`](controller/runner/) for operation scheduling and recovery.
+  [`controller/workers/runner`](controller/workers/runner/) for operation scheduling
+  and recovery.
 - Keep entities and store contracts in [`domain`](domain/), using singular files
   and types in plural packages, such as `agents.Agent` and `agents.AgentStore`.
   Transport commands belong in [`comms/clients`](comms/clients/).
@@ -170,9 +171,9 @@
   outside the owner loop. `Done` signals cancellation; `Close` waits for workers
   and subscription cleanup under its caller's context before hosts release
   providers. Cleanup runs separately so it cannot block `Close` past that deadline.
-- [`runner.NewRunner`](controller/runner/runner.go) restores saved state
+- [`runner.New`](controller/workers/runner/worker.go) restores saved state
   synchronously without launching task execution or background observation. The host must start
-  [`Runner.Run`](controller/runner/lifecycle.go) before submitting mutations.
+  [`Worker.Run`](controller/workers/runner/lifecycle.go) before submitting mutations.
   `Run` is blocking and single-use: concurrent calls return `ErrAlreadyRunning`;
   calls after shutdown return `ErrClosed`. Constructor-context cancellation,
   Run-context cancellation and `Close` stop admission. The running loop joins
@@ -199,7 +200,7 @@
 - Reconcile uncertain writes before dispatching more work. Dispatched work stays
   bound to its recorded agent and command; never reassign an unknown outcome.
   `RecoverAction` only observes work; it must not execute or republish commands.
-- The runner's [bounded observations](controller/runner/observations.go) reconcile
+- The runner's [bounded observations](controller/workers/runner/observations.go) reconcile
   interrupted executions while the controller remains running, including after an
   operation is completed, failed or cancelled. Only successful output or a typed
   `executions.CommandFailure` establishes a known outcome. Inconclusive checks
@@ -323,7 +324,7 @@
   Operation-wide questions are not shared. Pending, rejected or uncertain answers
   and ordinary reads/recovery never trigger forwarding. Delivery failures do not
   change an answer or its continuation; sharing grants no completion authority.
-- Keep [`AgentSelector`](controller/runner/agent_selector.go) limited to choosing
+- Keep [`AgentSelector`](controller/workers/runner/agent_selector.go) limited to choosing
   eligible candidates. The runner owns affinity, readiness and capacity checks
   and dispatch persistence. Selection is serial, must honor cancellation and
   return promptly; an empty choice defers work.

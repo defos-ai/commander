@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/defos-ai/commander/framework/comms/clients/controller/commands"
-	"github.com/defos-ai/commander/framework/controller/runner"
+	"github.com/defos-ai/commander/framework/controller/workers/runner"
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/domain/missions/policies"
@@ -106,7 +106,7 @@ func TestUncertainCompletionRetainsReportThroughRecovery(t *testing.T) {
 	config.OperationStore = &fakes.UncertainWriteStore{OperationStore: config.OperationStore, AfterComplete: func(operations.Operation) error {
 		return errors.Join(operations.ErrWriteUncertain, failure)
 	}}
-	first, err := runner.NewRunner(t.Context(), fakes.Executor{}, config)
+	first, err := runner.New(t.Context(), fakes.Executor{}, config)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -163,7 +163,7 @@ func TestUncertainFailureRecoversRunningResultsWithoutNewWork(t *testing.T) {
 		return errors.Join(operations.ErrWriteUncertain, failure)
 	}}
 	exec, calls := fakes.ControlledExecutor()
-	first, err := runner.NewRunner(t.Context(), fakes.DurableExecutor{Executor: exec}, config)
+	first, err := runner.New(t.Context(), fakes.DurableExecutor{Executor: exec}, config)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -203,7 +203,7 @@ func TestUncertainFailureRecoversRunningResultsWithoutNewWork(t *testing.T) {
 		observed <- fakes.Invocation{Agent: agent, Call: call}
 		return savedResult, nil
 	}
-	restarted, err := runner.NewRunner(t.Context(), fakes.DurableExecutor{Executor: exec}, config)
+	restarted, err := runner.New(t.Context(), fakes.DurableExecutor{Executor: exec}, config)
 	if err != nil {
 		t.Fatal(err)
 	}

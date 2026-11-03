@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/defos-ai/commander/framework/comms/clients/controller/commands"
-	"github.com/defos-ai/commander/framework/controller/runner"
+	"github.com/defos-ai/commander/framework/controller/workers/runner"
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/domain/missions/policies"
@@ -23,7 +23,7 @@ func TestRunnerDefersRecoveredExecutionUntilRun(t *testing.T) {
 	running := fixtures.SeedMaintenanceTask(t, config, true)
 	exec, calls := fakes.ControlledExecutor()
 	exec.Recover = exec.Run
-	r, err := runner.NewRunner(t.Context(), exec, config)
+	r, err := runner.New(t.Context(), exec, config)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +61,7 @@ func TestRunnerCloseBeforeRunPreservesWorkAndRejectsStart(t *testing.T) {
 	config := fixtures.Config()
 	op := fixtures.SeedMaintenanceTask(t, config, false)
 	exec, calls := fakes.ControlledExecutor()
-	r, err := runner.NewRunner(t.Context(), exec, config)
+	r, err := runner.New(t.Context(), exec, config)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +96,7 @@ func TestRunnerCloseBeforeRunPreservesWorkAndRejectsStart(t *testing.T) {
 
 func TestRunnerRejectsDuplicateRunAndJoinsContextCancellation(t *testing.T) {
 	exec, calls := fakes.ControlledExecutor()
-	r, err := runner.NewRunner(t.Context(), exec, fixtures.Config())
+	r, err := runner.New(t.Context(), exec, fixtures.Config())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -203,7 +203,7 @@ func TestCloseWaitsForSuccessfulResultsAndCanBeRetried(t *testing.T) {
 		<-release
 		return fixtures.Output(call.ActionName), nil
 	}}
-	r, err := runner.NewRunner(t.Context(), exec, fixtures.Config())
+	r, err := runner.New(t.Context(), exec, fixtures.Config())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -262,7 +262,7 @@ func TestResultSaveFailureReachesWaitersAndRecoversWithoutNewExecution(t *testin
 		}}
 	})
 	exec, calls := fakes.ControlledExecutor()
-	r, err := runner.NewRunner(t.Context(), exec, config)
+	r, err := runner.New(t.Context(), exec, config)
 	if err != nil {
 		t.Fatal(err)
 	}

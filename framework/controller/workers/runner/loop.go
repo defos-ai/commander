@@ -20,7 +20,7 @@ type taskResult struct {
 
 // After startup recovery, this loop owns all mutable runner state. Workers only
 // execute remote calls and return results; they never retain operationState.
-func (r *Runner) run() {
+func (r *Worker) run() {
 	if r.ctx.Err() == nil {
 		r.resumeTasks()
 	}
@@ -56,7 +56,7 @@ func (r *Runner) run() {
 	}
 }
 
-func (r *Runner) acceptResult(result taskResult) {
+func (r *Worker) acceptResult(result taskResult) {
 	r.workers--
 	if result.observation {
 		delete(r.observations, result.task.ID)
@@ -71,7 +71,7 @@ func (r *Runner) acceptResult(result taskResult) {
 	r.finishTask(r.states[result.task.OperationID], result.task, result.output, result.err)
 }
 
-func submit[T any](ctx context.Context, r *Runner, execute func(context.Context) (T, error)) (T, error) {
+func submit[T any](ctx context.Context, r *Worker, execute func(context.Context) (T, error)) (T, error) {
 	var zero T
 	if err := ctx.Err(); err != nil {
 		return zero, err

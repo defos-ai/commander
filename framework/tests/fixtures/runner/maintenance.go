@@ -5,14 +5,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/defos-ai/commander/framework/controller/runner"
+	"github.com/defos-ai/commander/framework/controller/workers/runner"
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/id"
 	fakes "github.com/defos-ai/commander/framework/tests/fakes/runner"
 )
 
-func SeedMaintenanceTask(t *testing.T, config runner.Config, running bool) operations.Operation {
+func SeedMaintenanceTask(t *testing.T, config runner.Dependencies, running bool) operations.Operation {
 	t.Helper()
 	now := time.Now().UTC()
 	op := operations.Operation{ID: id.OperationID(), Mission: config.MissionStore.(*fakes.MissionStore).Snapshot(),

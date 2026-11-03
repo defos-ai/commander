@@ -10,7 +10,7 @@ import (
 	"github.com/defos-ai/commander/framework/domain/sessions"
 )
 
-func (r *Runner) refreshPreflight(ctx context.Context, state *operationState, records []agents.Agent) error {
+func (r *Worker) refreshPreflight(ctx context.Context, state *operationState, records []agents.Agent) error {
 	var scopes []sessions.Scope
 	if r.sessions != nil {
 		if err := r.reconcileSessions(ctx, state); err != nil {

@@ -15,13 +15,13 @@ import (
 	"github.com/defos-ai/commander/framework/id"
 )
 
-func (r *Runner) Missions(ctx context.Context) ([]missions.Mission, error) {
+func (r *Worker) Missions(ctx context.Context) ([]missions.Mission, error) {
 	return r.missions.List(ctx)
 }
 
 // Start saves unavailable requirements so the decision maker can inspect them.
 // Tasks stay queued until preflight passes; the operation itself is still created.
-func (r *Runner) Start(ctx context.Context, command commands.StartOperationCommand) (operations.Operation, error) {
+func (r *Worker) Start(ctx context.Context, command commands.StartOperationCommand) (operations.Operation, error) {
 	if err := ctx.Err(); err != nil {
 		return operations.Operation{}, err
 	}
@@ -81,13 +81,13 @@ func (r *Runner) Start(ctx context.Context, command commands.StartOperationComma
 }
 
 // Get and List remain readable after shutdown. Stores may outlive the runner.
-func (r *Runner) Get(ctx context.Context, operationID string) (operations.Operation, error) {
+func (r *Worker) Get(ctx context.Context, operationID string) (operations.Operation, error) {
 	return r.store.Get(ctx, operationID)
 }
 
-func (r *Runner) List(ctx context.Context) ([]operations.Operation, error) { return r.store.List(ctx) }
+func (r *Worker) List(ctx context.Context) ([]operations.Operation, error) { return r.store.List(ctx) }
 
-func (r *Runner) GetReport(ctx context.Context, operationID string) (reports.Report, error) {
+func (r *Worker) GetReport(ctx context.Context, operationID string) (reports.Report, error) {
 	operation, err := r.store.Get(ctx, operationID)
 	if err != nil {
 		return reports.Report{}, err
@@ -105,7 +105,7 @@ func (r *Runner) GetReport(ctx context.Context, operationID string) (reports.Rep
 	return report, nil
 }
 
-func (r *Runner) Complete(ctx context.Context, command commands.CompleteOperationCommand) (operations.Operation, error) {
+func (r *Worker) Complete(ctx context.Context, command commands.CompleteOperationCommand) (operations.Operation, error) {
 	if err := command.Validate(); err != nil {
 		return operations.Operation{}, err
 	}
@@ -144,7 +144,7 @@ func (r *Runner) Complete(ctx context.Context, command commands.CompleteOperatio
 	})
 }
 
-func (r *Runner) Fail(ctx context.Context, command commands.FailOperationCommand) (operations.Operation, error) {
+func (r *Worker) Fail(ctx context.Context, command commands.FailOperationCommand) (operations.Operation, error) {
 	if err := command.Validate(); err != nil {
 		return operations.Operation{}, err
 	}
@@ -164,7 +164,7 @@ func (r *Runner) Fail(ctx context.Context, command commands.FailOperationCommand
 
 // Cancel stops new assignments. Already-published commands may still execute;
 // their replies are collected until the task timeout, preserving partial results.
-func (r *Runner) Cancel(ctx context.Context, command commands.CancelOperationCommand) (operations.Operation, error) {
+func (r *Worker) Cancel(ctx context.Context, command commands.CancelOperationCommand) (operations.Operation, error) {
 	if err := command.Validate(); err != nil {
 		return operations.Operation{}, err
 	}

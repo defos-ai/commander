@@ -14,7 +14,7 @@ import (
 
 	"github.com/defos-ai/commander/framework/controller"
 	adapterconsumer "github.com/defos-ai/commander/framework/controller/consumers/adapter"
-	"github.com/defos-ai/commander/framework/controller/runner"
+	"github.com/defos-ai/commander/framework/controller/workers/runner"
 	"github.com/defos-ai/commander/framework/crypto"
 	"github.com/defos-ai/commander/framework/domain/controllers"
 	"github.com/defos-ai/commander/framework/host"
@@ -98,7 +98,7 @@ func serve(ctx context.Context, configuration config, logger *slog.Logger, optio
 		defer cancel()
 		result = errors.Join(result, coordination.Close(shutdown))
 	}()
-	execution, err := runner.NewRunner(context.WithoutCancel(ctx), coordination, runner.Config{
+	execution, err := runner.New(context.WithoutCancel(ctx), coordination, runner.Dependencies{
 		MissionStore: deps.MissionStore, OperationStore: deps.OperationStore,
 		Sessions:    coordination.RuntimeSessions(),
 		ReportStore: deps.ReportStore, AgentCatalog: coordination,

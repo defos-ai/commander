@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/defos-ai/commander/framework/controller/runner"
+	"github.com/defos-ai/commander/framework/controller/workers/runner"
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/domain/operations"
@@ -192,7 +192,7 @@ func TestAffinityRecoveryWaitsForTheOriginalAgent(t *testing.T) {
 	}
 }
 
-func assertAffinityTaskQueued(t *testing.T, r *runner.Runner, operationID string, index int, calls <-chan fakes.Invocation) operations.Operation {
+func assertAffinityTaskQueued(t *testing.T, r *runner.Worker, operationID string, index int, calls <-chan fakes.Invocation) operations.Operation {
 	t.Helper()
 	// Events uses the runner owner loop, so this observes a complete scheduler pass.
 	if _, err := r.Events(t.Context(), operationID, 0, false); err != nil {

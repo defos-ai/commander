@@ -3,7 +3,7 @@ package fixtures
 import (
 	"time"
 
-	"github.com/defos-ai/commander/framework/controller/runner"
+	"github.com/defos-ai/commander/framework/controller/workers/runner"
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/missions"
@@ -41,7 +41,7 @@ func AffinityPreflightAgent(agentID string, names ...string) agents.Agent {
 	return record
 }
 
-func AffinityConfig() runner.Config {
+func AffinityConfig() runner.Dependencies {
 	config := Config()
 	config.MissionStore.(*fakes.MissionStore).Change(func(m *missions.Mission) {
 		m.Policies = &policies.MissionPolicies{Placement: AffinityPolicy()}

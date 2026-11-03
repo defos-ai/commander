@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/defos-ai/commander/framework/controller/runner"
+	"github.com/defos-ai/commander/framework/controller/workers/runner"
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/artifacts"
 	"github.com/defos-ai/commander/framework/domain/operations"
@@ -13,7 +13,7 @@ import (
 	fakes "github.com/defos-ai/commander/framework/tests/fakes/runner"
 )
 
-func InterruptedExecution(t *testing.T, config runner.Config) (*runner.Runner, *fakes.LateExecution, fakes.Invocation, operations.Operation) {
+func InterruptedExecution(t *testing.T, config runner.Dependencies) (*runner.Worker, *fakes.LateExecution, fakes.Invocation, operations.Operation) {
 	t.Helper()
 	config.TaskTimeout = 30 * time.Millisecond
 	execution := fakes.NewLateExecution()

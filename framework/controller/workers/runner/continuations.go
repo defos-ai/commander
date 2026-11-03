@@ -25,7 +25,7 @@ func taskIndex(op *operations.Operation, taskID string) int {
 	return -1
 }
 
-func (r *Runner) normalize(ctx context.Context, op operations.Operation, next []actionmodel.NextAction, records []agents.Agent) ([]actionmodel.NextAction, error) {
+func (r *Worker) normalize(ctx context.Context, op operations.Operation, next []actionmodel.NextAction, records []agents.Agent) ([]actionmodel.NextAction, error) {
 	if len(next) == 0 {
 		return next, nil
 	}
@@ -35,7 +35,7 @@ func (r *Runner) normalize(ctx context.Context, op operations.Operation, next []
 	return runtimeSessions.Normalize(next, records, op.Mission.ActionDefinitions...), nil
 }
 
-func (r *Runner) Resolve(ctx context.Context, command commands.ResolveContinuationCommand) (operations.Operation, error) {
+func (r *Worker) Resolve(ctx context.Context, command commands.ResolveContinuationCommand) (operations.Operation, error) {
 	if err := command.Validate(); err != nil {
 		return operations.Operation{}, err
 	}
