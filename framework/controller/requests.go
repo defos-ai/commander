@@ -5,7 +5,7 @@ import (
 	"errors"
 )
 
-// Public requests stop with admission; internal Runner calls use core coordination.
+// Public requests stop with admission; internal operation worker calls use core coordination.
 func request[T any](ctx context.Context, c *Controller, execute func(context.Context) (T, error)) (T, error) {
 	var zero T
 	if ctx == nil {

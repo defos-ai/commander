@@ -83,7 +83,7 @@ func (w *Worker) Prepare(ctx context.Context, a runtimeSessions.Assignment) (run
 		return runtimeSessions.PreparedDispatch{}, operations.ErrOperationConflict
 	}
 	// Dispatch is now durable. Any later failure requires reconciliation, even
-	// if the failing store reports a definite rejection. Never leave the runner
+	// if the failing store reports a definite rejection. Never leave the operation worker
 	// believing this task is still queued or allow selection of another owner.
 	uncertain := func(err error) (runtimeSessions.PreparedDispatch, error) {
 		return runtimeSessions.PreparedDispatch{Operation: op, Task: task}, errors.Join(operations.ErrWriteUncertain, err)

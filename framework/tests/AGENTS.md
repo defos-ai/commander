@@ -53,7 +53,7 @@ add their service prerequisites and checks.
   relevant. For concurrency changes, preserve race-detector coverage and verify
   ownership/settlement behavior rather than relying on timing sleeps.
 - Cancel and await background work in cleanup. A test must not leave consumers,
-  runners or goroutines writing into the next test's state.
+  operation workers or goroutines writing into the next test's state.
 
 ## Shared stack and cleanup
 

@@ -14,13 +14,13 @@ including workers whose `Run` has not started. No runtime loop starts in assembl
 
 - [Commands](command/worker.go) owns adapter command and cancellation subscriptions,
   concurrent request handlers and their private request ledger. Subscribe after
-  runner recovery and before readiness. Keep request ID/adapter/payload checks,
-  cached replies and cancellation notices that overtake requests intact. The ledger
+  operation worker recovery and before readiness. Keep request ID/adapter/payload
+  checks, cached replies and cancellation notices that overtake requests intact. The ledger
   owner must keep processing completions until both consumers join their handlers.
   Cancel before independently closing both subscriptions; `Close` joins Run and
   once-only subscription cleanup within the caller's deadline. Intake failures
   stop admission through the ordered shutdown path; they do not cancel core
-  routing before the runner joins.
+  routing before the operation worker joins.
 - [Coordination](coordination/worker.go) owns the command mailbox, pending replies,
   inventory observation state, lease expiry and durable dispatch/recovery. Remote
   waits stay outside its owner loop. `submit` retains a buffered reply so caller
@@ -34,7 +34,7 @@ including workers whose `Run` has not started. No runtime loop starts in assembl
   await the same cleanup and preserve its error.
 - [Sessions](session/worker.go) owns one gate, admission caches, preparation,
   publication and retrying retained controls. Share this exact instance with the
-  runner, events and dispatch. Keep remote control waits outside the session gate.
+  operation worker, events and dispatch. Keep remote control waits outside the session gate.
   Follow the [session protocol](../../sessions/AGENTS.md) for changes.
 - [Secrets](secret/worker.go) owns encrypted delivery handlers and its retry loop.
   Both event handling and reconciliation execute inside coordination; never
@@ -43,12 +43,13 @@ including workers whose `Run` has not started. No runtime loop starts in assembl
 - [Sharing](sharing/worker.go) owns its bounded queue and best-effort forwarding.
   Read accepted records and observe recipients through `AgentReader`; never
   mutate coordination state or change accepted execution outcomes on failure.
-- [Runner](runner/worker.go) owns operation scheduling and recovery. Controller
-  assembly supplies mandatory mission, operation and report stores, the same
+- [Operation worker](operation/worker.go) owns operation scheduling and recovery.
+  Controller assembly supplies mandatory mission, operation and report stores, the same
   session worker, an explicit sharing capability and a typed coordination
   executor. Keep its catalog and execution paths independent of public host
   admission so accepted results can drain during shutdown. Assembly injects it
-  into the command worker; hosts do not construct a second runner or command consumer.
+  into the command worker; hosts do not construct a second operation worker or
+  command consumer.
 
 `coordination.Worker.Apply` scopes event and secret mutation to its owner loop.
 Keep the supplied state inside that synchronous callback; events bind a local
@@ -66,8 +67,8 @@ Keep the shutdown hook limited to lifecycle shutdown. Do not pass Controller or
 a collection of host callbacks into workers. Cancel before releasing pending
 callers so they see the original fatal cause. Retain the complete worker list
 before starting any Run call. Shared admission cancellation can begin command and
-runner draining together. Graceful shutdown joins command requests and cleanup,
-then the runner, before canceling and closing core workers concurrently outside
+operation worker draining together. Graceful shutdown joins command requests and
+cleanup, then the operation worker, before canceling and closing core workers concurrently outside
 owner callbacks. Coordination and events remain available during both drains.
 Fatal core errors cancel core work immediately and fence pending callers
 with their original cause. The caller's deadline bounds waiting, and retries await

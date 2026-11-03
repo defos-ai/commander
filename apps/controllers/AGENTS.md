@@ -6,18 +6,18 @@
   Configuration lives in `cli/config.go`;
   concrete providers and their cleanup belong in `cli/factory.go`.
 - Keep framework scheduling and recovery in [framework/controller](../../framework/controller/).
-  A host supplies dependencies and policies; it must not duplicate the runner's
-  owner loop or introduce its own operation mutation path.
+  A host supplies dependencies and policies; it must not duplicate the operation
+  worker's owner loop or introduce its own operation mutation path.
 - Supply mission, operation and report stores through `ControllerConfig`.
-  The controller constructs, recovers, starts and joins its runner. Assembly
-  supplies its operation commands directly to the owned command worker.
-  Do not create another runner or command consumer, or manage worker `Run` calls
-  from the CLI.
+  The controller constructs, recovers, starts and joins its operation worker.
+  Assembly supplies its operation commands directly to the owned command worker.
+  Do not create another operation worker or command consumer, or manage worker
+  `Run` calls from the CLI.
 - Mark registration ready only after controller construction completes recovery
   and subscribes command/cancellation inboxes. On shutdown, mark draining, close
   the controller, then registration and providers. Controller shutdown stops
-  admission and joins command requests and subscription cleanup, then the runner,
-  before closing coordination and events. Use bounded shutdown contexts that
+  admission and joins command requests and subscription cleanup, then the
+  operation worker, before closing coordination and events. Use bounded shutdown contexts that
   survive parent cancellation. Do not add an unbounded worker wait after an
   expired `Close` deadline.
 - Keep the current one-active-controller-per-database assumption explicit.
@@ -39,18 +39,19 @@
 
 ## Selection and durable work
 
-- [runner.AgentSelector](../../framework/controller/workers/runner/agent_selector.go)
+- [operation.AgentSelector](../../framework/controller/workers/operation/agent_selector.go)
   chooses only among supplied eligible candidates. Affinity, readiness, capacity
-  checks and durable dispatch reservation remain the runner's responsibility.
+  checks and durable dispatch reservation remain the operation worker's
+  responsibility.
   Inject it through `ControllerConfig.AgentSelector`.
 - Selection runs serially in the owner loop. Return promptly, honor cancellation,
   and do not dispatch work or retain mutable candidate snapshots. An empty ID
   defers work; errors or invalid IDs leave it queued.
 - Report the selector's `Name()` in registration. The previous selected agent ID
   advances only after durable dispatch reservation; load/capacity describe this
-  runner's work, not a distributed global limit.
-- The runner validates the stored mission and retains its policies directly in the
-  operation's independent mission snapshot. Hosts do not inject policy selection
+  operation worker's work, not a distributed global limit.
+- The operation worker validates the stored mission and retains its policies
+  directly in the operation's independent mission snapshot. Hosts do not inject policy selection
   or override policy. Edit mission definitions for future operations; recovery
   uses each operation's original snapshot.
 - Dispatched tasks remain bound to their recorded agent and command. Never silently

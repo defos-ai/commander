@@ -69,7 +69,7 @@ func Register(ctx context.Context, store controllers.ControllerStore, config Reg
 	if err := store.Upsert(initial, record); err != nil {
 		return nil, err
 	}
-	// Keep advertising during host shutdown until its consumers and runner stop.
+	// Keep advertising during host shutdown until its consumers and operation worker stop.
 	lifetime, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	r := &Registration{updates: make(chan registrationUpdate), done: make(chan struct{}), cancel: cancel}
 	go r.run(lifetime, store, config, record)

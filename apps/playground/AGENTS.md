@@ -39,7 +39,7 @@
 ## Behavior to preserve
 
 - Chat goes through MCP even in all-in-one mode. Reuse app hosts rather than
-  duplicating their lifecycle or calling the runner directly from chat.
+  duplicating their lifecycle or calling the operation worker directly from chat.
   Discover missing capabilities through registered agents' responsibilities and
   action schemas. Keep the chat prompt generic; agent-specific usage belongs in
   registration metadata. Submit work through missions and the controller, then

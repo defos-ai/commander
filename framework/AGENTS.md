@@ -10,7 +10,7 @@
   belong to applications.
 - Start with [`agent`](agent/) for execution and discovery,
   [`controller`](controller/) for inventory and dispatch, and
-  [`controller/workers/runner`](controller/workers/runner/) for operation scheduling
+  [`controller/workers/operation`](controller/workers/operation/) for operation scheduling
   and recovery.
 - Keep entities and store contracts in [`domain`](domain/), using singular files
   and types in plural packages, such as `agents.Agent` and `agents.AgentStore`.
@@ -149,7 +149,7 @@
 - Runtime-session changes must follow the [session guide](sessions/AGENTS.md),
   including when changing callers outside the session directory. The
   controller's `session.Worker` owns admission, binding, exact execution
-  claiming and publication ordering. The runner consumes the shared
+  claiming and publication ordering. The operation worker consumes the shared
   `sessions.Coordinator` interface backed by that same instance. Persist normalized
   intent with automatic children.
   Preserve scope history across inventory expiry; abandonment releases only the
@@ -163,29 +163,29 @@
   returns the worker list without calling `Run` or starting workers.
   `NewController` starts the returned list; [worker subpackages](controller/workers/AGENTS.md)
   retain their logic and private state. The parent workers package owns their
-  shared contract and lifecycle helper. Use coordination and runner owner loops
-  for runtime mutation. Update persistence, consumers and recovery together when
+  shared contract and lifecycle helper. Use coordination and operation worker
+  owner loops for runtime mutation. Update persistence, consumers and recovery together when
   changing lifecycle behavior.
-- Controller lifecycle startup joins command intake, the runner, coordination,
-  events, sessions, secret reconciliation and sharing through one completion
+- Controller lifecycle startup joins command intake, the operation worker,
+  coordination, events, sessions, secret reconciliation and sharing through one completion
   signal. Keep remote waits outside the owner loop. Each worker owns its blocking `Run(ctx)` and
   `Close(ctx)`; the controller retains the complete list before starting it.
   `Done` signals that public admission has stopped. Shared admission cancellation
-  may begin command and runner draining together. Graceful shutdown joins command
-  requests and subscription cleanup first, then the runner, while coordination
+  may begin command and operation worker draining together. Graceful shutdown joins
+  command requests and subscription cleanup first, then the operation worker, while coordination
   and event handling remain available for accepted results. Then cancel the core
   lifetime and close its workers concurrently. Fatal core errors cancel that lifetime immediately and
   fence admission before pending callers wake. `Close` waits under its caller's
   context; cleanup continues independently after a timeout so retries await the
   same work and error. Hosts retain their providers until shutdown finishes.
-- [`runner.New`](controller/workers/runner/worker.go) restores saved state
+- [`operation.New`](controller/workers/operation/worker.go) restores saved state
   synchronously without launching task execution or background observation.
   Controller assembly injects the same session worker, explicit sharing capability
   and a typed executor that uses coordination directly, so draining bypasses public
   admission. Assembly subscribes the command and cancellation inboxes after
   recovery; adapters submit through that owned worker. Do not construct another
-  runner or command consumer beside the controller. Standalone runner hosts must start
-  [`Worker.Run`](controller/workers/runner/lifecycle.go) before submitting mutations.
+  operation worker or command consumer beside the controller. Standalone hosts must start
+  [`Worker.Run`](controller/workers/operation/lifecycle.go) before submitting mutations.
   `Run` is blocking and single-use: concurrent calls return `ErrAlreadyRunning`;
   calls after shutdown return `ErrClosed`. Constructor-context cancellation,
   Run-context cancellation and `Close` stop admission. The running loop joins
@@ -212,8 +212,8 @@
 - Reconcile uncertain writes before dispatching more work. Dispatched work stays
   bound to its recorded agent and command; never reassign an unknown outcome.
   `RecoverAction` only observes work; it must not execute or republish commands.
-- The runner's [bounded observations](controller/workers/runner/observations.go) reconcile
-  interrupted executions while the controller remains running, including after an
+- The operation worker's [bounded observations](controller/workers/operation/observations.go)
+  reconcile interrupted executions while the controller remains running, including after an
   operation is completed, failed or cancelled. Only successful output or a typed
   `executions.CommandFailure` establishes a known outcome. Inconclusive checks
   preserve the original interruption, deadline, continuation and event history.
@@ -327,8 +327,8 @@
   are logged without changing accepted outcomes.
   Cancel and join it during shutdown. Recovery reads do not replay sharing, and
   saved source IDs let receivers deduplicate accepted event redeliveries.
-- After a successful answer save, the runner notifies its explicitly injected
-  sharing capability with only operation/question IDs. The sharing worker
+- After a successful answer save, the operation worker notifies its explicitly
+  injected sharing capability with only operation/question IDs. The sharing worker
   [rereads the saved decision](controller/workers/sharing/decisions.go)
   and matches its task to the original execution claim before routing. Preserve
   question IDs, content, timestamps and answer origin; multiple decisions can
@@ -336,8 +336,8 @@
   Operation-wide questions are not shared. Pending, rejected or uncertain answers
   and ordinary reads/recovery never trigger forwarding. Delivery failures do not
   change an answer or its continuation; sharing grants no completion authority.
-- Keep [`AgentSelector`](controller/workers/runner/agent_selector.go) limited to choosing
-  eligible candidates. The runner owns affinity, readiness and capacity checks
+- Keep [`AgentSelector`](controller/workers/operation/agent_selector.go) limited to choosing
+  eligible candidates. The operation worker owns affinity, readiness and capacity checks
   and dispatch persistence. Selection is serial, must honor cancellation and
   return promptly; an empty choice defers work.
 - Operation preflight exposes missing requirements only for live, ready/working
@@ -348,9 +348,9 @@
   Queued work resumes through normal readiness refresh, never merely because a
   value was saved or a delivery acknowledged.
 - Keep registration ready only after recovery and consumers start. During
-  shutdown, await runner and consumer termination before closing registration.
+  shutdown, await operation worker and consumer termination before closing registration.
   Hosts register the agent selector's `Name()` using the same implementation
-  injected into the runner.
+  injected into the operation worker.
 
 ## Agent extension contracts
 

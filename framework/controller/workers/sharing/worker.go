@@ -70,7 +70,7 @@ func (w *Worker) QueueResult(message messages.Message) {
 	w.queueSharedData(sharedData{AgentID: message.AgentID, CommandID: message.CorrelationID, Work: message.Work})
 }
 
-// ShareQuestionAnswer is a runner notification after a successful answer save.
+// ShareQuestionAnswer is an operation worker notification after a successful answer save.
 // The worker rereads saved evidence; the notification supplies no answer data.
 func (w *Worker) ShareQuestionAnswer(operationID, questionID string) {
 	if w.operationStore == nil || !id.Valid(operationID) || !id.Valid(questionID) {

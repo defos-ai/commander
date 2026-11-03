@@ -17,7 +17,7 @@ import (
 	"github.com/defos-ai/commander/framework/controller/workers/command"
 	"github.com/defos-ai/commander/framework/controller/workers/coordination"
 	"github.com/defos-ai/commander/framework/controller/workers/event"
-	"github.com/defos-ai/commander/framework/controller/workers/runner"
+	"github.com/defos-ai/commander/framework/controller/workers/operation"
 	"github.com/defos-ai/commander/framework/controller/workers/session"
 	"github.com/defos-ai/commander/framework/controller/workers/sharing"
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
@@ -58,7 +58,7 @@ type ControllerConfig struct {
 	SecretDecryptor    consumers.SecretDecryptor
 	HeartbeatTimeout   time.Duration
 	LeaseSweepInterval time.Duration
-	AgentSelector      runner.AgentSelector
+	AgentSelector      operation.AgentSelector
 	TaskTimeout        time.Duration
 	Capacity           int
 	Logger             *slog.Logger
@@ -73,7 +73,7 @@ type Controller struct {
 	sessions       *session.Worker
 	sharing        *sharing.Worker
 	events         *event.Worker
-	runner         *runner.Worker
+	operations     *operation.Worker
 	commands       *command.Worker
 	workers        []workers.Worker
 	coreWorkers    []workers.Worker
@@ -147,7 +147,7 @@ func NewController(ctx context.Context, bus comms.Bus, config ControllerConfig) 
 		config.Logger = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
 	lifetime, cancel := context.WithCancelCause(ctx)
-	// Core workers remain available until accepted runner results have drained.
+	// Core workers remain available until accepted operation results have drained.
 	coreLifetime, cancelCore := context.WithCancelCause(context.WithoutCancel(ctx))
 	stopStartup := context.AfterFunc(ctx, func() { cancelCore(context.Cause(ctx)) })
 	c := &Controller{
@@ -176,4 +176,4 @@ func (c *Controller) ID() string { return c.id }
 
 func (c *Controller) Type() string { return c.controllerType }
 
-func (c *Controller) Operations() controllercommands.Operations { return c.runner }
+func (c *Controller) Operations() controllercommands.Operations { return c.operations }

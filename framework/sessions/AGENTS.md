@@ -5,8 +5,8 @@ or recovery, including callers outside this directory. For usage and lifecycle
 limits, see [Sessions](../../docs/features/sessions.md).
 
 - [admission.go](admission.go) normalizes intent without I/O; shared dispatch and
-  evidence types and the runner's [Coordinator](coordinator.go) contract remain
-  here. The controller's [session.Worker](../controller/workers/session/worker.go)
+  evidence types and the operation worker's [Coordinator](coordinator.go) contract
+  remain here. The controller's [session.Worker](../controller/workers/session/worker.go)
   owns admission, dispatch, observation and control reconciliation. The domain
   owns transitions; stores own atomicity.
 - Live and mission contracts take precedence over learned catalog metadata.

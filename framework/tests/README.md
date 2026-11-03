@@ -22,8 +22,8 @@ Run the small deterministic suite before service-backed integration tests:
 go test -race -count=1 -timeout=3m ./framework/... ./providers/fs/... ./apps/agents/builder/... ./apps/agents/spawner/...
 ```
 
-The selected scenarios cover runner recovery and late results, completion approval,
-agent/controller secret and checkpoint exchanges, filesystem atomicity, and safe
+The selected scenarios cover operation worker recovery and late results,
+completion approval, agent/controller secret and checkpoint exchanges, filesystem atomicity, and safe
 agent spawning/publication. Admin UI adds focused coverage for completion approval,
 uncertain writes, raw JSON and preserving drafts across late responses:
 

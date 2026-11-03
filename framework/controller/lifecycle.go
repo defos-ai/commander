@@ -7,7 +7,7 @@ import (
 	"sync"
 
 	"github.com/defos-ai/commander/framework/controller/workers"
-	"github.com/defos-ai/commander/framework/controller/workers/runner"
+	"github.com/defos-ai/commander/framework/controller/workers/operation"
 )
 
 func (c *Controller) start(list ...workers.Worker) {
@@ -19,7 +19,7 @@ func (c *Controller) start(list ...workers.Worker) {
 			if err == nil && c.lifetime.Err() == nil {
 				err = fmt.Errorf("%T stopped while the controller was running", worker)
 			}
-			if c.lifetime.Err() == nil || (err != nil && err != context.Canceled && err != ErrControllerClosed && err != runner.ErrClosed) {
+			if c.lifetime.Err() == nil || (err != nil && err != context.Canceled && err != ErrControllerClosed && err != operation.ErrClosed) {
 				if worker == c.commands {
 					c.beginClose(err)
 				} else {
@@ -40,7 +40,7 @@ func (c *Controller) Done() <-chan struct{} { return c.lifetime.Done() }
 
 func (c *Controller) Err() error { return context.Cause(c.lifetime) }
 
-// Close stops admission and joins command intake, Runner, then core workers.
+// Close stops admission and joins command intake, operation worker, then core workers.
 // Independently hosted agents and the caller-owned bus remain running.
 func (c *Controller) Close(ctx context.Context) error {
 	if ctx == nil {
@@ -80,9 +80,9 @@ func (c *Controller) beginClose(cause error) {
 		go func() {
 			defer close(c.cleanupDone)
 			commandErr := c.commands.Close(context.Background())
-			runnerErr := c.runner.Close(context.Background())
+			operationErr := c.operations.Close(context.Background())
 			c.cancelCore(context.Cause(c.lifetime))
-			c.closeErr = errors.Join(commandErr, runnerErr, closeWorkers(context.Background(), c.coreWorkers))
+			c.closeErr = errors.Join(commandErr, operationErr, closeWorkers(context.Background(), c.coreWorkers))
 		}()
 	})
 }

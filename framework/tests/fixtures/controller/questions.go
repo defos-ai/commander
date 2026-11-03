@@ -9,15 +9,15 @@ import (
 	"github.com/defos-ai/commander/framework/controller/consumers"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	controllerfakes "github.com/defos-ai/commander/framework/tests/fakes/controller"
-	runnerfakes "github.com/defos-ai/commander/framework/tests/fakes/runner"
+	operationfakes "github.com/defos-ai/commander/framework/tests/fakes/operation"
 )
 
-func ExecutionQuestionConsumer(t *testing.T) (consumers.EventConsumer, *controllerfakes.CheckpointExecutions, *runnerfakes.OperationStore, *controllerfakes.SecretPublishBus) {
+func ExecutionQuestionConsumer(t *testing.T) (consumers.EventConsumer, *controllerfakes.CheckpointExecutions, *operationfakes.OperationStore, *controllerfakes.SecretPublishBus) {
 	t.Helper()
 	consumer, execution, bus := CheckpointConsumer(t)
 	command := execution.Snapshot().Command
 	deadline := time.Now().Add(time.Hour)
-	store := runnerfakes.NewOperationStore()
+	store := operationfakes.NewOperationStore()
 	operation := operations.Operation{ID: command.Work.OperationID, Status: operations.Running,
 		Tasks: []operations.Task{{ID: command.Work.TaskID, CommandID: command.ID, OperationID: command.Work.OperationID,
 			AgentID: command.AgentID, ActionName: "capture", Status: operations.TaskRunning, DeadlineAt: &deadline}}}

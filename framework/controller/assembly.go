@@ -10,7 +10,7 @@ import (
 	"github.com/defos-ai/commander/framework/controller/workers/command"
 	"github.com/defos-ai/commander/framework/controller/workers/coordination"
 	"github.com/defos-ai/commander/framework/controller/workers/event"
-	"github.com/defos-ai/commander/framework/controller/workers/runner"
+	"github.com/defos-ai/commander/framework/controller/workers/operation"
 	"github.com/defos-ai/commander/framework/controller/workers/secret"
 	"github.com/defos-ai/commander/framework/controller/workers/session"
 	"github.com/defos-ai/commander/framework/controller/workers/sharing"
@@ -89,7 +89,7 @@ func assemble(c *Controller, bus comms.Bus, config ControllerConfig) (result []w
 	if c.sessions != nil {
 		sessionCoordinator, publisher = c.sessions, c.sessions
 	}
-	c.runner, err = runner.New(c.lifetime, coordination.Executor{Worker: coordinator, Sessions: publisher}, runner.Dependencies{
+	c.operations, err = operation.New(c.lifetime, coordination.Executor{Worker: coordinator, Sessions: publisher}, operation.Dependencies{
 		Sessions: sessionCoordinator, AgentCatalog: coordinator, Sharing: c.sharing,
 		MissionStore: config.MissionStore, OperationStore: config.OperationStore, ReportStore: config.ReportStore,
 		AgentSelector: config.AgentSelector, TaskTimeout: config.TaskTimeout, Capacity: config.Capacity, Logger: config.Logger,
@@ -97,10 +97,10 @@ func assemble(c *Controller, bus comms.Bus, config ControllerConfig) (result []w
 	if err != nil {
 		return nil, err
 	}
-	list = append(list, c.runner)
+	list = append(list, c.operations)
 	c.commands, err = command.New(c.lifetime, command.Dependencies{
 		Bus: bus, ControllerType: config.Type, ControllerID: config.ID,
-		Controller: c, Operations: c.runner, Logger: config.Logger,
+		Controller: c, Operations: c.operations, Logger: config.Logger,
 	})
 	if err != nil {
 		return nil, err

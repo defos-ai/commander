@@ -9,7 +9,7 @@ import (
 	"github.com/defos-ai/commander/framework/controller"
 	"github.com/defos-ai/commander/framework/domain/missions"
 	fakes "github.com/defos-ai/commander/framework/tests/fakes/controller"
-	runnerfakes "github.com/defos-ai/commander/framework/tests/fakes/runner"
+	operationfakes "github.com/defos-ai/commander/framework/tests/fakes/operation"
 )
 
 func StartLifecycleController(t *testing.T, cleanupError error, sweepInterval time.Duration) (context.Context, *controller.Controller, *fakes.Bus, *fakes.Inventory, *fakes.Gate) {
@@ -20,7 +20,7 @@ func StartLifecycleController(t *testing.T, cleanupError error, sweepInterval ti
 	bus.BlockClose(gate, cleanupError)
 	c, err := controller.NewController(ctx, bus, controller.ControllerConfig{
 		AgentStore: inventory, ActionStore: fakes.UnusedActions{}, ArtifactStore: fakes.UnusedArtifacts{},
-		MissionStore: runnerfakes.NewMissionStore(missions.Mission{}), OperationStore: runnerfakes.NewOperationStore(), ReportStore: runnerfakes.ReportStore{},
+		MissionStore: operationfakes.NewMissionStore(missions.Mission{}), OperationStore: operationfakes.NewOperationStore(), ReportStore: operationfakes.ReportStore{},
 		ExecutionStore: fakes.UnusedExecutions{}, HeartbeatTimeout: time.Hour, LeaseSweepInterval: sweepInterval,
 	})
 	if err != nil {

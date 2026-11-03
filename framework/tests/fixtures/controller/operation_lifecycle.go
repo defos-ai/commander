@@ -15,7 +15,7 @@ import (
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/id"
 	fakes "github.com/defos-ai/commander/framework/tests/fakes/controller"
-	runnerfakes "github.com/defos-ai/commander/framework/tests/fakes/runner"
+	operationfakes "github.com/defos-ai/commander/framework/tests/fakes/operation"
 )
 
 type OwnedOperations struct {
@@ -35,14 +35,14 @@ func NewOwnedOperations(t *testing.T) OwnedOperations {
 	now := time.Now().UTC()
 	inventory.Set(&agents.Agent{AgentSnapshot: ObservationSnapshot(), LastHeartbeat: now, LastSeen: now, ObservedAt: now, LeaseExpiresAt: now.Add(time.Hour)})
 	gate := fakes.NewGate()
-	store := &fakes.DrainingOperations{OperationStore: runnerfakes.NewOperationStore()}
+	store := &fakes.DrainingOperations{OperationStore: operationfakes.NewOperationStore()}
 	store.BlockNextFinish(gate)
 	mission := missions.Mission{Name: "review", Objectives: []string{"Review a document"}, RequiredActions: []string{"inspect"},
 		StartingActions: []string{"inspect"}, InputSchema: json.RawMessage(`{}`), OutputSchema: json.RawMessage(`{}`)}
 	return OwnedOperations{Context: ctx, Bus: bus, Inventory: inventory, Executions: executions, ResultGate: gate,
 		Config: controller.ControllerConfig{
 			AgentStore: inventory, ActionStore: fakes.UnusedActions{}, ArtifactStore: fakes.UnusedArtifacts{}, ExecutionStore: executions,
-			MissionStore: runnerfakes.NewMissionStore(mission), OperationStore: store, ReportStore: runnerfakes.ReportStore{},
+			MissionStore: operationfakes.NewMissionStore(mission), OperationStore: store, ReportStore: operationfakes.ReportStore{},
 			HeartbeatTimeout: time.Hour, LeaseSweepInterval: time.Hour,
 		}}
 }

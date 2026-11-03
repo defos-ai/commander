@@ -14,7 +14,7 @@ import (
 	"github.com/defos-ai/commander/framework/comms/messages"
 	"github.com/defos-ai/commander/framework/controller"
 	"github.com/defos-ai/commander/framework/domain/operations"
-	runnerfakes "github.com/defos-ai/commander/framework/tests/fakes/runner"
+	operationfakes "github.com/defos-ai/commander/framework/tests/fakes/operation"
 	fixtures "github.com/defos-ai/commander/framework/tests/fixtures/controller"
 )
 
@@ -110,7 +110,7 @@ func TestControllerCloseKeepsRoutingUntilAcceptedOperationResultsDrain(t *testin
 			}
 			for range 2 {
 				if err := fixtures.Receive(t, ctx, joined); err != nil {
-					t.Fatalf("retrying controller Close did not join its runner: %v", err)
+					t.Fatalf("retrying controller Close did not join its operation worker: %v", err)
 				}
 			}
 			saved, err := fixture.Config.OperationStore.Get(ctx, op.ID)
@@ -135,7 +135,7 @@ func TestControllerRecoveryFailureCleansUnstartedWorkersAndPreservesWork(t *test
 	ctx, bus := fixture.Context, fixture.Bus
 	saved := fixture.SeedQueued(t)
 	failure, cleanupError := errors.New("operation recovery failed"), errors.New("subscription cleanup failed")
-	fixture.Config.OperationStore = &runnerfakes.RecoveryFailureStore{OperationStore: fixture.Config.OperationStore, Failure: failure}
+	fixture.Config.OperationStore = &operationfakes.RecoveryFailureStore{OperationStore: fixture.Config.OperationStore, Failure: failure}
 	bus.BlockClose(nil, cleanupError)
 	fixtures.Send(t, ctx, bus, controllerevents.AgentHeartbeat, "")
 

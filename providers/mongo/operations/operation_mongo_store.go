@@ -285,7 +285,7 @@ func checkOperationID(ctx context.Context, operationID string) error {
 }
 func operationWriteError(operationID string, wrote bool, err error) error {
 	// An error after the last callback wrote successfully may be a lost commit
-	// confirmation. Pause the runner even if visibility cannot yet be established.
+	// confirmation. Pause the operation worker even if visibility cannot yet be established.
 	if err != nil && wrote {
 		return fmt.Errorf("commit operation %s: %w", operationID, errors.Join(operations.ErrWriteUncertain, err))
 	}

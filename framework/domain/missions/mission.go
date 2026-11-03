@@ -204,7 +204,7 @@ func (m Mission) ValidateInput(input json.RawMessage) error {
 
 // ValidateOutput checks the input and report against their declared schemas.
 // Evidence interpretation and whether a report answers the objective remain
-// decisions for the runner and its decision maker.
+// decisions for the operation worker and its decision maker.
 func (m Mission) ValidateOutput(input, output json.RawMessage) error {
 	if err := m.ValidateInput(input); err != nil {
 		return err

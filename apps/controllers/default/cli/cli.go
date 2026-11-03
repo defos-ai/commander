@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/defos-ai/commander/framework/controller"
-	"github.com/defos-ai/commander/framework/controller/workers/runner"
+	"github.com/defos-ai/commander/framework/controller/workers/operation"
 	"github.com/defos-ai/commander/framework/crypto"
 	"github.com/defos-ai/commander/framework/domain/controllers"
 	"github.com/defos-ai/commander/framework/host"
@@ -67,7 +67,7 @@ func serve(ctx context.Context, configuration config, logger *slog.Logger, optio
 		return err
 	}
 	defer func() { result = errors.Join(result, deps.Close()) }()
-	agentSelector := runner.RoundRobinSelector{}
+	agentSelector := operation.RoundRobinSelector{}
 	registration, err := controller.Register(ctx, deps.ControllerStore, controller.RegistrationConfig{
 		ID: configuration.controllerID, Type: controllerType,
 		AgentSelector: agentSelector.Name(), Logger: logger,

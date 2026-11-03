@@ -1,0 +1,116 @@
+package operation
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"time"
+
+	"github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/domain/executions"
+	"github.com/defos-ai/commander/framework/domain/operations"
+)
+
+type taskResult struct {
+	task        operations.Task
+	output      actions.ActionOutput
+	err         error
+	observation bool
+}
+
+// After startup recovery, this loop owns all mutable operation worker state. Workers only
+// execute remote calls and return results; they never retain operationState.
+func (r *Worker) run() {
+	if r.ctx.Err() == nil {
+		r.resumeTasks()
+	}
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+	for r.ctx.Err() == nil {
+		select {
+		case <-r.ctx.Done():
+		case request := <-r.requests:
+			request()
+		case result := <-r.results:
+			r.acceptResult(result)
+			r.signalScheduler()
+		case <-r.wake:
+			r.retryResults()
+			r.observeInterruptedTasks()
+			r.dispatchQueued()
+		case <-ticker.C:
+			r.retryResults()
+			r.observeInterruptedTasks()
+			r.dispatchQueued()
+		}
+	}
+	// Join every launched call and persist successful results that arrive during
+	// shutdown. Cancellation errors leave their durable tasks available for recovery.
+	for r.workers > 0 {
+		r.acceptResult(<-r.results)
+	}
+	for _, state := range r.states {
+		if state.err != nil {
+			r.closeErr = errors.Join(r.closeErr, fmt.Errorf("operation %s: %w", state.operation.ID, state.err))
+		}
+	}
+}
+
+func (r *Worker) acceptResult(result taskResult) {
+	r.workers--
+	if result.observation {
+		delete(r.observations, result.task.ID)
+		var failure *executions.CommandFailure
+		if result.err != nil && !errors.As(result.err, &failure) {
+			// An observation error says nothing new about the remote execution.
+			// Retain the original interruption and retry without adding history.
+			r.observations[result.task.ID] = taskObservation{nextAttempt: time.Now().Add(taskObservationInterval)}
+			return
+		}
+	}
+	r.finishTask(r.states[result.task.OperationID], result.task, result.output, result.err)
+}
+
+func submit[T any](ctx context.Context, r *Worker, execute func(context.Context) (T, error)) (T, error) {
+	var zero T
+	if err := ctx.Err(); err != nil {
+		return zero, err
+	}
+	if r.ctx.Err() != nil {
+		return zero, ErrClosed
+	}
+	type response struct {
+		value T
+		err   error
+	}
+	reply := make(chan response, 1)
+	request := func() {
+		if err := ctx.Err(); err != nil {
+			reply <- response{err: err}
+			return
+		}
+		if r.ctx.Err() != nil {
+			reply <- response{err: ErrClosed}
+			return
+		}
+		requestCtx, cancel := r.requestContext(ctx)
+		defer cancel()
+		value, err := execute(requestCtx)
+		reply <- response{value, err}
+	}
+	select {
+	case r.requests <- request:
+	case <-ctx.Done():
+		return zero, ctx.Err()
+	case <-r.ctx.Done():
+		return zero, ErrClosed
+	}
+	select {
+	case result := <-reply:
+		return result.value, result.err
+	case <-ctx.Done():
+		return zero, ctx.Err()
+	case <-r.ctx.Done():
+		return zero, ErrClosed
+	}
+}

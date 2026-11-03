@@ -14,7 +14,7 @@ import (
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/id"
 	controllerfakes "github.com/defos-ai/commander/framework/tests/fakes/controller"
-	runnerfakes "github.com/defos-ai/commander/framework/tests/fakes/runner"
+	operationfakes "github.com/defos-ai/commander/framework/tests/fakes/operation"
 	fixtures "github.com/defos-ai/commander/framework/tests/fixtures/controller"
 )
 
@@ -197,7 +197,7 @@ func TestExecutionQuestionRecoversUncertainSaveAndLostReply(t *testing.T) {
 			request := fixtures.ExecutionQuestionRequest(t, command, "continue", "Continue?")
 			failure := errors.New("persistence confirmation unavailable")
 			if scenario == "uncertain save" {
-				consumer.Operations = &runnerfakes.UncertainWriteStore{OperationStore: store,
+				consumer.Operations = &operationfakes.UncertainWriteStore{OperationStore: store,
 					AfterAsk: func(operations.Operation) error { return errors.Join(operations.ErrWriteUncertain, failure) }}
 			} else {
 				bus.FailPublish(failure)
@@ -238,7 +238,7 @@ func TestExecutionQuestionConfirmsAnswerPersistenceBeforeReturningIt(t *testing.
 		t.Fatal(err)
 	}
 	failure := errors.New("answer durability unconfirmed")
-	consumer.Operations = &runnerfakes.UncertainWriteStore{OperationStore: store,
+	consumer.Operations = &operationfakes.UncertainWriteStore{OperationStore: store,
 		AfterAsk: func(operations.Operation) error { return errors.Join(operations.ErrWriteUncertain, failure) }}
 
 	err = consumer.Consume(t.Context(), request)

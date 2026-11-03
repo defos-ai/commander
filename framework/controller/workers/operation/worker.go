@@ -1,0 +1,146 @@
+package operation
+
+import (
+	"context"
+	"errors"
+	"io"
+	"log/slog"
+	"sync/atomic"
+	"time"
+
+	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
+	agentmodel "github.com/defos-ai/commander/framework/domain/agents"
+	"github.com/defos-ai/commander/framework/domain/missions"
+	"github.com/defos-ai/commander/framework/domain/operations"
+	"github.com/defos-ai/commander/framework/domain/reports"
+	runtimeSessions "github.com/defos-ai/commander/framework/sessions"
+)
+
+// ActionExecutor dispatches new work and observes previously dispatched work.
+// RecoverAction must never execute or republish the command.
+// It reports a confirmed remote failure as executions.CommandFailure.
+type ActionExecutor interface {
+	RunAction(context.Context, string, actionmodel.ActionCall) (actionmodel.ActionOutput, error)
+	RecoverAction(context.Context, string, actionmodel.ActionCall) (actionmodel.ActionOutput, error)
+}
+
+// DurableActionExecutor can safely resume a reserved dispatch to its original
+// instance using the same command envelope. RecoverAction remains observation-only.
+type DurableActionExecutor interface {
+	DispatchAction(context.Context, string, actionmodel.ActionCall) (actionmodel.ActionOutput, error)
+}
+
+var (
+	ErrClosed          = operations.ErrClosed
+	ErrFinished        = operations.ErrFinished
+	ErrQuestionPending = operations.ErrQuestionPending
+	ErrNotRunning      = operations.ErrNotRunning
+	ErrAlreadyRunning  = errors.New("operation worker is already running")
+)
+
+type AgentCatalog interface {
+	Agents(context.Context) ([]agentmodel.Agent, error)
+}
+
+type QuestionAnswerSharer interface {
+	ShareQuestionAnswer(operationID, questionID string)
+}
+
+type Dependencies struct {
+	Sessions      runtimeSessions.Coordinator
+	AgentCatalog  AgentCatalog
+	AgentSelector AgentSelector
+	Sharing       QuestionAnswerSharer
+	Logger        *slog.Logger
+	// Capacity is per agent for work owned by this operation worker; default one.
+	Capacity int
+
+	MissionStore   missions.MissionStore
+	OperationStore operations.OperationStore
+	// ReportStore saves immutable reports before an operation is completed.
+	ReportStore reports.ReportStore
+	// TaskTimeout bounds the initial wait for a dispatched command. Default: fifteen minutes.
+	// Interrupted executions remain observable after this deadline.
+	TaskTimeout time.Duration
+}
+
+type operationState struct {
+	sessionPending bool
+	operation      operations.Operation
+	changed        chan struct{}
+	err            error
+}
+
+type Worker struct {
+	sessions       runtimeSessions.Coordinator
+	ctx            context.Context
+	cancel         context.CancelFunc
+	executor       ActionExecutor
+	sharing        QuestionAnswerSharer
+	store          operations.OperationStore
+	missions       missions.MissionStore
+	reports        reports.ReportStore
+	states         map[string]*operationState
+	taskTimeout    time.Duration
+	catalog        AgentCatalog
+	selector       AgentSelector
+	logger         *slog.Logger
+	capacity       int
+	lastAgent      string
+	wake           chan struct{}
+	requests       chan func()
+	pendingResults map[string]taskResult
+	observations   map[string]taskObservation
+	results        chan taskResult
+	workers        int
+	closeErr       error // written before done closes
+	done           chan struct{}
+	runState       atomic.Uint32
+}
+
+func New(ctx context.Context, executor ActionExecutor, config Dependencies) (*Worker, error) {
+	if ctx == nil || executor == nil {
+		return nil, errors.New("operation worker requires a context and action executor")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if config.TaskTimeout < 0 {
+		return nil, errors.New("task timeout must not be negative")
+	}
+	if config.TaskTimeout == 0 {
+		config.TaskTimeout = operations.DefaultTaskTimeout
+	}
+	if config.OperationStore == nil {
+		return nil, errors.New("operation worker requires an operation store")
+	}
+	if config.MissionStore == nil {
+		return nil, errors.New("operation worker requires a mission store")
+	}
+	if config.ReportStore == nil {
+		return nil, errors.New("operation worker requires a report store")
+	}
+	if config.AgentCatalog == nil {
+		return nil, errors.New("operation worker requires an agent catalog")
+	}
+	if config.Capacity < 0 {
+		return nil, errors.New("capacity must not be negative")
+	}
+	if config.Capacity == 0 {
+		config.Capacity = 1
+	}
+	if config.AgentSelector == nil {
+		config.AgentSelector = RoundRobinSelector{}
+	}
+	if config.Logger == nil {
+		config.Logger = slog.New(slog.NewTextHandler(io.Discard, nil))
+	}
+	lifetime, cancel := context.WithCancel(ctx)
+	r := &Worker{sessions: config.Sessions, sharing: config.Sharing, catalog: config.AgentCatalog, capacity: config.Capacity, wake: make(chan struct{}, 1), requests: make(chan func()), results: make(chan taskResult), ctx: lifetime, cancel: cancel, executor: executor, store: config.OperationStore,
+		missions: config.MissionStore, reports: config.ReportStore, selector: config.AgentSelector, logger: config.Logger, states: make(map[string]*operationState), taskTimeout: config.TaskTimeout, done: make(chan struct{})}
+	if err := r.recover(ctx); err != nil {
+		cancel()
+		return nil, err
+	}
+	return r, nil
+}
