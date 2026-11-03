@@ -105,6 +105,11 @@ func (o Operation) SessionPolicyCompatible(task Task, record agents.Agent) bool 
 		if policy.CreateAction != task.ActionName {
 			continue
 		}
+		if !slices.ContainsFunc(record.Actions, func(a actions.Action) bool {
+			return a.Name == policy.CreateAction && a.SessionMode == string(sessions.Create)
+		}) {
+			return false
+		}
 		// Consumer readiness is checked separately; creation only needs the contracts.
 		for _, name := range policy.UseActions {
 			if !slices.ContainsFunc(record.Actions, func(a actions.Action) bool {

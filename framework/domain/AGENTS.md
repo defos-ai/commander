@@ -41,9 +41,10 @@ applies to all domain packages below this directory.
   and nonempty unique `use_actions` under `policies.session`. Names must be trimmed
   and nonblank; an action may belong to only one entry and role. No installed-agent
   or coverage-list membership is required. Omitted/null/empty lists add no policy.
-  Deep-clone the entry slice and each consumer slice. This contract is persisted
-  only; controller binding and adapter support are pending, so declarations do
-  not yet supply or enforce session IDs.
+  Deep-clone the entry slice and each consumer slice. Controller session admission
+  supplies the routing fields before task acceptance; action modes and local
+  providers still implement the resource contract. Adapter authoring support is
+  pending. Follow the [session guide](../sessions/AGENTS.md) for binding behavior.
 - [`CompletionPolicy`](missions/policies/completion_policy.go) is optional under
   `MissionPolicies.Completion`. Omission/null preserves the model default; an
   explicit empty policy is invalid. Clone its pointer independently with the

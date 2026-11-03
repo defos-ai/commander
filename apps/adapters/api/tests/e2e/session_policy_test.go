@@ -22,6 +22,8 @@ func TestE2ESessionPolicyAssignmentsAndContinuations(t *testing.T) {
 	op := s.Start("policy-paths")
 	path := "/api/v1/operations/" + op
 
+	s.Request("POST", path+"/tasks", map[string]any{"action_name": "connect-resource", "input": map[string]string{"session_scope": id.New()}}, 422, nil)
+	s.Request("POST", path+"/tasks", map[string]any{"action_name": "connect-resource", "input": map[string]string{"session_id": id.New()}}, 422, nil)
 	s.Request("POST", path+"/tasks", map[string]any{"action_name": "use-resource", "input": map[string]any{}}, 422, nil)
 	marker := s.Assign(op, "mark-owner", map[string]any{})
 	marker = s.Finished(op, marker.ID)
@@ -52,6 +54,13 @@ func TestE2ESessionPolicyAssignmentsAndContinuations(t *testing.T) {
 		{"session_scope": resource.ScopeID, "session_id": id.New()},
 	} {
 		s.Request("POST", path+"/tasks", map[string]any{"action_name": "use-resource", "input": conflicting}, 422, nil)
+	}
+	for _, ambiguous := range []json.RawMessage{
+		json.RawMessage(`{"SESSION_SCOPE":"` + resource.ScopeID + `","session_id":"` + resource.ID + `"}`),
+		json.RawMessage(`{"session_scope":"` + resource.ScopeID + `","session_\u0073cope":"` + resource.ScopeID + `","session_id":"` + resource.ID + `"}`),
+		json.RawMessage(`{"session_scope":"` + resource.ScopeID + `","session_id":"` + resource.ID + `","session_id":"` + resource.ID + `"}`),
+	} {
+		s.Request("POST", path+"/tasks", map[string]any{"action_name": "use-resource", "input": ambiguous}, 422, nil)
 	}
 
 	use := s.Assign(op, "use-resource", map[string]any{})
@@ -188,14 +197,62 @@ func TestE2ESessionPolicyRejectsIncompatibleActionContracts(t *testing.T) {
 	s.SessionMission("policy-wrong-consumer", policies.SessionPolicy{CreateAction: "connect-resource", UseActions: []string{"mark-owner"}})
 	wrongCreator := s.Start("policy-wrong-creator")
 	wrongConsumer := s.Start("policy-wrong-consumer")
-	creation := s.Assign(wrongConsumer, "connect-resource", map[string]any{})
-	s.Finished(wrongConsumer, creation.ID)
 
 	s.Request("POST", "/api/v1/operations/"+wrongCreator+"/tasks", map[string]any{"action_name": "mark-owner", "input": map[string]any{}}, 422, nil)
 	s.Request("POST", "/api/v1/operations/"+wrongConsumer+"/tasks", map[string]any{"action_name": "mark-owner", "input": map[string]any{}}, 422, nil)
 
-	if len(s.Operation(wrongCreator).Tasks) != 0 || len(s.Operation(wrongConsumer).Tasks) != 1 {
+	if len(s.Operation(wrongCreator).Tasks) != 0 || len(s.Operation(wrongConsumer).Tasks) != 0 {
 		t.Fatal("incompatible session contracts reached task acceptance")
+	}
+}
+
+func TestE2ESessionPolicyAutomaticCreatorsRetainAdmission(t *testing.T) {
+	peer := e2efixtures.ImmediateSessionPeer(t)
+	s := e2efixtures.NewSessionStack(t, peer.URL)
+	s.Worker(1, "FIXTURE_POLICY_ACTIONS=true")
+	s.SessionMission("policy-automatic", policies.SessionPolicy{CreateAction: "connect-resource", UseActions: []string{"use-resource"}})
+	op := s.Start("policy-automatic")
+	duplicateOp := s.Start("policy-automatic")
+
+	parent := s.Assign(op, "propose-work", map[string]string{"action_name": "connect-resource"})
+	parent = s.Finished(op, parent.ID)
+	var creation operations.Task
+	e2efixtures.WaitUntil(t, 10*time.Second, func() bool {
+		for _, task := range s.Operation(op).Tasks {
+			if task.ParentTaskID == parent.ID {
+				creation = task
+				return true
+			}
+		}
+		return false
+	})
+	creation = s.Finished(op, creation.ID)
+	resource := requirePolicySession(t, creation)
+	duplicates := s.Assign(duplicateOp, "propose-connections", map[string]any{})
+	duplicates = s.Finished(duplicateOp, duplicates.ID)
+	var rejected []operations.Task
+	e2efixtures.WaitUntil(t, 10*time.Second, func() bool {
+		rejected = nil
+		for _, task := range s.Operation(duplicateOp).Tasks {
+			if task.ParentTaskID == duplicates.ID {
+				rejected = append(rejected, task)
+			}
+		}
+		return len(rejected) == 2
+	})
+
+	if parent.SessionIntent != nil || duplicates.SessionIntent != nil || duplicates.Result == nil || len(duplicates.Result.NextActions) != 2 {
+		t.Fatalf("automatic creation changed its stateless parent outcome: first=%+v duplicate=%+v", parent, duplicates)
+	}
+	for _, task := range rejected {
+		if task.Status != operations.TaskQueued || task.AgentID != "" || task.SessionIntent == nil || !strings.Contains(task.SessionIntent.Error, "multiple creations") {
+			t.Fatalf("duplicate automatic creator escaped policy admission: %+v", task)
+		}
+	}
+	var inventory struct{ Items []sessions.Session }
+	s.Request("GET", "/api/v1/sessions", nil, 200, &inventory)
+	if len(inventory.Items) != 1 || inventory.Items[0].ID != resource.ID {
+		t.Fatalf("invalid automatic creators reserved or opened extra resources: %+v", inventory.Items)
 	}
 }
 

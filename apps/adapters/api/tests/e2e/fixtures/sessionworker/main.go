@@ -57,6 +57,9 @@ func run() error {
 			mode = "create"
 		}
 		inputSchema := json.RawMessage(`{"type":"object","required":["session_scope"],"properties":{"session_scope":{"type":"string"}}}`)
+		if name == "propose-connections" && os.Getenv("FIXTURE_POLICY_ACTIONS") == "true" {
+			inputSchema = json.RawMessage(`{"type":"object"}`)
+		}
 		if name == "propose-work" {
 			inputSchema = json.RawMessage(`{"type":"object","required":["action_name"],"properties":{"action_name":{"type":"string"}}}`)
 		}
