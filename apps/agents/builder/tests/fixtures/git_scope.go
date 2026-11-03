@@ -66,6 +66,16 @@ func GitScope(t *testing.T, config fakes.GitConfig) *environment.DiscoveryScope 
 			}
 		}
 	}
+	if config.BuildMode == "success" {
+		t.Cleanup(func() {
+			if !t.Failed() {
+				return
+			}
+			if output, err := os.ReadFile(filepath.Join(bin, "go.log")); err == nil && len(output) > 0 {
+				t.Logf("local Go fixture output:\n%s", output)
+			}
+		})
+	}
 	return &environment.DiscoveryScope{Paths: []string{bin}}
 }
 

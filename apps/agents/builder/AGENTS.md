@@ -207,6 +207,11 @@ Build scenarios use local executable fixtures rather than paid Codex calls;
 verify secret isolation, failed validation, release-structure failures and source
 artifact contents. Cover successful metadata/manifest checks without including
 synthetic release assets in the saved source.
+The synthetic success fixture's private `go.work` must explicitly replace its
+required framework version with the local checkout before running Go offline;
+`use` alone can still trigger version lookups when loading dependencies. Keep
+its compiler diagnostics bounded and visible only on test failure, separate from
+production's redacted subprocess errors.
 
 From the repository root:
 
