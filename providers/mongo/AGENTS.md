@@ -91,7 +91,7 @@ artifact bytes and reports belong to the separate storage provider.
   aggregates in `runtime_sessions`, preserving exact timestamps and revisions.
   Keep collection creation outside transactions and release/history in the same
   document. Retain identities without TTL cleanup; preserve uncertain commits.
-  Lifecycle validation uses the isolated [public E2E suite](../../docs/runtime-sessions.md#e2e-checks).
+  Lifecycle validation uses the isolated [public E2E suite](../../framework/sessions/AGENTS.md#e2e-checks).
   Discovery narrows scope reads by `_id` when supplied and filters decoded records
   in the provider. Keep query criteria as typed values, include retained history,
   and order results by scope ID, then session ID.

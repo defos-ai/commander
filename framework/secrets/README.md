@@ -1,11 +1,9 @@
 # Secret management
 
-Manage integration credentials centrally for agents working across business
-systems, with encrypted storage, action requirements and tracked delivery.
-One name identifies one shared value across the Commander deployment,
-independently of agents and operations. Users manage it
-through [Admin UI](../../apps/admin/ui/README.md) or the authenticated
-[HTTP API](../../apps/adapters/api/README.md#secrets); values stay out of chat.
+Build encrypted credential storage and delivery for agents working across
+business systems. One name identifies one shared value across the deployment.
+For providing and rotating values, follow the
+[shared secrets guide](../../docs/features/secrets.md).
 
 For a custom host, construct the service with an encrypted
 [FS](../../providers/fs/README.md#encrypted-secrets) or
@@ -37,16 +35,16 @@ if err != nil {
 defer clear(value)
 ```
 
-Missing secrets block only the affected actions. Save a value once to serve all
-requesting agents, including those started later. Each agent retains its own
-delivery and installation tracking. Values stay in memory rather than process
-environment variables.
+Missing secrets block only the affected actions. Each agent tracks its own
+delivery and installation; values stay in memory rather than process environment
+variables.
 
-Updates arrive on refresh, normally within 30 seconds. Installed copies expire
-after at most one minute. Deletion does not cancel running actions or erase copies
-they retained. The controller decrypts requested values for delivery; database
-records and delivery history stay encrypted. Restrict broker and filesystem
-access to trusted hosts, and use AMQPS for network secret delivery.
+Default settings refresh declared values every 30 seconds with one-minute leases.
+Deletion does not cancel running actions or erase copies they retained. The
+controller decrypts requested values for delivery; database records and delivery
+history stay encrypted. Restrict broker and filesystem access to trusted hosts,
+and use AMQPS for network secret delivery. Retain the host's
+[encryption key](../../apps/adapters/api/README.md#secrets) across restarts.
 
 ### Request a secret during execution
 
@@ -64,9 +62,6 @@ defer clear(value)
 Use this inside `Agent.Serve` with `AgentConfig.Secrets` configured. Set a context
 deadline: the request waits for installation and does not pause the task timeout.
 Omit the name from `RequiredSecrets` if the action can start without it.
-
-Playground opens a masked form; Admin offers **Manage secrets**. Submit the value
-there to resume waiting work after installation.
 
 ## Request and delivery tracking
 

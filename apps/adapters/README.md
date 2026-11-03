@@ -53,7 +53,7 @@ The list is discovery metadata; it has no saved trust or approval state.
 Call `create_mission` with a flat mission definition containing `name`,
 `objectives`, `input_schema` and `output_schema`.
 Add actions and policies as needed; see
-[mission definitions](../../docs/abstractions.md#mission-operation-and-task).
+[mission definitions](../../docs/features/missions.md).
 Actions may be installed later. Saving a mission does not start work.
 
 Names are unique and remain fixed. To change objectives, actions, policies or schemas,
@@ -74,8 +74,9 @@ Keep secret values out of definitions and chat.
 4. Review the evidence, finish pending work, then `complete_operation` with output
    matching the mission schema. Retrieve the result with `get_report`.
 
-Use Playground's masked form or **Agents → Manage secrets** in Admin when secrets
-are missing. Do not send values through chat or tools.
+Use Playground's masked form or **Secrets** in Admin's sidebar when secrets
+are missing. Follow the [shared secret workflow](../../docs/features/secrets.md);
+do not send values through chat or tools.
 
 **Query saved state before retrying an uncertain command.** Accepted work may
 continue, and another assignment creates another task. Use `cancel_operation`

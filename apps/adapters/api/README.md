@@ -44,7 +44,7 @@ curl --user "$API_USERNAME" \
 Include `name`, an `objectives` array, `input_schema` and `output_schema`.
 Add required/optional actions, starting actions and policies as needed.
 Use `action_definitions` for capabilities an agent should implement later;
-see [mission definitions](../../../docs/abstractions.md#mission-operation-and-task).
+see [mission definitions](../../../docs/features/missions.md).
 
 Saving does not require installed agents or start work. Names are unique:
 an existing name returns `409 mission_exists`. After an uncertain save, read

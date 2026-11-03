@@ -19,7 +19,7 @@ controller per database**.
 
 Compose and all-in-one seed bundled missions through the API. For a separate
 deployment, use [Admin](../admin/README.md) `missions seed` or `missions import`.
-See [mission authoring](../../docs/abstractions.md) and
+See [mission authoring](../../docs/features/missions.md) and
 [deployment](../../docs/deployment.md).
 
 For longer tasks such as agent builds, increase the default wait of 15 minutes:
@@ -47,7 +47,7 @@ Configure providers in [`default/cli/`](default/cli/). Use the
 The default is `runner.RoundRobinSelector{}`. To change selection, implement
 [`runner.AgentSelector`](../../framework/controller/runner/agent_selector.go)
 and pass it in `runner.Config.AgentSelector`. Return an eligible agent ID or
-an empty ID to defer work. [Task affinity](../../docs/abstractions.md#task-affinity)
+an empty ID to defer work. [Task affinity](../../docs/features/missions.md#task-affinity)
 still applies.
 
 Report its `Name()` in `controller.RegistrationConfig.AgentSelector` so Admin

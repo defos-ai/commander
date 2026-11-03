@@ -44,7 +44,8 @@ when any fails, and neutral before a result is available.
 
 Choose a mission and enter its JSON input to start an operation. Open the
 execution graph to inspect tasks, results and artifacts; download the final
-report as JSON. Use **Manage secrets** when an agent needs a value.
+report as JSON. Use **Manage secrets** when an agent needs a value. See the
+[operation workflow](../../../docs/features/operations.md) for readiness and recovery.
 
 Open **Logs** for recent execution progress, or use a task's **View logs** button.
 Filter by task, agent or action. **Load older** reads history; **Pause following**
@@ -53,54 +54,36 @@ Use **Follow live** to catch up or **Jump to latest** to return to recent entrie
 The view keeps up to 1,000 logs at a time; older entries remain available through
 **Load older**.
 
-Answer questions with an option or your own text. Cancelling stops queued work;
-dispatched tasks may finish. After a command timeout, refresh the operation
-before trying again.
-Questions show the model waiting countdown and who supplied a saved answer.
-You can still answer after the countdown; if another answer arrives while your
-form is open, inspect the saved answer before continuing.
+The **Questions** section shows the model waiting countdown and saved answer
+origin. Choose an option or enter text; inspect a competing saved answer before
+continuing. See [Questions](../../../docs/features/questions.md) for fallback behavior.
 
 Choose **Complete operation** to review objectives and task outcomes, enter the
 final output as JSON, and confirm completion. The dialog shows the mission's
-output schema. Report limitations and unknown outcomes in that output; completion
-accepts the final report without certifying every task succeeded. After an
-uncertain submission, choose **View operation** before submitting again.
-With Operator completion policy, model submissions save completion draft for your
-approval without creating a final report. Review and edit it in this dialog. If
+output schema and any completion draft awaiting operator approval. After an
+uncertain submission, choose **View operation** before submitting again. If
 the completion draft changes, choose **Load latest output** to replace your draft
 explicitly, then review and approve it.
 
 ## Create and edit missions
 
-1. Open **Missions → Create mission** and enter a name and objectives.
-2. Set **Completion decision** to **Model** or **Operator**. Operator requires
-   explicit completion approval; Model also allows an operator to complete it.
-3. Search actions and mark them **Required** or **Optional**. Choose starting
-   actions to guide the first assignments.
-4. Choose **Define action** for a capability to build later. Add its input/output
-   object schemas and required secret names.
-5. Use **Advanced settings** for policies and schemas, or **JSON** for
-   the full definition. Save to open the new mission.
+Open **Missions → Create mission** and use Form or JSON mode. **Define action**
+adds a desired capability; **Advanced settings** edits policies and schemas.
+Follow [Missions](../../../docs/features/missions.md) for definitions and policy choices.
 
-Actions can be installed later; saving does not start work. Keep secret values
-out of definitions. Names are unique; use **Check saved mission** after an
-uncertain save. Unsaved drafts disappear when you leave or reload the page.
-
-Open **JSON** on a saved mission to view or copy its definition. See
-[mission contracts](../../../docs/abstractions.md#mission-operation-and-task).
+Use **Check saved mission** after an uncertain save. Unsaved drafts disappear
+when you leave or reload the page. Open **JSON** on a saved mission to view or copy it.
 
 To change a saved mission, open it and choose **Edit mission**. JSON fields are
 formatted for reading while preserving numeric precision and string escapes.
 Update objectives, actions, completion decision or advanced settings in Form or
-JSON, then save. The name stays fixed.
-Changes apply to future operations; existing operations retain their saved
-definition. After an uncertain update, inspect the saved mission before trying again.
+JSON, then save. After an uncertain update, inspect the saved mission before trying again.
 
 ## Secrets
 
 Open **Secrets** in the sidebar to provide, replace or delete shared secrets.
-Each name identifies one value for all requesting agents. You can also set an
-expiration. Values are write-only.
+You can also set an expiration. Values are write-only; follow the
+[secret workflow](../../../docs/features/secrets.md) for sharing and delivery limits.
 
 Compose and all-in-one configure encryption automatically. Standalone hosts need
 an [encryption key](../../adapters/api/README.md#secrets). After saving, wait for
@@ -114,12 +97,10 @@ inspect connection details, activity and retained history. An agent's **Sessions
 button filters the list to that exact owner; task details link to their saved
 session or scope.
 
-Use **Verify** to check a resource through its owner and **Close session** to
-release it. A closing session still awaits confirmation. **Abandon session**
-releases a lost or failed resource's scope without confirming closure; its old
-work and agent affinity retain their original owner. Released history is read-only.
+Use **Verify**, **Close session** or **Abandon session** according to the
+[session lifecycle](../../../docs/features/sessions.md). Released history is read-only.
 After an uncertain control, use **Inspect saved state** before making another
-request. Completing or cancelling an operation leaves its resources alive.
+request.
 
 ## Connections
 

@@ -47,7 +47,7 @@
   optional intersecting scope/exact-owner filters and send
   controls through the controller. Preserve `request_id`, abandonment's retained
   lost state and affinity, and `session_mode` in action summaries/contracts.
-  See [the session contract](../../docs/runtime-sessions.md#queries-and-controls).
+  See [session queries and controls](../../docs/features/sessions.md#queries-and-controls).
 - Standalone MCP requires `MCP_TOKEN`; embedded hosts inject `host.BearerCredentials`
   through CLI options. Validate before opening listeners or providers. Protect
   every `/mcp` method, including notifications/resources, and keep `/healthz` public.

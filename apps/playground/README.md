@@ -151,9 +151,9 @@ Docker also needs the matching `-e VARIABLE` argument.
 
 For agent secrets, enter values in the masked form that opens when needed.
 **Tab** moves between fields, **Enter** advances or saves, and **Esc** postpones.
-Use `/secrets` to reopen it, or **Agents → Manage secrets** in Admin.
+Use `/secrets` to reopen it, or **Secrets** in Admin's sidebar.
 Values go directly to the API, outside the model. Running tasks keep their
-deadline while waiting.
+deadline while waiting. See [shared secrets](../../docs/features/secrets.md).
 
 After connecting, Playground saves the selected provider's key through the API
 under its environment-variable name, such as `OPENAI_API_KEY` or `ANTHROPIC_API_KEY`.
@@ -227,24 +227,18 @@ Answer operation questions in the **Operator input** panel or Admin's operation
 **Questions** section. Playground sends panel and `/answer` submissions directly
 to the API, using the same login as `/admin`; enter that login locally if prompted.
 If submission cannot be confirmed, inspect the saved question before submitting again.
-Questions stay open after their operator waiting window (120 seconds by default).
-The model may answer after `fallback_at`; operators can answer throughout.
-Playground automatically reviews watched questions when that window ends.
-`/stop` pauses this review; `/watch <operation-id>` resumes it. Other MCP clients
-schedule their own revisit using the same saved `fallback_at`.
-
-Running actions can ask their own questions. Answer the existing question and
-let that action resume; its task deadline continues while it waits. Avoid
-starting replacement work for the same pending decision.
+Playground automatically revisits watched questions when model fallback becomes
+available. `/stop` pauses review; `/watch <operation-id>` resumes it. See
+[Questions](../../docs/features/questions.md) for timing, action waits and other MCP clients.
 
 Tool calls update their pending line when they complete or fail. The progress
 area shows up to three recently updated operations; `+N more · /operations`
 points to the full list. Watching and model review continue for hidden operations.
 
-`completed` means a final report was accepted; it may include limitations.
 Terminal operations show a static marker and list unknown task outcomes.
 Playground keeps watching for late results and artifacts. `/stop` pauses model
 review while operation updates continue; `/watch <operation-id>` resumes review.
+See [Operations](../../docs/features/operations.md) for completion, settlement and recovery.
 
 Scroll with the wheel, trackpad or **PgUp/PgDown**. Drag to select, then use your
 terminal's copy command, such as **Ctrl+Shift+C** in GNOME Terminal, **Cmd+C** in

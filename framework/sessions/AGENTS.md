@@ -1,8 +1,8 @@
 # Working on runtime sessions
 
 Read this guide when changing session admission, placement, providers, controls
-or recovery, including callers outside this directory. For transition ordering
-and failure cases, read the [lifecycle design](../../docs/runtime-session-lifecycle-design.md).
+or recovery, including callers outside this directory. For usage and lifecycle
+limits, see [Sessions](../../docs/features/sessions.md).
 
 - [admission.go](admission.go) normalizes intent; [observations.go](observations.go)
   reconciles operation/execution evidence; [controls.go](controls.go) handles
@@ -90,6 +90,13 @@ Close and abandonment persist independently after the creating execution ends.
 Startup reconciles saved intent, dispatch, owner binding and execution claims
 before dispatch. Unknown outcomes retain the original owner and command; released
 bindings allow observation of old outcomes without republishing old work.
+
+Dispatch saves task intent, reserves the scope, assesses placement, persists the
+exact owner dispatch, binds the session and claims the execution before publishing.
+These stores have no shared transaction: reconcile incomplete phases to the saved
+identities before publication. Serialize preparation/publication and close/abandon
+through the coordinator; do not hold its gate while waiting for remote execution
+or control replies. An uncertain write never authorizes a new owner or command.
 
 One active controller per database is supported. FS stores scope aggregates in
 `runtime-sessions.json`; Mongo stores one aggregate per scope in `runtime_sessions`

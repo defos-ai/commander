@@ -33,10 +33,10 @@ For a website review:
    Commander reviews their results.
 4. Open the completed operation in Admin to inspect findings and screenshots.
 
-Learn how to [create missions and choose policies](abstractions.md),
+Learn how to [create missions and choose policies](features/missions.md),
 [build agents](../apps/agents/README.md), or [connect another client](../apps/adapters/README.md).
-See [data sharing](features/data-sharing.md) for controller-managed
-delivery of saved results, artifact references and decisions between actions.
+Use the [feature guides](features/README.md) for operations, questions, secrets,
+sessions and data sharing.
 
 ## Dependencies
 

@@ -5,7 +5,7 @@ review consistent across agent integrations. This reference helps you choose a
 model and find its consumers before changing a contract. Links lead to definitions
 and store interfaces; field lists and allowed status values stay in source.
 For workflow examples, read
-[missions and policies](../../docs/abstractions.md).
+[missions and policies](../../docs/features/missions.md).
 
 A mission describes reusable work. An operation runs that mission, tasks assign
 actions, and executions retain the exact dispatched commands and outcomes.
@@ -125,7 +125,7 @@ Secret values stay outside operation questions, logs and model context.
 
 An operation finishing does not close its sessions. `Session` is a public view;
 `Scope` and `Record` own durable reservation and lifecycle state. See the
-[runtime-session contract](../../docs/runtime-sessions.md).
+[session guide](../../docs/features/sessions.md).
 
 ## Controllers
 

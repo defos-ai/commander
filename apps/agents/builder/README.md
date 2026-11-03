@@ -79,10 +79,10 @@ agent's readiness; its failure leaves your build and release available.
 ## Secrets
 
 Enter model and GitHub tokens in Playground's secret form or Admin's
-**Agents → Manage secrets**; never paste them into chat or action inputs.
+**Secrets** page; never paste them into chat or action inputs.
 
 The controller delivers requested values; builders do not need an encryption key
-for managed secrets. See [secret setup](../../../framework/secrets/README.md).
+for managed secrets. See [shared secrets](../../../docs/features/secrets.md).
 
 ## Workspaces and execution
 

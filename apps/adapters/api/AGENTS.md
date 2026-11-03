@@ -30,7 +30,7 @@
   404 is not evidence that a record is absent. Saved-state reads work without
   a live controller or MCP connection.
 - Runtime-session routes use `queries.Sessions` and typed controller controls;
-  see [the public contract](../../../docs/runtime-sessions.md#queries-and-controls).
+  see [the public contract](../../../docs/features/sessions.md#queries-and-controls).
   Keep lifecycle disposition separate from observed state and preserve retained
   history, normalized task intent and per-task placement blockers. A timed-out
   close is uncertain; a failed close can remain queued for reconciliation.

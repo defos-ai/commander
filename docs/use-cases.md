@@ -28,8 +28,8 @@ Install or implement the required actions for your systems before running them.
 
 1. [Build or install agents](../apps/agents/README.md) with actions for the systems
    involved, and configure their access.
-2. [Define a mission](abstractions.md#create-a-mission) with objectives and required
-   actions. Choose [continuation policies](abstractions.md#continuation-policy) for follow-up work and
+2. [Define a mission](features/missions.md#create-a-mission) with objectives and required
+   actions. Choose [continuation policies](features/missions.md#continuation-policy) for follow-up work and
    model review, and include human review where the process needs approval.
 3. Start an operation through Playground, MCP or the API. Use
    [Admin](../apps/admin/ui/README.md) to inspect its tasks, execution logs, results
