@@ -35,8 +35,14 @@ applies to all domain packages below this directory.
   [operation](operations/operation.go). Action coverage does not automatically
   sequence tasks or act as an execution allowlist.
 - Mission policy types live in [missions/policies](missions/policies/), which
-  stays independent of its parent package. Placement, continuation and sharing
-  are grouped under `MissionPolicies`; completion retains its separate mission field.
+  stays independent of its parent package. Completion, placement, continuation
+  and sharing are grouped under `MissionPolicies`.
+- [`CompletionPolicy`](missions/policies/completion_policy.go) is optional under
+  `MissionPolicies.Completion`. Omission/null preserves the model default; an
+  explicit empty policy is invalid. Clone its pointer independently with the
+  policy container. `Mission.CompletionPolicy` reads the effective value without
+  filling omitted fields. Reject root `completion` instead of dropping operator
+  authority while reading an old definition.
 - [`PlacementPolicy`](missions/policies/placement_policy.go) is optional under
   `MissionPolicies.Placement`. Its one `same_agent` group is read by preflight,
   dispatch, affinity and session placement. Omitted/null placement and nil/empty

@@ -23,9 +23,10 @@ artifact bytes and reports belong to the separate storage provider.
 - Mission creation uses an atomic primary-key insert and rejects every existing
   name, including an identical definition. Keep seeding's `Upsert` replacement
   behavior separate; only a duplicate `_id` maps to `missions.ErrMissionExists`.
-- BSON ignores unknown fields. Mission reads explicitly reject a stored root
-  `rules` field, including null/empty values, so removed review constraints cannot
-  silently disappear. New documents omit it; no conversion happens during reads.
+- BSON ignores unknown fields. Mission reads explicitly reject stored root
+  `rules` and `completion` fields, including null/empty values, so review and
+  completion constraints cannot silently disappear. New documents omit them;
+  no conversion happens during reads. Completion belongs in `policies.completion`.
 - Operations span metadata, task, question and event collections. Initialize
   collections/indexes before the first transaction; preserve unique positions and
   event keys within each operation.

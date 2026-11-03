@@ -12,7 +12,7 @@ function ActionNames({ names }: { names: string[] | null | undefined }) {
 
 export function MissionDetails({ mission }: { mission: Mission }) {
   const { t } = useTranslation();
-  const completionDecision = mission.completion?.decision_by ?? 'model';
+  const completionDecision = mission.policies?.completion?.decision_by ?? 'model';
   return <div className="mission-details">
     <section className="catalog-section"><h2>{t($ => $.missions.objectives)}</h2>
       <ul className="catalog-tags">{mission.objectives.map((objective, index) => <li key={index}>{objective}</li>)}</ul>

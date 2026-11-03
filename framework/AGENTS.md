@@ -67,11 +67,13 @@
   operation snapshots. Results, accepted artifact metadata and task-scoped
   answered questions can be forwarded to existing active tasks. Sharing does not
   start tasks or grant secret/storage access.
-- Optional mission `completion` stores a mission-wide
+- Optional mission `policies.completion` stores a mission-wide
   [`CompletionPolicy`](domain/missions/policies/completion_policy.go) with
   required `decision_by: model|operator`. Omission/null retains a nil policy;
-  an empty object is invalid. Clone its pointer independently in mission and
-  operation snapshots. Trusted adapters stamp required completion origin:
+  an empty object is invalid. Clone its pointer independently inside policies in
+  mission and operation snapshots. `Mission.CompletionPolicy` supplies the effective
+  model default without changing the retained definition. Reject the old root
+  `completion` field. Trusted adapters stamp required completion origin:
   HTTP API uses `operator`, MCP uses `model`; public bodies cannot choose it.
   Model/omitted policy completes immediately through the existing command.
   For operator policy, model completion saves one `Operation.CompletionDraft`

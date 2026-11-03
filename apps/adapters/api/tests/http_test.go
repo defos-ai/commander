@@ -130,7 +130,7 @@ func TestSwaggerServesProtectedLocalAssetsAndOperationContracts(t *testing.T) {
 	}
 	for _, name := range []string{"Mission", "CreateMissionRequest"} {
 		mission := document.Components.Schemas[name]
-		if mission.Properties["policies"] == nil || mission.Properties["rules"] != nil || mission.Properties["automations"] != nil {
+		if mission.Properties["policies"] == nil || mission.Properties["rules"] != nil || mission.Properties["completion"] != nil || mission.Properties["automations"] != nil {
 			t.Fatalf("OpenAPI %s must publish typed mission policies without legacy rules", name)
 		}
 	}
@@ -143,6 +143,13 @@ func TestSwaggerServesProtectedLocalAssetsAndOperationContracts(t *testing.T) {
 		policies := document.Components.Schemas["MissionPolicies"+suffix]
 		if property := policies.Properties["continuation"]; property == nil || !slices.Contains(property.Types, "object") || !slices.Contains(property.Types, "null") || slices.Contains(policies.Required, "continuation") {
 			t.Fatal("OpenAPI must make continuation optional and nullable")
+		}
+		if property := policies.Properties["completion"]; property == nil || !slices.Contains(property.Types, "object") || !slices.Contains(property.Types, "null") || slices.Contains(policies.Required, "completion") {
+			t.Fatal("OpenAPI must make nested completion optional and nullable")
+		}
+		completion := document.Components.Schemas["MissionCompletionPolicy"+suffix]
+		if completion.AdditionalProperties == nil || completion.AdditionalProperties.Not == nil || !slices.Equal(completion.Required, []string{"decision_by"}) || completion.Properties["decision_by"] == nil || !slices.Equal(completion.Properties["decision_by"].Enum, []any{"model", "operator"}) {
+			t.Fatal("OpenAPI must require a completion decision maker and reject unknown fields")
 		}
 		continuation := document.Components.Schemas["MissionContinuationPolicy"+suffix]
 		if continuation.AdditionalProperties == nil || continuation.AdditionalProperties.Not == nil || len(continuation.Properties) != 2 {

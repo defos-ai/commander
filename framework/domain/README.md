@@ -39,10 +39,10 @@ The [Agent], [Controller], [Runner], [Queries], [Secret service] and
 | Model | Why it exists | Consumers |
 | --- | --- | --- |
 | [`Mission`](missions/mission.go) | Defines reusable objectives, action coverage, schemas and policies; each operation saves its accepted definition. | [Admin] authoring/seeding, Adapters and Runner startup. |
-| [`CompletionPolicy`](missions/policies/completion_policy.go) | Declares who may complete the whole mission; an operator policy requires the operator submission channel. Each operation retains its policy. | Mission validation, Adapters, Runner and atomic completion in operation stores. |
+| [`CompletionPolicy`](missions/policies/completion_policy.go) | Declares completion authority under `policies.completion`; an operator policy requires the operator submission channel. Each operation retains its policy. | Mission validation, Adapters, Runner and atomic completion in operation stores. |
 | [`PlacementPolicy`](missions/policies/placement_policy.go) | Binds one action group to the first dispatched agent within an operation. | Mission validation/cloning, preflight, runner placement, atomic dispatch, session placement and adapters. |
 | [`ContinuationPolicy`](missions/policies/continuation_policy.go) | Defines independent action scopes for direct-child aggregation and required model review. | Mission validation/cloning, continuation evaluation, atomic transitions and adapters. |
-| [`MissionPolicies`](missions/policies/policies.go) | Groups optional placement, continuation and sharing settings into each saved mission snapshot. Completion retains its separate field. | Mission validation/cloning, Adapters, mission and operation stores. |
+| [`MissionPolicies`](missions/policies/policies.go) | Groups optional completion, placement, continuation and sharing settings into each saved mission snapshot. | Mission validation/cloning, Adapters, mission and operation stores. |
 | [`SharingPolicy`, `SharingRoute`](missions/policies/sharing_policy.go) | Declare permitted action-to-action data routes for saved results, accepted artifact metadata and task-scoped answered questions, retained independently in each operation. | Mission authoring/validation, Adapters, Controller forwarding, mission and operation stores. |
 
 ## Operations

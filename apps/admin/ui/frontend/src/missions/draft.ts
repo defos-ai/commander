@@ -1,5 +1,6 @@
 import { formatJSON } from './format';
 import { isMissionPolicies } from './policies';
+import type { CompletionPolicy } from '../api/types';
 
 export const initialMissionDefinition = JSON.stringify({
   name: '',
@@ -13,7 +14,6 @@ export const initialMissionDefinition = JSON.stringify({
 export type MissionDraft = {
   name: string;
   objectives: string[];
-  completion_decision: 'model' | 'operator';
   required_actions: string[];
   optional_actions: string[];
   starting_actions: string[];
@@ -94,7 +94,7 @@ function strings(value: unknown, nullable = false): value is string[] | undefine
 
 export function readMissionDraft(source: string): MissionDraft {
   const { value, fields } = document(source);
-  if ('steps' in value || 'rules' in value || typeof value.name !== 'string' || !strings(value.objectives) || !value.objectives?.length
+  if ('steps' in value || 'rules' in value || 'completion' in value || typeof value.name !== 'string' || !strings(value.objectives) || !value.objectives?.length
     || !strings(value.required_actions, true) || !strings(value.optional_actions, true) || !strings(value.starting_actions, true)) {
     throw new TypeError('Mission form fields have invalid types');
   }
@@ -105,11 +105,6 @@ export function readMissionDraft(source: string): MissionDraft {
   if (value.action_definitions != null && !Array.isArray(value.action_definitions)) {
     throw new TypeError('Mission action definitions must be a list');
   }
-  const completion = value.completion;
-  if (completion != null && (!object(completion) || Object.keys(completion).some(key => key !== 'decision_by') ||
-    (completion.decision_by !== 'model' && completion.decision_by !== 'operator'))) {
-    throw new TypeError('Mission completion policy must specify model or operator');
-  }
   function raw(field: string, fallback: string): string {
     const span = fields.get(field);
     return span ? source.slice(span.start, span.end) : fallback;
@@ -117,7 +112,6 @@ export function readMissionDraft(source: string): MissionDraft {
   return {
     name: value.name,
     objectives: value.objectives,
-    completion_decision: completion?.decision_by === 'operator' ? 'operator' : 'model',
     required_actions: value.required_actions ?? [],
     optional_actions: value.optional_actions ?? [],
     starting_actions: value.starting_actions ?? [],
@@ -138,6 +132,22 @@ export function updateMissionDefinition(source: string, field: string, jsonValue
   return source.slice(0, index) + `${last ? ',' : ''}\n  ${JSON.stringify(field)}: ${jsonValue}` + source.slice(index);
 }
 
+export function readCompletionDecision(source: string): CompletionPolicy['decision_by'] {
+  const policies: unknown = JSON.parse(source);
+  if (!isMissionPolicies(policies)) throw new TypeError('Mission policies have invalid fields');
+  return policies?.completion?.decision_by ?? 'model';
+}
+
+export function writeCompletionDecision(source: string, decision: CompletionPolicy['decision_by']): string {
+  if (readCompletionDecision(source) === decision) return source;
+  const policiesSource = JSON.parse(source) === null ? '{}' : source;
+  const { value, fields } = document(policiesSource);
+  const completion = fields.get('completion');
+  const completionSource = completion && value.completion !== null ? policiesSource.slice(completion.start, completion.end) : '{}';
+  return updateMissionDefinition(policiesSource, 'completion',
+    updateMissionDefinition(completionSource, 'decision_by', JSON.stringify(decision)));
+}
+
 export function writeMissionDraft(source: string, draft: MissionDraft): string {
   const previous = readMissionDraft(source);
   let result = source;
@@ -148,9 +158,6 @@ export function writeMissionDraft(source: string, draft: MissionDraft): string {
   for (const field of ['input_schema', 'output_schema', 'policies', 'action_definitions'] as const) {
     JSON.parse(draft[field]);
     if (formatJSON(previous[field]) !== formatJSON(draft[field])) result = updateMissionDefinition(result, field, draft[field]);
-  }
-  if (previous.completion_decision !== draft.completion_decision) {
-    result = updateMissionDefinition(result, 'completion', JSON.stringify({ decision_by: draft.completion_decision }));
   }
   readMissionDraft(result);
   return result;

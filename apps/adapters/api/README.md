@@ -56,7 +56,7 @@ the JSON `name` unchanged. Objectives, action lists/contracts, policies and sche
 can change; existing operations keep their original mission snapshot. Read the
 saved definition after an uncertain update before retrying.
 
-Optional `completion.decision_by` accepts `model` or `operator` and records the
+Optional `policies.completion.decision_by` accepts `model` or `operator` and records the
 mission-wide policy in future operation snapshots. `operator` requires completion
 through an operator channel, such as the authenticated HTTP API, with no model
 fallback. Omission or `model` also allows MCP completion.

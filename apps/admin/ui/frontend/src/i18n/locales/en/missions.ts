@@ -43,6 +43,8 @@ export default {
     inputSchema: 'Input schema (JSON)',
     outputSchema: 'Output schema (JSON)',
     policies: 'Policies (JSON)',
+    invalidPolicies: 'Invalid policies',
+    repairPolicies: 'Fix Policies (JSON) before choosing a completion decision.',
     actionDefinitions: 'Action definitions (JSON)',
     unsupportedJSON: 'This definition cannot be shown in the form. Check its field types or continue editing JSON.',
     invalidFields: 'Enter valid JSON with the expected field types in the advanced settings.',

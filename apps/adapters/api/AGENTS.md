@@ -71,12 +71,14 @@
   null or empty continuation declares no overrides. Keep OpenAPI nested policies
   and continuation strict; register continuation schemas before policies so the
   nested schema preserves nullable arrays and action-name constraints.
-- Optional mission `completion` maps through independent API request/response DTOs
-  to [`policies.CompletionPolicy`](../../../framework/domain/missions/policies/completion_policy.go).
-  Clone its pointer at mapping boundaries; omission
-  and explicit null stay omitted, while a present object requires exact
+- Optional mission `policies.completion` maps through independent API
+  request/response DTOs to [`policies.CompletionPolicy`](../../../framework/domain/missions/policies/completion_policy.go).
+  Clone its pointer at mapping boundaries; omission and explicit null stay
+  omitted and default to model, while a present object requires exact
   `decision_by: model|operator` and rejects unknown fields. OpenAPI must describe
-  this separately from action-scoped rule parameters. Preserve the configured
+  this nested policy as optional and nullable, with no root completion property.
+  Register completion schemas before policies to preserve strict nested
+  constraints. Reject root `completion`, including null. Preserve the configured
   policy in catalog and operation responses. The controller enforces the saved
   operation policy: `operator` retains model output for review and permits final
   completion only with operator origin, without a timed fallback; omitted/model

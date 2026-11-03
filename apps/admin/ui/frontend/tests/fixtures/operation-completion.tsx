@@ -7,7 +7,7 @@ export { connection, credentials, detail, view } from './operation-controls';
 export const operation: Operation = {
   ...initialOperation, status: 'planning', questions: [],
   mission: {
-    ...initialOperation.mission, completion: { decision_by: 'operator' },
+    ...initialOperation.mission, policies: { completion: { decision_by: 'operator' } },
     output_schema: { type: 'object', required: ['summary'], properties: { summary: { type: 'string' } } },
   },
   progress: { ...initialOperation.progress, pending_questions: 0 },

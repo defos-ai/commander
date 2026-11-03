@@ -36,15 +36,15 @@ func openAPIDocument() ([]byte, error) {
 		{"MissionSharingPolicy", reflect.TypeFor[models.MissionSharingPolicyResponse]()},
 		{"MissionPlacementPolicy", reflect.TypeFor[models.MissionPlacementPolicyResponse]()},
 		{"MissionContinuationPolicy", reflect.TypeFor[models.MissionContinuationPolicyResponse]()},
-		{"MissionPolicies", reflect.TypeFor[models.MissionPoliciesResponse]()},
 		{"MissionCompletionPolicy", reflect.TypeFor[models.MissionCompletionPolicyResponse]()},
+		{"MissionPolicies", reflect.TypeFor[models.MissionPoliciesResponse]()},
 		{"ActionDefinition", reflect.TypeFor[models.ActionDefinitionResponse]()},
 		{"Mission", reflect.TypeFor[models.MissionResponse]()},
 		{"MissionSharingPolicyRequest", reflect.TypeFor[models.MissionSharingPolicyRequest]()},
 		{"MissionPlacementPolicyRequest", reflect.TypeFor[models.MissionPlacementPolicyRequest]()},
 		{"MissionContinuationPolicyRequest", reflect.TypeFor[models.MissionContinuationPolicyRequest]()},
-		{"MissionPoliciesRequest", reflect.TypeFor[models.MissionPoliciesRequest]()},
 		{"MissionCompletionPolicyRequest", reflect.TypeFor[models.MissionCompletionPolicyRequest]()},
+		{"MissionPoliciesRequest", reflect.TypeFor[models.MissionPoliciesRequest]()},
 		{"ActionDefinitionRequest", reflect.TypeFor[models.ActionDefinitionRequest]()},
 		{"CreateMissionRequest", reflect.TypeFor[models.CreateMissionRequest]()},
 		{"ActionRequirement", reflect.TypeFor[models.ActionRequirementResponse]()},
@@ -71,7 +71,7 @@ func openAPIDocument() ([]byte, error) {
 			objectives.Items.Pattern = `\S`
 			objectives.Description = "Ordered mission objectives. Include at least one nonblank objective."
 		}
-		for _, name := range []string{"placement", "continuation"} {
+		for _, name := range []string{"placement", "continuation", "completion"} {
 			if property := schema.Properties[name]; property != nil {
 				property.Type, property.Types = "", []string{"object", "null"}
 			}
@@ -114,14 +114,14 @@ func openAPIDocument() ([]byte, error) {
 			schema.Properties["model_review"].Description = "Action names whose valid proposals require model review instead of automatic continuation. May overlap aggregate_results; omitted, null or empty disables this override. Failures and empty proposals still require review."
 		case "MissionPolicies", "MissionPoliciesRequest":
 			schema.AdditionalProperties = &jsonschema.Schema{Not: &jsonschema.Schema{}}
-			schema.Description = "Optional placement, continuation and sharing policies retained in each operation. Completion remains at the mission root. An empty object declares no policy overrides."
+			schema.Description = "Optional placement, continuation, completion and sharing policies retained in each operation. An empty object declares no policy overrides; completion defaults to model."
 		case "MissionCompletionPolicy", "MissionCompletionPolicyRequest":
+			schema.Description = "Optional mission-wide completion policy retained in each operation. Omitted or null defaults to model; a present object requires decision_by. Operator requires operator-origin completion with no timed model fallback."
 			schema.Required = []string{"decision_by"}
 			schema.AdditionalProperties = &jsonschema.Schema{Not: &jsonschema.Schema{}}
 			schema.Properties["decision_by"].Enum = []any{"model", "operator"}
 			schema.Properties["decision_by"].Description = "Required completion decision maker. operator requires completion through an operator channel; model also permits model-origin completion. The controller uses the operation's retained mission policy."
 		case "Mission":
-			schema.Properties["completion"].Description = "Optional mission-wide completion policy retained in each operation. Omission or model permits model-origin completion; operator requires operator-origin completion with no timed model fallback."
 			schema.Properties["action_definitions"].Description = "Desired action contracts referenced by this mission. Metadata only: defining an action does not register an executor or satisfy readiness."
 			schema.Properties["required_actions"].Description = "Actions included in mission preflight readiness checks."
 			schema.Properties["optional_actions"].Description = "Additional actions the mission may use. Unscheduled optional actions do not block mission preflight; queued optional actions participate in readiness checks. Names are unique and must not overlap required_actions."
@@ -257,7 +257,6 @@ func constrainMissionRequestSchema(schema *jsonschema.Schema, model string) {
 		secrets.Description = "Managed secret names, never secret values."
 	case "CreateMissionRequest":
 		schema.Required = []string{"name", "objectives", "input_schema", "output_schema"}
-		schema.Properties["completion"].Description = "Optional mission-wide completion policy, copied into future operation snapshots. operator requires operator-origin completion with no timed model fallback; omission or model also permits model-origin completion."
 		schema.Properties["name"].Pattern = `\S`
 		schema.Properties["name"].Not = &jsonschema.Schema{Enum: []any{".", ".."}}
 		schema.Properties["name"].Description = "Nonblank mission name; the dot segments '.' and '..' are invalid. Existing names return mission_exists and are never replaced."

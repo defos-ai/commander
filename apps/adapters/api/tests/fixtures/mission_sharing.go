@@ -13,11 +13,19 @@ func SharingMission() models.CreateMissionRequest {
 		Objectives:   []string{"Analyze vulnerability findings as they arrive."},
 		InputSchema:  json.RawMessage(`{}`),
 		OutputSchema: json.RawMessage(`{}`),
-		Policies: &models.MissionPoliciesRequest{Continuation: &models.MissionContinuationPolicyRequest{AggregateResults: []string{"find-vulnerabilities"}, ModelReview: []string{"find-vulnerabilities", "analyze-vulnerabilities"}}, Placement: &models.MissionPlacementPolicyRequest{SameAgent: []string{"find-vulnerabilities", "analyze-vulnerabilities"}}, Sharing: []models.MissionSharingPolicyRequest{{
-			FromActions: []string{"find-vulnerabilities"},
-			ToActions:   []string{"analyze-vulnerabilities"},
-			Include:     []string{"results", "artifacts", "decisions"},
-		}}},
+		Policies: &models.MissionPoliciesRequest{
+			Completion: &models.MissionCompletionPolicyRequest{DecisionBy: "operator"},
+			Continuation: &models.MissionContinuationPolicyRequest{
+				AggregateResults: []string{"find-vulnerabilities"},
+				ModelReview:      []string{"find-vulnerabilities", "analyze-vulnerabilities"},
+			},
+			Placement: &models.MissionPlacementPolicyRequest{SameAgent: []string{"find-vulnerabilities", "analyze-vulnerabilities"}},
+			Sharing: []models.MissionSharingPolicyRequest{{
+				FromActions: []string{"find-vulnerabilities"},
+				ToActions:   []string{"analyze-vulnerabilities"},
+				Include:     []string{"results", "artifacts", "decisions"},
+			}},
+		},
 	}
 }
 
@@ -79,5 +87,17 @@ func InvalidContinuationPolicies() []any {
 		Object{"model_review": "analyze-vulnerabilities"},
 		Object{"aggregate_results": []string{"find-vulnerabilities"}, "decision_by": "model"},
 		Object{"for_actions": []string{"find-vulnerabilities"}},
+	}
+}
+
+func InvalidCompletionPolicies() []any {
+	return []any{
+		Object{},
+		Object{"decision_by": ""},
+		Object{"decision_by": "human"},
+		Object{"decision_by": nil},
+		Object{"decision_by": 1},
+		Object{"decision_by": "operator", "fallback_at": "later"},
+		"operator",
 	}
 }

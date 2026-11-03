@@ -417,12 +417,20 @@ func TestCompletionUsesSavedMissionPolicy(t *testing.T) {
 	a.Call("describe_mission", fixtures.Object{"mission_name": "analyze-text"}, &definition)
 	operatorDefinition := definition.Clone()
 	operatorDefinition.Name += "-operator-" + id.New()
-	operatorDefinition.Completion = &policies.CompletionPolicy{DecisionBy: policies.Operator}
+	if operatorDefinition.Policies == nil {
+		operatorDefinition.Policies = &policies.MissionPolicies{}
+	}
+	operatorDefinition.Policies.Completion = &policies.CompletionPolicy{DecisionBy: policies.Operator}
 	operatorDefinition.OutputSchema = json.RawMessage(`{"anyOf":[{"type":"object","properties":{"summary":{"type":"string"}},"required":["summary"],"additionalProperties":false},{"type":"null"}]}`)
 	a.Call("create_mission", fixtures.MissionDefinition(operatorDefinition), nil)
 	var operation operations.Operation
 	a.Call("start_operation", fixtures.Object{"mission_name": operatorDefinition.Name, "input": fixtures.Object{"text": "Operator reviews final output"}}, &operation)
 	defer a.CancelActiveOperation(operation.ID)
+	operatorDefinition.Policies.Completion.DecisionBy = policies.Model
+	a.Call("update_mission", fixtures.MissionDefinition(operatorDefinition), nil)
+	if saved := a.Get(operation.ID); saved.Mission.Policies == nil || saved.Mission.Policies.Completion == nil || saved.Mission.Policies.Completion.DecisionBy != policies.Operator {
+		t.Fatal("editing completion policy changed the running operation snapshot")
+	}
 	output := json.RawMessage(`{"summary":"Review\u0020required"}`)
 	var pending struct {
 		operations.Operation
@@ -452,12 +460,8 @@ func TestCompletionUsesSavedMissionPolicy(t *testing.T) {
 	}
 	a.Call("cancel_operation", fixtures.Object{"operation_id": operation.ID}, nil)
 
-	modelDefinition := definition.Clone()
-	modelDefinition.Name += "-model-" + id.New()
-	modelDefinition.Completion = &policies.CompletionPolicy{DecisionBy: policies.Model}
-	a.Call("create_mission", fixtures.MissionDefinition(modelDefinition), nil)
 	var modelOperation operations.Operation
-	a.Call("start_operation", fixtures.Object{"mission_name": modelDefinition.Name, "input": fixtures.Object{"text": "Model completes final output"}}, &modelOperation)
+	a.Call("start_operation", fixtures.Object{"mission_name": operatorDefinition.Name, "input": fixtures.Object{"text": "Model completes final output"}}, &modelOperation)
 	defer a.CancelActiveOperation(modelOperation.ID)
 	var completed operations.Operation
 	a.Call("complete_operation", fixtures.Object{"operation_id": modelOperation.ID, "output": output}, &completed)

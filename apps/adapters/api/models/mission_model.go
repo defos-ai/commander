@@ -3,19 +3,19 @@ package models
 import "encoding/json"
 
 type CreateMissionRequest struct {
-	Policies          *MissionPoliciesRequest         `json:"policies,omitempty"`
-	Completion        *MissionCompletionPolicyRequest `json:"completion,omitempty"`
-	Name              string                          `json:"name"`
-	Objectives        []string                        `json:"objectives"`
-	ActionDefinitions []ActionDefinitionRequest       `json:"action_definitions,omitempty"`
-	RequiredActions   []string                        `json:"required_actions,omitempty"`
-	OptionalActions   []string                        `json:"optional_actions,omitempty"`
-	StartingActions   []string                        `json:"starting_actions,omitempty"`
-	InputSchema       json.RawMessage                 `json:"input_schema"`
-	OutputSchema      json.RawMessage                 `json:"output_schema"`
+	Policies          *MissionPoliciesRequest   `json:"policies,omitempty"`
+	Name              string                    `json:"name"`
+	Objectives        []string                  `json:"objectives"`
+	ActionDefinitions []ActionDefinitionRequest `json:"action_definitions,omitempty"`
+	RequiredActions   []string                  `json:"required_actions,omitempty"`
+	OptionalActions   []string                  `json:"optional_actions,omitempty"`
+	StartingActions   []string                  `json:"starting_actions,omitempty"`
+	InputSchema       json.RawMessage           `json:"input_schema"`
+	OutputSchema      json.RawMessage           `json:"output_schema"`
 }
 
 type MissionPoliciesRequest struct {
+	Completion   *MissionCompletionPolicyRequest   `json:"completion,omitempty"`
 	Continuation *MissionContinuationPolicyRequest `json:"continuation,omitempty"`
 	Placement    *MissionPlacementPolicyRequest    `json:"placement,omitempty"`
 	Sharing      []MissionSharingPolicyRequest     `json:"sharing,omitempty"`
@@ -41,19 +41,19 @@ type MissionCompletionPolicyRequest struct {
 }
 
 type MissionResponse struct {
-	Policies          *MissionPoliciesResponse         `json:"policies,omitempty"`
-	Completion        *MissionCompletionPolicyResponse `json:"completion,omitempty"`
-	Name              string                           `json:"name"`
-	Objectives        []string                         `json:"objectives"`
-	ActionDefinitions []ActionDefinitionResponse       `json:"action_definitions,omitempty"`
-	RequiredActions   []string                         `json:"required_actions"`
-	OptionalActions   []string                         `json:"optional_actions,omitempty"`
-	StartingActions   []string                         `json:"starting_actions"`
-	InputSchema       json.RawMessage                  `json:"input_schema"`
-	OutputSchema      json.RawMessage                  `json:"output_schema"`
+	Policies          *MissionPoliciesResponse   `json:"policies,omitempty"`
+	Name              string                     `json:"name"`
+	Objectives        []string                   `json:"objectives"`
+	ActionDefinitions []ActionDefinitionResponse `json:"action_definitions,omitempty"`
+	RequiredActions   []string                   `json:"required_actions"`
+	OptionalActions   []string                   `json:"optional_actions,omitempty"`
+	StartingActions   []string                   `json:"starting_actions"`
+	InputSchema       json.RawMessage            `json:"input_schema"`
+	OutputSchema      json.RawMessage            `json:"output_schema"`
 }
 
 type MissionPoliciesResponse struct {
+	Completion   *MissionCompletionPolicyResponse   `json:"completion,omitempty"`
 	Continuation *MissionContinuationPolicyResponse `json:"continuation,omitempty"`
 	Placement    *MissionPlacementPolicyResponse    `json:"placement,omitempty"`
 	Sharing      []MissionSharingPolicyResponse     `json:"sharing,omitempty"`

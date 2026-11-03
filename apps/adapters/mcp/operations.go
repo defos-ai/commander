@@ -245,7 +245,7 @@ func addOperationTools(server *mcp.Server, config Config) {
 			})
 			return commandOperation(operation, questionAnswerError(ctx, query, request, err))
 		})
-	addTool(server, "complete_operation", "Submit final output after active tasks and questions are resolved. Output must match output_schema; describe remaining limitations and unknown outcomes. With omitted/model completion policy, saves a final report and completes immediately, returning report_id for get_report. With operator policy, saves completion_draft and returns awaiting operator approval without creating a report. Direct the operator to review or edit it and choose Complete operation in Admin UI or use the authenticated HTTP API; never invent an Admin URL. MCP has model origin and cannot approve operator completion; question fallback never grants that approval. While awaiting review, read get_operation instead of repeatedly submitting the same output. After an uncertain response, inspect saved state before another mutation.", objectSchema(map[string]any{"operation_id": stringProperty, "output": map[string]any{}}, "operation_id", "output"),
+	addTool(server, "complete_operation", "Submit final output after active tasks and questions are resolved. Output must match output_schema; describe remaining limitations and unknown outcomes. With omitted/model policies.completion, saves a final report and completes immediately, returning report_id for get_report. With policies.completion.decision_by=operator, saves completion_draft and returns awaiting operator approval without creating a report. Direct the operator to review or edit it and choose Complete operation in Admin UI or use the authenticated HTTP API; never invent an Admin URL. MCP has model origin and cannot approve operator completion; question fallback never grants that approval. While awaiting review, read get_operation instead of repeatedly submitting the same output. After an uncertain response, inspect saved state before another mutation.", objectSchema(map[string]any{"operation_id": stringProperty, "output": map[string]any{}}, "operation_id", "output"),
 		func(ctx context.Context, request CompleteOperationRequest) (operationResult, error) {
 			operation, err := execution.Complete(ctx, commands.CompleteOperationCommand{
 				OperationID: request.OperationID, Output: request.Output, CompletedBy: operations.CompletionModel,
@@ -306,6 +306,12 @@ func missionDefinitionSchema() string {
 		"policies": map[string]any{
 			"type": []string{"object", "null"}, "additionalProperties": false,
 			"properties": map[string]any{
+				"completion": map[string]any{
+					"type": []string{"object", "null"}, "additionalProperties": false,
+					"required":    []string{"decision_by"},
+					"properties":  map[string]any{"decision_by": map[string]any{"type": "string", "enum": []string{"model", "operator"}}},
+					"description": "Optional mission-wide completion decision setting, retained in operation snapshots. Omitted or null defaults to model; a present object requires decision_by. Operator policy requires operator completion through Admin UI's Complete operation action or the authenticated HTTP API; MCP completion has model origin and cannot approve it.",
+				},
 				"continuation": map[string]any{
 					"type": []string{"object", "null"}, "additionalProperties": false,
 					"properties":  map[string]any{"aggregate_results": actionNames, "model_review": actionNames},
@@ -321,13 +327,7 @@ func missionDefinitionSchema() string {
 					"description": "Optional action-based sharing routes retained in operation snapshots. Omitted, null or empty sharing declares no routes. Source and recipient action names need not appear in required_actions or optional_actions; they do not start work or change preflight readiness. The controller forwards accepted results, artifact metadata and saved task-scoped answered questions to matching active actions in the same operation. Shared answers preserve their original scope and operator/model origin; operation-wide questions are excluded.",
 				},
 			},
-			"description": "Optional placement, continuation and sharing policies. Completion remains at the mission root. An empty object declares no policy overrides.",
-		},
-		"completion": map[string]any{
-			"type": []string{"object", "null"}, "additionalProperties": false,
-			"required":    []string{"decision_by"},
-			"properties":  map[string]any{"decision_by": map[string]any{"type": "string", "enum": []string{"model", "operator"}}},
-			"description": "Optional mission-wide completion decision setting, retained in operation snapshots. Operator policy requires operator completion through Admin UI's Complete operation action or the authenticated HTTP API; MCP completion has model origin and cannot approve it.",
+			"description": "Optional placement, continuation, completion and sharing policies. An empty object declares no policy overrides; completion defaults to model.",
 		},
 		"objectives": map[string]any{"type": "array", "minItems": 1, "items": nonblank,
 			"description": "Ordered mission objectives; include at least one nonblank objective."},

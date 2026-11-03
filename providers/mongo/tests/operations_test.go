@@ -33,9 +33,12 @@ func TestOperationMongoSnapshotsAndIntegrity(t *testing.T) {
 	original.Mission.OptionalActions = []string{"publish"}
 	original.Mission.ActionDefinitions = []actions.Definition{fixtures.ActionDefinition()}
 	original.Mission.RequiredActions = append(original.Mission.RequiredActions, "discover")
-	original.Mission.Policies = &policies.MissionPolicies{Continuation: &policies.ContinuationPolicy{
-		AggregateResults: []string{"discover"}, ModelReview: []string{"inspect"},
-	}}
+	original.Mission.Policies = &policies.MissionPolicies{
+		Completion: &policies.CompletionPolicy{DecisionBy: policies.Operator},
+		Continuation: &policies.ContinuationPolicy{
+			AggregateResults: []string{"discover"}, ModelReview: []string{"inspect"},
+		},
+	}
 	task := operations.NewTask(original.ID, "", actions.NextAction{ActionName: "inspect", Input: json.RawMessage(`{ "number": 9007199254740993 }`)})
 	original.Tasks = []operations.Task{task}
 	question := fixtures.Question("")
@@ -56,6 +59,7 @@ func TestOperationMongoSnapshotsAndIntegrity(t *testing.T) {
 	original.Questions[0].Options[0] = "changed"
 	original.Mission.Policies.Continuation.AggregateResults[0] = "changed"
 	original.Mission.Policies.Continuation.ModelReview[0] = "changed"
+	original.Mission.Policies.Completion.DecisionBy = policies.Model
 	got := fixtures.ReadOperation(t, catalog, expected.ID)
 	assertOperationEqual(t, got, expected)
 	if !got.CreatedAt.Equal(expected.CreatedAt) || !got.Questions[0].FallbackAt.Equal(question.FallbackAt) {
@@ -70,6 +74,7 @@ func TestOperationMongoSnapshotsAndIntegrity(t *testing.T) {
 	got.Mission.ActionDefinitions[0].OutputSchema[0] = '!'
 	got.Mission.Policies.Continuation.AggregateResults[0] = "changed"
 	got.Mission.Policies.Continuation.ModelReview[0] = "changed"
+	got.Mission.Policies.Completion.DecisionBy = policies.Model
 	got.Questions[0].Options[0] = "changed"
 	assertOperationEqual(t, fixtures.ReadOperation(t, catalog, expected.ID), expected)
 	other := fixtures.Operation()
@@ -443,7 +448,7 @@ func TestOperationMongoTerminalTransitionsKeepLateEvidence(t *testing.T) {
 			first, _ := fixtures.OpenOperations(t)
 			second, database := fixtures.OpenOperations(t)
 			definition := fixtures.Operation()
-			definition.Mission.Completion = &policies.CompletionPolicy{DecisionBy: policies.Operator}
+			definition.Mission.Policies = &policies.MissionPolicies{Completion: &policies.CompletionPolicy{DecisionBy: policies.Operator}}
 			op := fixtures.CreateOperation(t, first, definition)
 			completionDraft := fixtures.CompletionDraft()
 			if _, err := first.SaveCompletionDraft(t.Context(), op.ID, completionDraft); err != nil {
@@ -539,7 +544,7 @@ func TestOperationMongoCompletionDraftIsAnAtomicReviewCopy(t *testing.T) {
 	first, database := fixtures.OpenOperations(t)
 	second, _ := fixtures.OpenOperations(t)
 	definition := fixtures.Operation()
-	definition.Mission.Completion = &policies.CompletionPolicy{DecisionBy: policies.Operator}
+	definition.Mission.Policies = &policies.MissionPolicies{Completion: &policies.CompletionPolicy{DecisionBy: policies.Operator}}
 	op := fixtures.CreateOperation(t, first, definition)
 	completionDraft := fixtures.CompletionDraft()
 	expected := compactOperationJSON(t, completionDraft)

@@ -20,7 +20,7 @@ uncertain update, read the saved definition before retrying.
 
 Call `complete_operation` with output matching the saved mission schema. With
 omitted/model completion policy, it saves the final report and completes
-immediately. With `completion.decision_by: operator`, it saves `completion_draft`
+immediately. With `policies.completion.decision_by: operator`, it saves `completion_draft`
 and returns **awaiting operator approval** without a final report. Ask the
 operator to review or edit the output and choose **Complete operation** in
 [Admin UI](../../admin/ui/README.md#review-operations), or submit it through the

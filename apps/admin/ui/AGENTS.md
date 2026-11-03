@@ -135,13 +135,17 @@
   JSON for display. Formatting alone must not turn an untouched field into a write.
 - Mission forms and details expose **Completion decision** as Model/Operator.
   Omitted/null policy displays Model; untouched form edits retain its exact
-  representation. Only a changed decision writes `completion.decision_by`.
-  Reject malformed or unsupported completion policy when switching JSON to Form,
-  retaining the raw source for repair. Mission edits affect future operations;
+  representation. Only a changed decision patches `policies.completion.decision_by`,
+  preserving the other policy fields and their raw tokens. Derive the select from
+  **Policies (JSON)** so edits through either control cannot leave stale values;
+  disable the select while that JSON is invalid, retaining its source for repair.
+  Reject `completion: {}` and unsupported completion policy when switching JSON
+  to Form. Mission edits affect future operations;
   the controller still enforces each operation's saved policy.
 - **Policies (JSON)** edits the complete `policies` object: `placement`,
-  `continuation` and `sharing`. Share field-shape validation between responses,
-  Form transitions and writes; reject the old root `rules` field. Preserve raw
+  `continuation`, `completion` and `sharing`. Share field-shape validation between
+  responses, Form transitions and writes; reject the old root `rules` and
+  `completion` fields, including null values. Preserve raw
   number/string tokens and untouched omitted/null/empty representations through
   unrelated edits and JSON/Form switches. Formatting alone must not create policies.
   Keep invalid drafts editable in their original mode; reject submission and

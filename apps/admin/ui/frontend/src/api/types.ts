@@ -5,7 +5,6 @@ export interface Mission {
   optional_actions?: string[];
   action_definitions?: ActionDefinition[];
   starting_actions: string[] | null;
-  completion?: { decision_by: 'model' | 'operator' } | null;
   policies?: MissionPolicies | null;
   input_schema: Record<string, unknown> | null;
   output_schema: Record<string, unknown> | null;
@@ -14,6 +13,7 @@ export interface Mission {
 export interface MissionPolicies {
   placement?: PlacementPolicy | null;
   continuation?: ContinuationPolicy | null;
+  completion?: CompletionPolicy | null;
   sharing?: SharingRoute[] | null;
 }
 
@@ -24,6 +24,10 @@ export interface PlacementPolicy {
 export interface ContinuationPolicy {
   aggregate_results?: string[] | null;
   model_review?: string[] | null;
+}
+
+export interface CompletionPolicy {
+  decision_by: 'model' | 'operator';
 }
 
 export interface SharingRoute {

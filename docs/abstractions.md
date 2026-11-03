@@ -148,6 +148,13 @@ the group when any compatible agent can do it.
 Edit the mission to change policies for future operations. Existing operations keep
 their original mission snapshot.
 
+## Completion
+
+Set `policies.completion.decision_by` to `operator` to require explicit approval.
+Model submissions save a completion draft; review or edit it in Admin before
+completing. Omitted completion or `model` allows immediate model completion.
+Operator completion has no timeout or model fallback.
+
 ## Questions
 
 Commander can ask a question when a decision needs your input. Answer in

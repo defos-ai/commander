@@ -160,10 +160,10 @@ func TestContinuationOperationKeepsItsMissionSnapshot(t *testing.T) {
 	config := fixtures.Config()
 	catalog := config.MissionStore.(*fakes.MissionStore)
 	catalog.Change(func(m *missions.Mission) {
-		m.Completion = &policies.CompletionPolicy{DecisionBy: policies.Operator}
 		scope := []string{"discover", "inspect"}
 		m.Policies = &policies.MissionPolicies{
-			Placement: fixtures.AffinityPolicy(), Sharing: fixtures.SharingPolicy(),
+			Completion: &policies.CompletionPolicy{DecisionBy: policies.Operator},
+			Placement:  fixtures.AffinityPolicy(), Sharing: fixtures.SharingPolicy(),
 			Continuation: &policies.ContinuationPolicy{AggregateResults: scope, ModelReview: scope[:1]},
 		}
 	})
@@ -172,7 +172,7 @@ func TestContinuationOperationKeepsItsMissionSnapshot(t *testing.T) {
 	r := fixtures.NewRunner(t, config, exec)
 	op := fixtures.Start(t, r)
 	catalog.Change(func(m *missions.Mission) {
-		m.Completion.DecisionBy = policies.Model
+		m.Policies.Completion.DecisionBy = policies.Model
 		m.Policies.Placement.SameAgent[0] = "follow-up"
 		m.Policies.Continuation.AggregateResults[0] = "follow-up"
 		m.Policies.Continuation.ModelReview[0] = "inspect"
@@ -181,7 +181,7 @@ func TestContinuationOperationKeepsItsMissionSnapshot(t *testing.T) {
 		m.Policies.Sharing[0].Include[0] = policies.ShareDecisions
 	})
 	later := fixtures.Start(t, r)
-	if later.Mission.Completion == nil || later.Mission.Completion.DecisionBy != policies.Model {
+	if later.Mission.Policies.Completion == nil || later.Mission.Policies.Completion.DecisionBy != policies.Model {
 		t.Fatal("a new operation did not receive the updated completion policy")
 	}
 	if !reflect.DeepEqual(later.Mission.Policies, catalog.Snapshot().Policies) {
@@ -192,7 +192,7 @@ func TestContinuationOperationKeepsItsMissionSnapshot(t *testing.T) {
 		t.Fatal("snapshot continuation scopes share mutable backing storage")
 	}
 	op.Mission.Policies.Continuation.ModelReview[0] = "returned review changed"
-	op.Mission.Completion.DecisionBy = policies.Model
+	op.Mission.Policies.Completion.DecisionBy = policies.Model
 	op.Mission.Policies.Placement.SameAgent[0] = "returned placement changed"
 	op.Mission.Policies.Sharing[0].FromActions[0] = "returned source changed"
 	op.Mission.Policies.Sharing[0].ToActions[0] = "returned recipient changed"
@@ -203,7 +203,7 @@ func TestContinuationOperationKeepsItsMissionSnapshot(t *testing.T) {
 	if len(settled.Tasks) != 1 || settled.Tasks[0].Continuation.DecisionBy != operations.DecisionModel {
 		t.Fatalf("catalog or returned snapshot edits changed continuation behavior: %+v", settled)
 	}
-	if settled.Mission.Completion == nil || settled.Mission.Completion.DecisionBy != policies.Operator {
+	if settled.Mission.Policies.Completion == nil || settled.Mission.Policies.Completion.DecisionBy != policies.Operator {
 		t.Fatal("catalog or returned snapshot edits changed the running operation's completion policy")
 	}
 	if !reflect.DeepEqual(settled.Mission.Policies, &expected) {

@@ -23,7 +23,7 @@ func TestCompletionDraftWaitsForOperatorAndSurvivesRecovery(t *testing.T) {
 	config := fixtures.Config()
 	catalog := config.MissionStore.(*fakes.MissionStore)
 	catalog.Change(func(m *missions.Mission) {
-		m.Completion = &policies.CompletionPolicy{DecisionBy: policies.Operator}
+		m.Policies = &policies.MissionPolicies{Completion: &policies.CompletionPolicy{DecisionBy: policies.Operator}}
 		m.OutputSchema = json.RawMessage(`{"type":"object","required":["summary"]}`)
 	})
 	reports := fakes.NewTerminalReportStore()
@@ -48,9 +48,10 @@ func TestCompletionDraftWaitsForOperatorAndSurvivesRecovery(t *testing.T) {
 	}
 	draft := bytes.Clone(drafted.CompletionDraft)
 	drafted.CompletionDraft[0] = '['
+	drafted.Mission.Policies.Completion.DecisionBy = policies.Model
 	retained, err := r.Get(t.Context(), op.ID)
-	if err != nil || !bytes.Equal(retained.CompletionDraft, draft) {
-		t.Fatal("a reader changed the saved completion draft")
+	if err != nil || !bytes.Equal(retained.CompletionDraft, draft) || !retained.RequiresCompletionApproval() {
+		t.Fatal("a reader changed the saved completion draft or approval policy")
 	}
 
 	replayed, err := r.Complete(t.Context(), command)
@@ -59,14 +60,18 @@ func TestCompletionDraftWaitsForOperatorAndSurvivesRecovery(t *testing.T) {
 		t.Fatal("repeating model completion changed or approved its draft")
 	}
 	fixtures.CloseRunner(t, r)
-	catalog.Change(func(m *missions.Mission) { m.Completion.DecisionBy = policies.Model })
+	catalog.Change(func(m *missions.Mission) { m.Policies.Completion = nil })
 
 	restarted := fixtures.NewRunner(t, config, fakes.Executor{})
 	restored, err := restarted.Get(t.Context(), op.ID)
 
 	if err != nil || !bytes.Equal(restored.CompletionDraft, draft) || restored.Status.Terminal() ||
-		restored.Mission.Completion.DecisionBy != policies.Operator || reports.Count() != 0 {
+		restored.Mission.Policies.Completion.DecisionBy != policies.Operator || reports.Count() != 0 {
 		t.Fatalf("recovery lost the draft or changed completion authority: %+v, %v", restored, err)
+	}
+	replayed, err = restarted.Complete(t.Context(), command)
+	if err != nil || !reflect.DeepEqual(replayed, restored) || reports.Count() != 0 {
+		t.Fatal("model completion bypassed the recovered operator policy after its catalog removal")
 	}
 	approved := json.RawMessage(`{"summary":"Reviewed and edited by the operator"}`)
 
@@ -86,7 +91,7 @@ func TestCompletionDraftRejectsIneligibleOutputWithoutWrites(t *testing.T) {
 		t.Run(scenario, func(t *testing.T) {
 			config := fixtures.Config()
 			config.MissionStore.(*fakes.MissionStore).Change(func(m *missions.Mission) {
-				m.Completion = &policies.CompletionPolicy{DecisionBy: policies.Operator}
+				m.Policies = &policies.MissionPolicies{Completion: &policies.CompletionPolicy{DecisionBy: policies.Operator}}
 				m.OutputSchema = json.RawMessage(`{"type":"object","required":["summary"]}`)
 			})
 			reports := fakes.NewTerminalReportStore()
@@ -133,7 +138,7 @@ func TestCompletionDraftRejectsIneligibleOutputWithoutWrites(t *testing.T) {
 func TestUncertainCompletionDraftRequiresRecoveryWithoutReplacement(t *testing.T) {
 	config := fixtures.Config()
 	config.MissionStore.(*fakes.MissionStore).Change(func(m *missions.Mission) {
-		m.Completion = &policies.CompletionPolicy{DecisionBy: policies.Operator}
+		m.Policies = &policies.MissionPolicies{Completion: &policies.CompletionPolicy{DecisionBy: policies.Operator}}
 	})
 	reports := fakes.NewTerminalReportStore()
 	config.ReportStore = reports

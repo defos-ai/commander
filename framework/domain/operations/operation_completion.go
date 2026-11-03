@@ -27,7 +27,7 @@ func (origin CompletionOrigin) Validate() error {
 }
 
 func (o Operation) RequiresCompletionApproval() bool {
-	return o.Mission.Completion != nil && o.Mission.Completion.DecisionBy == policies.Operator
+	return o.Mission.CompletionPolicy().DecisionBy == policies.Operator
 }
 
 func (o *Operation) SaveCompletionDraft(output json.RawMessage) error {
@@ -72,10 +72,8 @@ func (o Operation) ValidateCompletionCandidate(output json.RawMessage) error {
 	if o.Status.Terminal() {
 		return ErrFinished
 	}
-	if policy := o.Mission.Completion; policy != nil {
-		if err := policy.Validate(); err != nil {
-			return err
-		}
+	if err := o.Mission.CompletionPolicy().Validate(); err != nil {
+		return err
 	}
 	for _, task := range o.Tasks {
 		if task.Status == TaskQueued || task.Status == TaskRunning {

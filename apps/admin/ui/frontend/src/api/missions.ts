@@ -31,15 +31,12 @@ function isMissionName(value: unknown): value is string {
 }
 
 export function isMission(value: unknown): value is Mission {
-  return isObject(value) && !('steps' in value) && !('rules' in value) && isMissionName(value.name) && isObjectives(value.objectives) &&
+  return isObject(value) && !('steps' in value) && !('rules' in value) && !('completion' in value) && isMissionName(value.name) && isObjectives(value.objectives) &&
     isNullableStringArray(value.required_actions) && isNullableStringArray(value.starting_actions) &&
     (value.optional_actions === undefined || isStringArray(value.optional_actions)) &&
     (value.action_definitions === undefined || (Array.isArray(value.action_definitions) && value.action_definitions.every(isActionDefinition))) &&
     (value.input_schema === null || isObject(value.input_schema)) &&
     (value.output_schema === null || isObject(value.output_schema)) &&
-    (value.completion == null || (isObject(value.completion) &&
-      Object.keys(value.completion).every(key => key === 'decision_by') &&
-      (value.completion.decision_by === 'model' || value.completion.decision_by === 'operator'))) &&
     isMissionPolicies(value.policies);
 }
 
@@ -90,7 +87,7 @@ async function writeMission(url: string, credentials: Session, definition: strin
   let input: unknown;
   try { input = JSON.parse(definition); }
   catch { throw failure('invalid_json'); }
-  if (!isObject(input) || 'steps' in input || 'rules' in input || !isMissionName(input.name) || !isObjectives(input.objectives) ||
+  if (!isObject(input) || 'steps' in input || 'rules' in input || 'completion' in input || !isMissionName(input.name) || !isObjectives(input.objectives) ||
     !isObject(input.input_schema) || !isObject(input.output_schema) || !isMissionPolicies(input.policies)) {
     throw failure('invalid_input');
   }

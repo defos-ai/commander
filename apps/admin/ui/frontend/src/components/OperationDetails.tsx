@@ -271,7 +271,7 @@ export function OperationDetails({ operation, onAnswer, onOpenArtifact, onOpenRe
   return <div className="catalog-details operation-details">
     <section className="catalog-section"><h2>{t($ => $.operations.summary)}</h2>
       <p className="operation-progress">{t($ => $.operations.progress, { total: progress.total_tasks, finished: progress.finished_tasks })}</p><p className="catalog-muted">{t($ => $.operations.progressNote)}</p>
-      {isActiveOperation(operation.status) && operation.mission.completion?.decision_by === 'operator' &&
+      {isActiveOperation(operation.status) && operation.mission.policies?.completion?.decision_by === 'operator' &&
         <p className="notice" role="status">{t($ => $.operations.operatorCompletionRequired)}</p>}
       {isActiveOperation(operation.status) && operation.completion_draft !== undefined &&
         <p className="notice" role="status">{t($ => $.operations.completionAwaitingApproval)}</p>}

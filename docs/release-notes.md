@@ -12,7 +12,7 @@ interactive questions, execution progress and operator-controlled completion.
   their original mission definition.
 - Use `policies.placement.same_agent` to keep related actions on one agent
   instance, including when it is busy or temporarily unavailable.
-- Set `completion.decision_by` to `operator` to require explicit completion.
+- Set `policies.completion.decision_by` to `operator` to require explicit completion.
   Model submissions save `completion_draft`; operators review or edit it in
   Admin before completing through the existing API. Omitted/model policy keeps
   immediate completion.
@@ -62,8 +62,9 @@ interactive questions, execution progress and operator-controlled completion.
   steps and the root `rules` field have been removed. Move same-agent actions to
   `policies.placement.same_agent`, aggregation actions to
   `policies.continuation.aggregate_results`, and model-review actions to
-  `policies.continuation.model_review`. Stored definitions and operation snapshots
-  are not automatically converted; old snapshots can block startup recovery.
+  `policies.continuation.model_review`. Move root `completion` to
+  `policies.completion`. Stored definitions and operation snapshots are not
+  automatically converted; old snapshots can block startup recovery.
 - Only spawner starts automatically. Enable Compose's `builder` profile or install
   Builder when needed. Bundled missions are `build-agent` and `install-agent`;
   `review-website` is no longer seeded. Existing saved missions are preserved.

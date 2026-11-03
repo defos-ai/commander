@@ -270,7 +270,8 @@ test('custom-port API catalogs survive navigation and restore server sign-in acr
 test('operation questions, automatic work, graph and downloads use the real stack', async ({ page, api }) => {
   const mission = await api.get<Mission>('/missions/analyze-text');
   const missionName = `operator-completion-${randomUUID()}`;
-  await api.post('/missions', { ...mission, name: missionName, completion: { decision_by: 'operator' } }, 201);
+  await api.post('/missions', { ...mission, name: missionName,
+    policies: { ...mission.policies, completion: { decision_by: 'operator' } } }, 201);
   await connect(page);
   await page.getByRole('navigation', { name: 'Workspace navigation' }).getByRole('button', { name: 'Operations', exact: true }).click();
   const operation = await startOperation(page, 'Commander integration example', missionName);

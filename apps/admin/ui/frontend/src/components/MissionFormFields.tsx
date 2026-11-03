@@ -1,6 +1,7 @@
 import { useId, type RefObject } from 'react';
 import type { Connection, Session } from '../connections/types';
-import type { MissionDraft } from '../missions/draft';
+import { readCompletionDecision, writeCompletionDecision, type MissionDraft } from '../missions/draft';
+import type { CompletionPolicy } from '../api/types';
 import { readActionDefinitions, writeActionDefinition, removeActionDefinition, type ActionDefinitionDraft } from '../missions/action-definitions';
 import { useTranslation } from '../i18n';
 import { Button } from './Button';
@@ -20,6 +21,9 @@ type Props = {
 export function MissionFormFields({ draft, onChange, connection, credentials, disabled, nameInput, nameReadOnly, onSignIn }: Props) {
   const { t } = useTranslation();
   const identity = useId();
+  let completionDecision: CompletionPolicy['decision_by'] | undefined;
+  try { completionDecision = readCompletionDecision(draft.policies); }
+  catch { /* Keep invalid advanced JSON editable without replacing it. */ }
   let definitions: ActionDefinitionDraft[] = [];
   let invalidDefinitions = false;
   try { definitions = readActionDefinitions(draft.action_definitions); }
@@ -58,14 +62,16 @@ export function MissionFormFields({ draft, onChange, connection, credentials, di
     </section>
     <div className="form-field">
       <label htmlFor={`${identity}-completion`}>{t($ => $.missions.completionDecision)}</label>
-      <select id={`${identity}-completion`} value={draft.completion_decision} disabled={disabled}
+      <select id={`${identity}-completion`} value={completionDecision ?? ''} disabled={disabled || completionDecision === undefined}
         aria-describedby={`${identity}-completion-hint`} onChange={event => onChange({
-          ...draft, completion_decision: event.target.value as MissionDraft['completion_decision'],
+          ...draft, policies: writeCompletionDecision(draft.policies, event.target.value as CompletionPolicy['decision_by']),
         })}>
+        {completionDecision === undefined && <option value="">{t($ => $.missions.builder.invalidPolicies)}</option>}
         <option value="model">{t($ => $.missions.completionDecisions.model)}</option>
         <option value="operator">{t($ => $.missions.completionDecisions.operator)}</option>
       </select>
-      <p className="form-hint" id={`${identity}-completion-hint`}>{t($ => $.missions.completionHints[draft.completion_decision])}</p>
+      <p className="form-hint" id={`${identity}-completion-hint`}>{completionDecision === undefined
+        ? t($ => $.missions.builder.repairPolicies) : t($ => $.missions.completionHints[completionDecision])}</p>
     </div>
     <MissionActionPicker connection={connection} credentials={credentials} disabled={disabled} onSignIn={onSignIn}
       definitions={definitions} invalidDefinitions={invalidDefinitions}

@@ -22,6 +22,9 @@ func ToMission(request models.CreateMissionRequest) missions.Mission {
 	}
 	if request.Policies != nil {
 		mission.Policies = &policies.MissionPolicies{}
+		if request.Policies.Completion != nil {
+			mission.Policies.Completion = &policies.CompletionPolicy{DecisionBy: policies.Decision(request.Policies.Completion.DecisionBy)}
+		}
 		if request.Policies.Continuation != nil {
 			mission.Policies.Continuation = &policies.ContinuationPolicy{
 				AggregateResults: slices.Clone(request.Policies.Continuation.AggregateResults),
@@ -42,9 +45,6 @@ func ToMission(request models.CreateMissionRequest) missions.Mission {
 			}
 		}
 	}
-	if request.Completion != nil {
-		mission.Completion = &policies.CompletionPolicy{DecisionBy: policies.Decision(request.Completion.DecisionBy)}
-	}
 	return mission
 }
 
@@ -61,6 +61,9 @@ func ToMissionResponse(mission missions.Mission) models.MissionResponse {
 	}
 	if mission.Policies != nil {
 		response.Policies = &models.MissionPoliciesResponse{}
+		if mission.Policies.Completion != nil {
+			response.Policies.Completion = &models.MissionCompletionPolicyResponse{DecisionBy: string(mission.Policies.Completion.DecisionBy)}
+		}
 		if mission.Policies.Continuation != nil {
 			response.Policies.Continuation = &models.MissionContinuationPolicyResponse{
 				AggregateResults: slices.Clone(mission.Policies.Continuation.AggregateResults),
@@ -80,9 +83,6 @@ func ToMissionResponse(mission missions.Mission) models.MissionResponse {
 				}
 			}
 		}
-	}
-	if mission.Completion != nil {
-		response.Completion = &models.MissionCompletionPolicyResponse{DecisionBy: string(mission.Completion.DecisionBy)}
 	}
 	return response
 }

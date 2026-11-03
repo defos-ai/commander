@@ -13,7 +13,7 @@ func MissionDefinition(mission missions.Mission) Object {
 		"name": mission.Name, "objectives": mission.Objectives,
 		"required_actions": mission.RequiredActions, "optional_actions": mission.OptionalActions,
 		"starting_actions": mission.StartingActions, "action_definitions": mission.ActionDefinitions,
-		"completion": mission.Completion, "policies": mission.Policies,
+		"policies":     mission.Policies,
 		"input_schema": mission.InputSchema, "output_schema": mission.OutputSchema,
 	}
 }
@@ -31,11 +31,19 @@ func SharingMission() missions.Mission {
 		Objectives:   []string{"Analyze vulnerability findings as they arrive."},
 		InputSchema:  json.RawMessage(`{}`),
 		OutputSchema: json.RawMessage(`{}`),
-		Policies: &policies.MissionPolicies{Continuation: &policies.ContinuationPolicy{AggregateResults: []string{"find-vulnerabilities"}, ModelReview: []string{"find-vulnerabilities", "analyze-vulnerabilities"}}, Placement: &policies.PlacementPolicy{SameAgent: []string{"find-vulnerabilities", "analyze-vulnerabilities"}}, Sharing: policies.SharingPolicy{{
-			FromActions: []string{"find-vulnerabilities"},
-			ToActions:   []string{"analyze-vulnerabilities"},
-			Include:     []policies.SharingKind{policies.ShareResults, policies.ShareArtifacts},
-		}}},
+		Policies: &policies.MissionPolicies{
+			Completion: &policies.CompletionPolicy{DecisionBy: policies.Operator},
+			Continuation: &policies.ContinuationPolicy{
+				AggregateResults: []string{"find-vulnerabilities"},
+				ModelReview:      []string{"find-vulnerabilities", "analyze-vulnerabilities"},
+			},
+			Placement: &policies.PlacementPolicy{SameAgent: []string{"find-vulnerabilities", "analyze-vulnerabilities"}},
+			Sharing: policies.SharingPolicy{{
+				FromActions: []string{"find-vulnerabilities"},
+				ToActions:   []string{"analyze-vulnerabilities"},
+				Include:     []policies.SharingKind{policies.ShareResults, policies.ShareArtifacts},
+			}},
+		},
 	}
 }
 
@@ -62,5 +70,17 @@ func InvalidContinuationPolicies() []any {
 		Object{"model_review": "analyze-vulnerabilities"},
 		Object{"aggregate_results": []string{"find-vulnerabilities"}, "decision_by": "model"},
 		Object{"for_actions": []string{"find-vulnerabilities"}},
+	}
+}
+
+func InvalidCompletionPolicies() []any {
+	return []any{
+		Object{},
+		Object{"decision_by": ""},
+		Object{"decision_by": "human"},
+		Object{"decision_by": nil},
+		Object{"decision_by": 1},
+		Object{"decision_by": "operator", "fallback_at": "later"},
+		"operator",
 	}
 }

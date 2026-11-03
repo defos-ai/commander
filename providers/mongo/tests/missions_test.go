@@ -23,9 +23,9 @@ func TestMissionMongoStore(t *testing.T) {
 	ctx := t.Context()
 	original := missions.Mission{
 		Name: "alpha", Objectives: []string{"Review a page", "Summarize findings"},
-		Completion: &policies.CompletionPolicy{DecisionBy: policies.Operator},
 		Policies: &policies.MissionPolicies{
-			Placement: &policies.PlacementPolicy{SameAgent: []string{"discover", "check"}},
+			Completion: &policies.CompletionPolicy{DecisionBy: policies.Operator},
+			Placement:  &policies.PlacementPolicy{SameAgent: []string{"discover", "check"}},
 			Continuation: &policies.ContinuationPolicy{
 				AggregateResults: []string{"discover"}, ModelReview: []string{"check"},
 			},
@@ -66,8 +66,11 @@ func TestMissionMongoStore(t *testing.T) {
 	if !bytes.Equal(schema, original.InputSchema) || document.Lookup("name").StringValue() != original.Name {
 		t.Fatal("provider changed JSON schema precision or stored field names")
 	}
-	if decision, ok := document.Lookup("completion", "decision_by").StringValueOK(); !ok || decision != string(policies.Operator) {
+	if decision, ok := document.Lookup("policies", "completion", "decision_by").StringValueOK(); !ok || decision != string(policies.Operator) {
 		t.Fatal("provider changed the completion setting or its stored field names")
+	}
+	if _, err := document.LookupErr("completion"); err == nil {
+		t.Fatal("provider wrote an unsupported root completion setting")
 	}
 	placement, err := document.Lookup("policies", "placement", "same_agent").Array().Values()
 	if err != nil || len(placement) != 2 || placement[0].StringValue() != "discover" || placement[1].StringValue() != "check" {
@@ -96,7 +99,7 @@ func TestMissionMongoStore(t *testing.T) {
 		}
 	}
 	stored.Objectives[0] = "modified by reader"
-	stored.Completion.DecisionBy = policies.Model
+	stored.Policies.Completion.DecisionBy = policies.Model
 	stored.Policies.Placement.SameAgent[0] = "modified by reader"
 	stored.RequiredActions[0] = "modified by reader"
 	stored.OptionalActions[0] = "modified by reader"
@@ -127,7 +130,6 @@ func TestMissionMongoStore(t *testing.T) {
 	updated.Objectives = []string{"Review before release"}
 	updated.OptionalActions = nil
 	updated.ActionDefinitions = nil
-	updated.Completion = nil
 	updated.Policies = nil
 	if err := catalog.Upsert(ctx, updated); err != nil {
 		t.Fatal(err)
@@ -148,7 +150,7 @@ func TestMissionMongoStore(t *testing.T) {
 	invalidSchema := updated.Clone()
 	invalidSchema.InputSchema = json.RawMessage(`{"type":"invalid-type"}`)
 	invalidCompletion := updated.Clone()
-	invalidCompletion.Completion = &policies.CompletionPolicy{DecisionBy: "unknown"}
+	invalidCompletion.Policies = &policies.MissionPolicies{Completion: &policies.CompletionPolicy{DecisionBy: "unknown"}}
 	invalidPlacement := updated.Clone()
 	invalidPlacement.Policies = &policies.MissionPolicies{Placement: &policies.PlacementPolicy{SameAgent: []string{"discover", "discover"}}}
 	invalidContinuation := updated.Clone()
@@ -197,6 +199,24 @@ func TestMissionMongoStore(t *testing.T) {
 	stored, err = catalog.Get(ctx, updated.Name)
 	if err != nil || !reflect.DeepEqual(stored, updated) {
 		t.Fatalf("rejecting old rules changed the saved mission: %#v, error = %v", stored, err)
+	}
+	for _, unsupported := range []any{bson.M{"decision_by": "operator"}, bson.M{}, nil} {
+		if _, err := database.Update(ctx, "missions", bson.M{"_id": updated.Name}, bson.M{"$set": bson.M{"completion": unsupported}}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := catalog.Get(ctx, updated.Name); err == nil {
+			t.Fatal("stored root completion was silently ignored when reading a mission")
+		}
+		if _, err := catalog.List(ctx); err == nil {
+			t.Fatal("stored root completion was silently ignored when listing missions")
+		}
+	}
+	if _, err := database.Update(ctx, "missions", bson.M{"_id": updated.Name}, bson.M{"$unset": bson.M{"completion": ""}}); err != nil {
+		t.Fatal(err)
+	}
+	stored, err = catalog.Get(ctx, updated.Name)
+	if err != nil || !reflect.DeepEqual(stored, updated) {
+		t.Fatalf("rejecting root completion changed the saved mission: %#v, error = %v", stored, err)
 	}
 }
 

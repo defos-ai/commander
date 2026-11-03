@@ -96,9 +96,8 @@
   Optional `policies.sharing` retains action-based routes for results, artifacts
   and decisions in mission/operation reads. Empty or omitted sharing declares no
   routes. Omitted/null `policies` and an empty object also declare no routes.
-  Placement, continuation and sharing are grouped here; completion remains
-  at the mission root. `policies.placement.same_agent` is an optional unique list
-  of trimmed action names; omitted/null/empty placement or lists mean no affinity.
+  Placement, continuation, completion and sharing are grouped under policies.
+  `policies.placement.same_agent` is an optional unique list of trimmed action names; omitted/null/empty placement or lists mean no affinity.
   Preserve its pointer and slice independently in HTTP DTO mappings and snapshots.
   Placement neither starts nor orders tasks. `policies.continuation` contains
   independent `aggregate_results` and `model_review` action-name lists. They may
@@ -112,9 +111,11 @@
   domain policy. Reject unknown fields and invalid entries through shared mission
   validation. The controller forwards results, accepted artifact metadata and
   saved task-scoped answers to matching active tasks without starting work.
-  Optional `completion` is a mission-wide setting with required `decision_by`
-  of `model` or `operator` when present; omitted/null stays absent. Preserve it
-  in mission reads and operation snapshots. HTTP completion stamps `operator`,
+  Optional `policies.completion` is a mission-wide setting with required
+  `decision_by` of `model` or `operator` when present; omitted/null stays absent
+  and defaults to model. An empty completion object is invalid. Reject the old
+  root `completion` field, including null. Preserve the nested policy in mission
+  reads and operation snapshots. HTTP completion stamps `operator`,
   MCP stamps `model`; keep `completed_by` out of public inputs and expose its saved
   value in operation reads. It identifies the submission path, not proof of human
   identity. Omitted/model policy completes immediately. Under operator policy,

@@ -24,16 +24,15 @@ import (
 // InputSchema and OutputSchema are JSON Schema objects; {} allows any JSON value.
 // References must resolve within each schema, without fetching external resources.
 type Mission struct {
-	Completion        *policies.CompletionPolicy `json:"completion,omitempty"`
-	Policies          *policies.MissionPolicies  `json:"policies,omitempty"`
-	Name              string                     `json:"name"`
-	Objectives        []string                   `json:"objectives"`
-	RequiredActions   []string                   `json:"required_actions"`
-	OptionalActions   []string                   `json:"optional_actions,omitempty"`
-	ActionDefinitions []actionmodel.Definition   `json:"action_definitions,omitempty"`
-	StartingActions   []string                   `json:"starting_actions"`
-	InputSchema       json.RawMessage            `json:"input_schema"`
-	OutputSchema      json.RawMessage            `json:"output_schema"`
+	Policies          *policies.MissionPolicies `json:"policies,omitempty"`
+	Name              string                    `json:"name"`
+	Objectives        []string                  `json:"objectives"`
+	RequiredActions   []string                  `json:"required_actions"`
+	OptionalActions   []string                  `json:"optional_actions,omitempty"`
+	ActionDefinitions []actionmodel.Definition  `json:"action_definitions,omitempty"`
+	StartingActions   []string                  `json:"starting_actions"`
+	InputSchema       json.RawMessage           `json:"input_schema"`
+	OutputSchema      json.RawMessage           `json:"output_schema"`
 }
 
 func (m Mission) SameAgentActions() []string {
@@ -48,6 +47,13 @@ func (m Mission) ContinuationPolicy() policies.ContinuationPolicy {
 		return policies.ContinuationPolicy{}
 	}
 	return *m.Policies.Continuation
+}
+
+func (m Mission) CompletionPolicy() policies.CompletionPolicy {
+	if m.Policies == nil || m.Policies.Completion == nil {
+		return policies.CompletionPolicy{DecisionBy: policies.Model}
+	}
+	return *m.Policies.Completion
 }
 
 func LoadMission(data []byte) (Mission, error) {
@@ -83,11 +89,6 @@ func (m Mission) Validate() error {
 	for _, objective := range m.Objectives {
 		if strings.TrimSpace(objective) == "" {
 			return errors.New("mission objectives must not contain blank entries")
-		}
-	}
-	if m.Completion != nil {
-		if err := m.Completion.Validate(); err != nil {
-			return err
 		}
 	}
 	if m.Policies != nil {
@@ -171,10 +172,6 @@ func validateActionNames(field string, names []string) error {
 }
 
 func (m Mission) Clone() Mission {
-	if m.Completion != nil {
-		completion := *m.Completion
-		m.Completion = &completion
-	}
 	if m.Policies != nil {
 		policies := m.Policies.Clone()
 		m.Policies = &policies
