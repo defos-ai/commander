@@ -80,9 +80,9 @@ func testSessionCreationReservesScope(t *testing.T, sameAgent bool) {
 	}
 	address := listener.Addr().String()
 	listener.Close()
-	rules := map[string]any{}
+	policies := map[string]any{}
 	if sameAgent {
-		rules["same-agent"] = map[string]any{"for_actions": []string{"propose-connections", "connect-resource"}}
+		policies["placement"] = map[string]any{"same_agent": []string{"propose-connections", "connect-resource"}}
 	}
 	password := id.New()
 	env := append(os.Environ(), "BUS_URL="+filepath.Join(state, "bus"), "DATABASE_URL="+filepath.Join(state, "database"),
@@ -140,7 +140,7 @@ func testSessionCreationReservesScope(t *testing.T, sameAgent bool) {
 		request("GET", "/api/v1/agents", nil, 200, &catalog)
 		return len(catalog.Items) == 2 && catalog.Items[0].Status == "ready" && catalog.Items[1].Status == "ready"
 	})
-	request("POST", "/api/v1/missions", map[string]any{"name": "session-e2e", "objectives": []string{"Connect one owned resource"}, "required_actions": []string{"propose-connections", "connect-resource"}, "starting_actions": []string{"propose-connections"}, "rules": rules, "input_schema": map[string]any{"type": "object"}, "output_schema": map[string]any{"type": "object"}}, 201, nil)
+	request("POST", "/api/v1/missions", map[string]any{"name": "session-e2e", "objectives": []string{"Connect one owned resource"}, "required_actions": []string{"propose-connections", "connect-resource"}, "starting_actions": []string{"propose-connections"}, "policies": policies, "input_schema": map[string]any{"type": "object"}, "output_schema": map[string]any{"type": "object"}}, 201, nil)
 	input := map[string]any{"session_scope": id.New()}
 	start := func() string {
 		var operation operations.Operation

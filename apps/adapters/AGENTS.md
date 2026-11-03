@@ -96,7 +96,11 @@
   Optional `policies.sharing` retains action-based routes for results, artifacts
   and decisions in mission/operation reads. Empty or omitted sharing declares no
   routes. Omitted/null `policies` and an empty object also declare no routes.
-  Only sharing is grouped here; completion and rules remain at the mission root.
+  Placement and sharing are grouped here; completion and continuation rules remain
+  at the mission root. `policies.placement.same_agent` is an optional unique list
+  of trimmed action names; omitted/null/empty placement or lists mean no affinity.
+  Preserve its pointer and slice independently in HTTP DTO mappings and snapshots.
+  Reject the removed `rules.same-agent` form; placement neither starts nor orders tasks.
   HTTP uses independent DTOs with cloned lists; MCP accepts the same
   domain policy. Reject unknown fields and invalid entries through shared mission
   validation. The controller forwards results, accepted artifact metadata and
@@ -171,7 +175,7 @@
 - MCP `get_operation` and `list_operations` expose read-only `affinity` through
   `Operation.AssessAffinity`. Preserve `for_actions`, the saved owner and any
   history error even without live inventory. Queued tasks remain unassigned.
-  Explain `same-agent` as placement with no fallback; saved preflight is not
+  Explain `policies.placement.same_agent` as placement with no fallback; saved preflight is not
   evidence of current capacity. Command responses retain their saved-state shape.
 - Keep pagination cursors bound to the resource and operation. Bound event waits
   and honor cancellation without changing saved operation state.

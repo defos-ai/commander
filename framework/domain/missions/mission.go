@@ -37,6 +37,13 @@ type Mission struct {
 	OutputSchema      json.RawMessage            `json:"output_schema"`
 }
 
+func (m Mission) SameAgentActions() []string {
+	if m.Policies == nil || m.Policies.Placement == nil {
+		return nil
+	}
+	return m.Policies.Placement.SameAgent
+}
+
 func LoadMission(data []byte) (Mission, error) {
 	var definition Mission
 	trimmed := bytes.TrimSpace(data)

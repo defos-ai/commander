@@ -25,8 +25,8 @@ func TestAffinitySelectsAnAgentSupportingTheWholeGroup(t *testing.T) {
 	exec, calls := fakes.ControlledExecutor()
 	r := fixtures.NewRunner(t, config, exec)
 	op := fixtures.Start(t, r)
-	if !reflect.DeepEqual(op.Mission.Rules, config.MissionStore.(*fakes.MissionStore).Snapshot().Rules) {
-		t.Fatal("operation did not retain its mission's affinity rule")
+	if !reflect.DeepEqual(op.Mission.Policies, config.MissionStore.(*fakes.MissionStore).Snapshot().Policies) {
+		t.Fatal("operation did not retain its mission's placement policy")
 	}
 
 	first := fixtures.Assign(t, r, op.ID, "inspect")
@@ -109,7 +109,7 @@ func TestAffinityQueuesBusySiblingsWithoutPinningOtherOperations(t *testing.T) {
 func TestAffinityRecoveryWaitsForTheOriginalAgent(t *testing.T) {
 	config := fixtures.AffinityConfig()
 	missionStore := config.MissionStore.(*fakes.MissionStore)
-	expectedRules := missionStore.Snapshot().Rules.Clone()
+	expectedPolicies := missionStore.Snapshot().Policies.Clone()
 	owner, spare := fixtures.ReadyAgent(fixtures.AgentID), fixtures.ReadyAgent("review-agent-00000002")
 	catalog := config.AgentCatalog.(*fakes.AgentCatalog)
 	catalog.Set(owner, spare)
@@ -125,7 +125,7 @@ func TestAffinityRecoveryWaitsForTheOriginalAgent(t *testing.T) {
 	assertAffinityTaskQueued(t, first, op.ID, 1, calls)
 	fixtures.CloseRunner(t, first)
 	missionStore.Change(func(m *missions.Mission) {
-		m.Rules = nil
+		m.Policies.Placement = nil
 	})
 
 	owner.Stale = true
@@ -180,7 +180,7 @@ func TestAffinityRecoveryWaitsForTheOriginalAgent(t *testing.T) {
 	if dispatches != 1 || len(settled.Tasks) != 2 || settled.Tasks[0].ID != originalTask.ID {
 		t.Fatalf("recovery replayed the original task: %+v", settled)
 	}
-	if !reflect.DeepEqual(settled.Mission.Rules, expectedRules) || len(missionStore.Snapshot().Rules) != 0 {
+	if !reflect.DeepEqual(settled.Mission.Policies, &expectedPolicies) || missionStore.Snapshot().Policies.Placement != nil {
 		t.Fatal("recovery must retain saved affinity independently of later mission edits")
 	}
 	select {

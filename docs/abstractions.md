@@ -19,7 +19,7 @@ the [HTTP API](../apps/adapters/api/README.md#create-and-update-missions) or MCP
 2. Select required actions. Add useful extras as `optional_actions` so they do not
    block the initial readiness check.
 3. Choose `starting_actions` from the required actions and define input/output schemas.
-4. Add rules where you need aggregation, model review or the same agent instance.
+4. Add rules for aggregation/model review, and placement policy for shared agent state.
 5. Save the mission. In Admin, open its **JSON** view to inspect the definition.
 
 For example, a build mission can require checkout and build while leaving sharing optional:
@@ -33,8 +33,8 @@ For example, a build mission can require checkout and build while leaving sharin
   "starting_actions": ["checkout-template"],
   "input_schema": {"type": "object"},
   "output_schema": {"type": "object"},
-  "rules": {
-    "same-agent": {"for_actions": ["checkout-template", "build-agent"]}
+  "policies": {
+    "placement": {"same_agent": ["checkout-template", "build-agent"]}
   }
 }
 ```
@@ -125,18 +125,17 @@ Choose the action names with `for_actions`:
 | --- | --- |
 | `aggregate-results` | One action generates several checks and you want their direct results collected before deciding what follows |
 | `decide-next-actions` | Commander should review results instead of automatically running proposed follow-ups |
-| `same-agent` | Later actions need local state held by the same agent |
 
 Aggregation waits for all **direct children** from one execution, not their recursive
 follow-ups. Without it, each child continues independently. Rules do not merge
 outputs or invent action inputs.
 
-### Task affinity
+## Task affinity
 
-Use `same-agent` for checkout and build actions that share a local workspace:
+Use `policies.placement.same_agent` for actions that share a local workspace:
 
 ```json
-{"same-agent": {"for_actions": ["checkout-template", "build-agent"]}}
+{"policies": {"placement": {"same_agent": ["checkout-template", "build-agent"]}}}
 ```
 
 The first matching dispatch binds that group to one agent for the operation.

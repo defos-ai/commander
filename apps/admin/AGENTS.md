@@ -62,9 +62,10 @@ the [UI guide](ui/AGENTS.md) for UI changes.
   resolution belongs to the spawner, and visibility travels unchanged without
   tokens in mission input.
 - `build-agent` requires operator action contracts alongside instructions, checkout
-  before build, workspace affinity on those two actions and model review on their
-  results. Publication/release stay optional, with no workspace affinity, so their
-  secrets cannot block a build. Publication needs consent; release needs its own
+  before build, `policies.placement.same_agent` affinity on those two actions and
+  model review on their results. Publication/release stay optional, with no
+  workspace affinity, so their secrets cannot block a build. Publication needs
+  consent; release needs its own
   consent/version. Release polls continue automatically until terminal model review.
   Installation is offered only after verified release, with explicit operator consent,
   then runs in a separate `install-agent` operation. Preserve successful build evidence

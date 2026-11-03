@@ -49,7 +49,7 @@ func RegisterOpenAPI(paths, components map[string]any, options *jsonschema.ForOp
 		case "Preflight":
 			schema.Description = "Saved readiness for mission and same-agent actions. Before affinity binds, grouped candidates must advertise every grouped action; afterward only the bound agent satisfies grouped coverage. Capacity is assessed separately by the scheduler. Resolving a missing secret alone does not guarantee readiness when other requirements remain."
 		case "Affinity":
-			schema.Description = "Read-only same-agent binding derived from the saved mission and task assignments, including terminal tasks. Absent without the rule. This is a placement constraint, not execution ordering or proof of agent availability."
+			schema.Description = "Read-only same-agent binding derived from the saved mission and task assignments, including terminal tasks. Absent without policies.placement.same_agent. This is a placement constraint, not execution ordering or proof of agent availability."
 			schema.Properties["for_actions"].Description = "Actions bound to one agent instance within this operation."
 			schema.Properties["agent_id"].Description = "Agent selected by the first matching dispatch. Later matching tasks wait for this agent; no automatic fallback or rebinding. Absent before dispatch or when error is present."
 			schema.Properties["error"].Description = "Saved rule or dispatch history is inconsistent. Absence of agent_id in this case does not mean the group is unbound; inspect the saved tasks."

@@ -8,7 +8,6 @@ export function MissionRules({ rules }: { rules: Mission['rules'] }) {
   const labels: Record<MissionRuleName, { name: string; setting: string }> = {
     'aggregate-results': { name: t($ => $.missionRules.aggregateResults), setting: t($ => $.missionRules.allDirectChildren) },
     'decide-next-actions': { name: t($ => $.missionRules.decideNextActions), setting: t($ => $.missionRules.model) },
-    'same-agent': { name: t($ => $.missionRules.sameAgent), setting: t($ => $.missionRules.sameAgentSetting) },
   };
 
   return <>

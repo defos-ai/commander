@@ -100,7 +100,7 @@
   normal execution checks still apply. Neither list restricts which actions may
   execute. Validate unique nonblank names and reject required/optional overlap;
   clone both lists at snapshot boundaries. Normal rules and readiness apply to optional work.
-  `same-agent` groups still participate in preflight even
+  `policies.placement.same_agent` groups still participate in preflight even
   if an action is optional; optionality does not override a placement constraint.
 - [`missions.RuleSet`](domain/missions/rule.go) is saved in each operation's
   mission snapshot. [`operations.RuleApplier`](domain/operations/rule_applier.go)
@@ -109,7 +109,12 @@
   failures and empty proposals also require review. Aggregation uses the current
   decision's saved child IDs. Preserve parent grouping before evaluating children,
   each child's parentage, and fresh group membership on subsequent decisions.
-- The `same-agent` mission rule binds its listed actions within one operation.
+- The `policies.placement.same_agent` policy binds its listed actions within one
+  operation. Omitted/null policies or placement, and an omitted/null/empty
+  `same_agent` list, declare no affinity. An empty placement object is valid.
+  Validate trimmed, unique nonblank names without requiring coverage-list
+  membership. Deep-clone the placement pointer and its list in mission snapshots.
+  The old `same-agent` rule is unsupported; remaining rules govern continuation.
   [`Operation.AffinityAgentID`](domain/operations/affinity.go) derives the binding
   from retained task assignments; no separate binding record is stored. Failed,
   interrupted and cancelled dispatched tasks retain ownership. Enforce agreement

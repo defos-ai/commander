@@ -6,7 +6,6 @@ import (
 	"slices"
 	"time"
 
-	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/id"
 )
 
@@ -44,7 +43,7 @@ func (o *Operation) DispatchTask(dispatch TaskDispatch) error {
 	if err != nil {
 		return err
 	}
-	if agentID != "" && ruleMatches(o.Mission.Rules, missions.SameAgent, task.ActionName) && dispatch.AgentID != agentID {
+	if agentID != "" && slices.Contains(o.Mission.SameAgentActions(), task.ActionName) && dispatch.AgentID != agentID {
 		return fmt.Errorf("%w: same-agent requires agent %s", ErrOperationConflict, agentID)
 	}
 

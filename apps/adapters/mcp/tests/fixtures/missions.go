@@ -31,10 +31,21 @@ func SharingMission() missions.Mission {
 		Objectives:   []string{"Analyze vulnerability findings as they arrive."},
 		InputSchema:  json.RawMessage(`{}`),
 		OutputSchema: json.RawMessage(`{}`),
-		Policies: &policies.MissionPolicies{Sharing: policies.SharingPolicy{{
+		Policies: &policies.MissionPolicies{Placement: &policies.PlacementPolicy{SameAgent: []string{"find-vulnerabilities", "analyze-vulnerabilities"}}, Sharing: policies.SharingPolicy{{
 			FromActions: []string{"find-vulnerabilities"},
 			ToActions:   []string{"analyze-vulnerabilities"},
 			Include:     []policies.SharingKind{policies.ShareResults, policies.ShareArtifacts},
 		}}},
+	}
+}
+
+func InvalidPlacementPolicies() []any {
+	return []any{
+		Object{"same_agent": []string{"find-vulnerabilities", "find-vulnerabilities"}},
+		Object{"same_agent": []string{" find-vulnerabilities"}},
+		Object{"same_agent": []string{""}},
+		Object{"same_agent": "find-vulnerabilities"},
+		Object{"for_actions": []string{"find-vulnerabilities"}},
+		Object{"same_agent": []string{"find-vulnerabilities"}, "fallback": true},
 	}
 }

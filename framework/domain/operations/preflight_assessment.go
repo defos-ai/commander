@@ -9,7 +9,6 @@ import (
 
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/agents"
-	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/domain/sessions"
 )
 
@@ -20,7 +19,7 @@ func (o Operation) AssessPreflight(records []agents.Agent, sessionScopes ...[]se
 	if err != nil {
 		return nil, err
 	}
-	group := o.Mission.Rules[missions.SameAgent].ForActions
+	group := o.Mission.SameAgentActions()
 	commonAgents := make(map[string]bool)
 	if len(group) != 0 && boundAgentID == "" {
 		for _, record := range records {

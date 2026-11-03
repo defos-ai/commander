@@ -15,7 +15,6 @@ type RuleName string
 const (
 	AggregateResults  RuleName = "aggregate-results"
 	DecideNextActions RuleName = "decide-next-actions"
-	SameAgent         RuleName = "same-agent"
 )
 
 type RuleSet map[RuleName]Rule
@@ -39,7 +38,7 @@ func (rules RuleSet) Validate() error {
 }
 
 func (rule Rule) validate(name RuleName) error {
-	if name != AggregateResults && name != DecideNextActions && name != SameAgent {
+	if name != AggregateResults && name != DecideNextActions {
 		return errors.New("unsupported rule")
 	}
 	if len(rule.ForActions) == 0 {

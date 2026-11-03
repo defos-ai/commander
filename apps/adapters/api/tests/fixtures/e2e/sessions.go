@@ -229,11 +229,11 @@ func (s *SessionStack) Worker(suffix int, extra ...string) func() {
 }
 
 func (s *SessionStack) Mission(name string, group bool, required ...string) {
-	rules := map[string]any{}
+	policies := map[string]any{}
 	if group {
-		rules["same-agent"] = map[string]any{"for_actions": []string{"connect-resource", "use-resource", "mark-owner"}}
+		policies["placement"] = map[string]any{"same_agent": []string{"connect-resource", "use-resource", "mark-owner"}}
 	}
-	s.Request("POST", "/api/v1/missions", map[string]any{"name": name, "objectives": []string{"Exercise durable runtime sessions"}, "required_actions": required, "starting_actions": []string{"connect-resource"}, "rules": rules, "input_schema": map[string]any{"type": "object"}, "output_schema": map[string]any{"type": "object"}}, 201, nil)
+	s.Request("POST", "/api/v1/missions", map[string]any{"name": name, "objectives": []string{"Exercise durable runtime sessions"}, "required_actions": required, "starting_actions": []string{"connect-resource"}, "policies": policies, "input_schema": map[string]any{"type": "object"}, "output_schema": map[string]any{"type": "object"}}, 201, nil)
 }
 
 func (s *SessionStack) Start(mission string) string {

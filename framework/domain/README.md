@@ -40,11 +40,11 @@ The [Agent], [Controller], [Runner], [Queries], [Secret service] and
 | --- | --- | --- |
 | [`Mission`](missions/mission.go) | Defines reusable objectives, action coverage, schemas and rules; each operation saves its accepted definition. | [Admin] authoring/seeding, Adapters and Runner startup. |
 | [`CompletionPolicy`](missions/policies/completion_policy.go) | Declares who may complete the whole mission; an operator policy requires the operator submission channel. Each operation retains its policy. | Mission validation, Adapters, Runner and atomic completion in operation stores. |
-| [`PlacementPolicy`](missions/policies/placement_policy.go) | Defines one same-agent action group for the typed-policy refactor. | Contract validation/cloning; runtime and mission-field adoption is pending. |
+| [`PlacementPolicy`](missions/policies/placement_policy.go) | Binds one action group to the first dispatched agent within an operation. | Mission validation/cloning, preflight, runner placement, atomic dispatch, session placement and adapters. |
 | [`ContinuationPolicy`](missions/policies/continuation_policy.go) | Defines independent action scopes for direct-child aggregation and required model review. | Contract validation/cloning; runtime and mission-field adoption is pending. |
-| [`MissionPolicies`](missions/policies/policies.go) | Groups optional behavioral settings, currently sharing, into each saved mission snapshot. Completion and orchestration rules retain their existing fields. | Mission validation/cloning, Adapters, mission and operation stores. |
+| [`MissionPolicies`](missions/policies/policies.go) | Groups optional placement and sharing settings into each saved mission snapshot. Completion and continuation rules retain their existing fields. | Mission validation/cloning, Adapters, mission and operation stores. |
 | [`SharingPolicy`, `SharingRoute`](missions/policies/sharing_policy.go) | Declare permitted action-to-action data routes for saved results, accepted artifact metadata and task-scoped answered questions, retained independently in each operation. | Mission authoring/validation, Adapters, Controller forwarding, mission and operation stores. |
-| [`RuleSet`, `Rule`, `RuleParams`](missions/rule.go) | Express aggregation, model review and same-agent policy declaratively. | Operation rule application, mission authoring and validation. |
+| [`RuleSet`, `Rule`, `RuleParams`](missions/rule.go) | Express aggregation and model review declaratively. | Operation rule application, mission authoring and validation. |
 
 ## Operations
 
@@ -60,7 +60,7 @@ The [Agent], [Controller], [Runner], [Queries], [Secret service] and
 | [`Preflight`, `ActionReadiness`, `AgentReadiness`](operations/preflight.go) | Explain whether current agents cover required actions and what prevents dispatch. | Runner assessment, OperationStore, Queries and Adapters. |
 | [`TaskPlacement`](operations/session_placement.go) | Explains an exact-owner/session placement constraint or missing requirement for a task. | Session placement assessment, Runner selection, preflight views. |
 | [`Progress`](operations/progress.go) | Derives task counts, pending decisions/questions and settlement from saved state. | Queries, Adapters, Admin UI and Playground through adapter responses. |
-| [`Affinity`](operations/affinity.go) | Projects the same-agent rule and retained assignments into a bound process or a diagnostic. | Runner placement checks, Queries and Adapters. |
+| [`Affinity`](operations/affinity.go) | Projects placement policy and retained assignments into a bound process or a diagnostic. | Runner placement checks, Queries and Adapters. |
 | [`RuleContext`, `RuleEffects`, `RuleFollowUp`](operations/rule_applier.go) | Separate the inputs and effects of pure mission-rule evaluation from dispatch and persistence. | `RuleApplier`, its `DefaultRuleApplier`, operation result/continuation transitions. |
 
 Questions stay here because a model can ask before any execution exists or while

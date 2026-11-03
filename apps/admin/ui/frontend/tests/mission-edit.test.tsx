@@ -7,9 +7,9 @@ import { deferredResponse } from './fixtures/deferred';
 import { connection, credentials, mission, mockAPI, mockEditableMission } from './fixtures/missions';
 
 describe('mission editing', () => {
-  it('edits objectives, action roles and details while preserving the name, sharing policies and untouched JSON tokens', async () => {
+  it('edits objectives, action roles and details while preserving the name, placement/sharing policies and untouched JSON tokens', async () => {
     const name = 'Review / #1?';
-    const definition = String.raw`{"name":"Review / #1?","objectives":["Review the service."],"completion":{"decision_by":"operator"},"policies":{"sharing":[{"from_actions":["\u0064iscover-pages"],"to_actions":["capture-page"],"include":["results","artifacts"]}]},"required_actions":["discover-pages"],"optional_actions":["capture-page"],"starting_actions":["discover-pages"],"input_schema":{"type":"object","properties":{"id":{"const":9007199254740993},"path":{"const":"\u0061\\path"}}},"output_schema":{}}`;
+    const definition = String.raw`{"name":"Review / #1?","objectives":["Review the service."],"completion":{"decision_by":"operator"},"policies":{"placement":{"same_agent":["\u0064iscover-pages","capture-\u0070age"]},"sharing":[{"from_actions":["\u0064iscover-pages"],"to_actions":["capture-page"],"include":["results","artifacts"]}]},"required_actions":["discover-pages"],"optional_actions":["capture-page"],"starting_actions":["discover-pages"],"input_schema":{"type":"object","properties":{"id":{"const":9007199254740993},"path":{"const":"\u0061\\path"}}},"output_schema":{}}`;
     const fetch = mockEditableMission(definition);
     render(<MissionsPage connection={connection} credentials={credentials} onSignIn={vi.fn()} selectedID={name} onSelect={vi.fn()} />);
 
@@ -29,6 +29,7 @@ describe('mission editing', () => {
 
     expect(await screen.findByRole('heading', { name, level: 1 })).toBeVisible();
     expect(await screen.findByText('Check release health.')).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Same agent actions' })).toBeVisible();
     const writes = fetch.mock.calls.filter(([, init]) => init?.method === 'PUT');
     expect(writes).toHaveLength(1);
     expect(upstreamURL(writes[0][0])).toBe(`${connection.url}/api/v1/missions/${encodeURIComponent(name)}`);
@@ -36,9 +37,10 @@ describe('mission editing', () => {
     expect(body).toContain('9007199254740993');
     expect(body).toContain(String.raw`"\u0061\\path"`);
     expect(body).toContain(String.raw`"\u0064iscover-pages"`);
+    expect(body).toContain(String.raw`"capture-\u0070age"`);
     expect(JSON.parse(body)).toMatchObject({ name, objectives: ['Check release health.'], required_actions: ['discover-pages', 'capture-page'],
       completion: { decision_by: 'model' },
-      policies: { sharing: [{ from_actions: ['discover-pages'], to_actions: ['capture-page'], include: ['results', 'artifacts'] }] },
+      policies: { placement: { same_agent: ['discover-pages', 'capture-page'] }, sharing: [{ from_actions: ['discover-pages'], to_actions: ['capture-page'], include: ['results', 'artifacts'] }] },
       optional_actions: [], output_schema: { type: 'object', properties: { summary: { type: 'string' } } } });
     expect(fetch.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
   });

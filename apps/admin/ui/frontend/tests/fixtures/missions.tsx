@@ -19,8 +19,8 @@ export const mission: Mission = {
   rules: {
     'aggregate-results': { for_actions: ['discover-pages'] },
     'decide-next-actions': { for_actions: ['check-links', 'capture-page'], params: { decision_by: 'model' } },
-    'same-agent': { for_actions: ['discover-pages', 'check-links'] },
   },
+  policies: { placement: { same_agent: ['discover-pages', 'check-links'] } },
 };
 
 export const otherMission: Mission = { ...mission, name: 'review-service', objectives: ['Check service availability.'] };

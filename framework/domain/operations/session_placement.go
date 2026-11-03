@@ -6,7 +6,6 @@ import (
 
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/agents"
-	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/domain/sessions"
 )
 
@@ -102,7 +101,7 @@ func (o Operation) sessionConstraint(task Task, scopes []sessions.Scope) (string
 	if err != nil {
 		return own, err
 	}
-	group := o.Mission.Rules[missions.SameAgent].ForActions
+	group := o.Mission.SameAgentActions()
 	if !slices.Contains(group, task.ActionName) {
 		return own, nil
 	}

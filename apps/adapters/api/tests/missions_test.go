@@ -66,31 +66,39 @@ func TestMissionSharingPolicy(t *testing.T) {
 	path := "/api/v1/missions/" + definition.Name
 
 	created := fixtures.Post[models.MissionResponse](a, "/api/v1/missions", definition, http.StatusCreated)
-	assertMissionSharing(t, created.Policies, definition.Policies)
-	assertMissionSharing(t, fixtures.Read[models.MissionResponse](a, path).Policies, definition.Policies)
+	assertMissionPolicies(t, created.Policies, definition.Policies)
+	assertMissionPolicies(t, fixtures.Read[models.MissionResponse](a, path).Policies, definition.Policies)
 	assertSchema(t, a, "Mission", a.Request(http.MethodGet, path, nil))
 	first := fixtures.Post[models.OperationResponse](a, "/api/v1/operations", fixtures.Object{"mission_name": definition.Name, "input": fixtures.Object{}}, http.StatusCreated)
 	if !reflect.DeepEqual(first.Mission.Policies, created.Policies) || len(first.Tasks) != 0 {
 		t.Fatalf("operation lost sharing policy or policy started work: %+v", first)
 	}
 
+	definition.Policies.Placement.SameAgent[1] = "review-vulnerabilities"
 	definition.Policies.Sharing[0].ToActions[0] = "review-vulnerabilities"
 	definition.Policies.Sharing[0].Include = []string{"decisions"}
 	updated := fixtures.Decode[models.MissionResponse](t, a.Request(http.MethodPut, path, definition), http.StatusOK)
-	assertMissionSharing(t, updated.Policies, definition.Policies)
-	assertMissionSharing(t, fixtures.Read[models.MissionResponse](a, path).Policies, definition.Policies)
+	assertMissionPolicies(t, updated.Policies, definition.Policies)
+	assertMissionPolicies(t, fixtures.Read[models.MissionResponse](a, path).Policies, definition.Policies)
 	retained := fixtures.Read[models.OperationResponse](a, fixtures.OperationPath(first.ID))
 	if !reflect.DeepEqual(retained.Mission.Policies, created.Policies) {
 		t.Fatal("mission update changed an existing operation's sharing policy")
 	}
 	second := fixtures.Post[models.OperationResponse](a, "/api/v1/operations", fixtures.Object{"mission_name": definition.Name, "input": fixtures.Object{}}, http.StatusCreated)
-	assertMissionSharing(t, second.Mission.Policies, definition.Policies)
+	assertMissionPolicies(t, second.Mission.Policies, definition.Policies)
 
 	for _, invalid := range fixtures.InvalidSharingPolicies() {
 		candidate := fixtures.SharingMission()
 		candidate.Policies.Sharing = invalid
 		fixtures.AssertError(t, a.Request(http.MethodPost, "/api/v1/missions", candidate), http.StatusBadRequest, "invalid_request")
 	}
+	for _, placement := range fixtures.InvalidPlacementPolicies() {
+		candidate := fixtures.PoliciesDefinition(definition, fixtures.Object{"placement": placement})
+		fixtures.AssertError(t, a.Request(http.MethodPut, path, candidate), http.StatusBadRequest, "invalid_request")
+	}
+	legacyRule := fixtures.PoliciesDefinition(definition, nil)
+	legacyRule["rules"] = fixtures.Object{"same-agent": fixtures.Object{"for_actions": []string{"find-vulnerabilities"}}}
+	fixtures.AssertError(t, a.Request(http.MethodPut, path, legacyRule), http.StatusBadRequest, "invalid_request")
 	for _, field := range []string{"context", "sharing"} {
 		legacy := fixtures.PoliciesDefinition(definition, nil)
 		delete(legacy, "policies")
@@ -100,14 +108,14 @@ func TestMissionSharingPolicy(t *testing.T) {
 		}
 		fixtures.AssertError(t, a.Request(http.MethodPut, path, legacy), http.StatusBadRequest, "invalid_request")
 	}
-	for _, policies := range []any{fixtures.Object{"sharing": []fixtures.Object{}}, fixtures.Object{"sharing": nil}, fixtures.Object{}, nil} {
+	for _, policies := range []any{fixtures.Object{"sharing": []fixtures.Object{}}, fixtures.Object{"sharing": nil}, fixtures.Object{"placement": nil}, fixtures.Object{"placement": fixtures.Object{}}, fixtures.Object{"placement": fixtures.Object{"same_agent": nil}}, fixtures.Object{"placement": fixtures.Object{"same_agent": []string{}}}, fixtures.Object{}, nil} {
 		disabled := fixtures.Decode[models.MissionResponse](t, a.Request(http.MethodPut, path, fixtures.PoliciesDefinition(definition, policies)), http.StatusOK)
 		if policies == nil {
 			if disabled.Policies != nil {
 				t.Fatal("null policies were not removed")
 			}
-		} else if disabled.Policies == nil || len(disabled.Policies.Sharing) != 0 {
-			t.Fatal("empty policies should declare no sharing routes")
+		} else if disabled.Policies == nil || len(disabled.Policies.Sharing) != 0 || disabled.Policies.Placement != nil && len(disabled.Policies.Placement.SameAgent) != 0 {
+			t.Fatal("empty policies should declare no sharing routes or placement group")
 		}
 	}
 	definition.Policies = nil
@@ -120,10 +128,13 @@ func TestMissionSharingPolicy(t *testing.T) {
 	}
 }
 
-func assertMissionSharing(t *testing.T, got *models.MissionPoliciesResponse, want *models.MissionPoliciesRequest) {
+func assertMissionPolicies(t *testing.T, got *models.MissionPoliciesResponse, want *models.MissionPoliciesRequest) {
 	t.Helper()
 	if got == nil || want == nil || len(got.Sharing) != len(want.Sharing) {
 		t.Fatalf("mission sharing differs: got %+v, want %+v", got, want)
+	}
+	if (got.Placement == nil) != (want.Placement == nil) || got.Placement != nil && !slices.Equal(got.Placement.SameAgent, want.Placement.SameAgent) {
+		t.Fatalf("mission placement differs: got %+v, want %+v", got.Placement, want.Placement)
 	}
 	for i, route := range got.Sharing {
 		expected := want.Sharing[i]

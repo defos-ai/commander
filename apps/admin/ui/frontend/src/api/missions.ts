@@ -1,7 +1,7 @@
 import { expireSession, proxyURL } from '../connections/client';
 import type { Session } from '../connections/types';
 import { ApiError, getJSON, getJSONDocument } from './client';
-import type { ActionDefinition, Mission, MissionPolicies, MissionRule, SharingRoute } from './types';
+import type { ActionDefinition, Mission, MissionPolicies, MissionRule, PlacementPolicy, SharingRoute } from './types';
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -25,7 +25,7 @@ function isRule(name: string, value: unknown): value is MissionRule {
     value.for_actions.some(action => !action || action.trim() !== action) || new Set(value.for_actions).size !== value.for_actions.length) return false;
   const params = value.params;
   if (params !== undefined && (!isObject(params) || Object.keys(params).some(key => key !== 'decision_by'))) return false;
-  if (name === 'aggregate-results' || name === 'same-agent') return params === undefined || params.decision_by === undefined;
+  if (name === 'aggregate-results') return params === undefined || params.decision_by === undefined;
   return name === 'decide-next-actions' && isObject(params) && params.decision_by === 'model';
 }
 
@@ -45,8 +45,16 @@ function isSharingRoute(value: unknown): value is SharingRoute {
     value.include.every(item => item === 'results' || item === 'artifacts' || item === 'decisions');
 }
 
+function isPlacementPolicy(value: unknown): value is PlacementPolicy | null | undefined {
+  return value == null || (isObject(value) && Object.keys(value).every(key => key === 'same_agent') &&
+    (value.same_agent == null || (isStringArray(value.same_agent) &&
+      value.same_agent.every(action => action !== '' && action.trim() === action) &&
+      new Set(value.same_agent).size === value.same_agent.length)));
+}
+
 function isMissionPolicies(value: unknown): value is MissionPolicies | null | undefined {
-  return value == null || (isObject(value) && Object.keys(value).every(key => key === 'sharing') &&
+  return value == null || (isObject(value) && Object.keys(value).every(key => key === 'sharing' || key === 'placement') &&
+    isPlacementPolicy(value.placement) &&
     (value.sharing == null || (Array.isArray(value.sharing) && value.sharing.every(isSharingRoute))));
 }
 

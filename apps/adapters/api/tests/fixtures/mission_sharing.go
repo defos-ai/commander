@@ -13,7 +13,7 @@ func SharingMission() models.CreateMissionRequest {
 		Objectives:   []string{"Analyze vulnerability findings as they arrive."},
 		InputSchema:  json.RawMessage(`{}`),
 		OutputSchema: json.RawMessage(`{}`),
-		Policies: &models.MissionPoliciesRequest{Sharing: []models.MissionSharingPolicyRequest{{
+		Policies: &models.MissionPoliciesRequest{Placement: &models.MissionPlacementPolicyRequest{SameAgent: []string{"find-vulnerabilities", "analyze-vulnerabilities"}}, Sharing: []models.MissionSharingPolicyRequest{{
 			FromActions: []string{"find-vulnerabilities"},
 			ToActions:   []string{"analyze-vulnerabilities"},
 			Include:     []string{"results", "artifacts", "decisions"},
@@ -54,4 +54,15 @@ func InvalidSharingPolicies() [][]models.MissionSharingPolicyRequest {
 		policies = append(policies, policy)
 	}
 	return policies
+}
+
+func InvalidPlacementPolicies() []any {
+	return []any{
+		Object{"same_agent": []string{"find-vulnerabilities", "find-vulnerabilities"}},
+		Object{"same_agent": []string{" find-vulnerabilities"}},
+		Object{"same_agent": []string{""}},
+		Object{"same_agent": "find-vulnerabilities"},
+		Object{"for_actions": []string{"find-vulnerabilities"}},
+		Object{"same_agent": []string{"find-vulnerabilities"}, "fallback": true},
+	}
 }

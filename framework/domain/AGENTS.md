@@ -37,18 +37,18 @@ applies to all domain packages below this directory.
 - Mission policy types live in [missions/policies](missions/policies/), which
   stays independent of its parent package. Rules remain in `missions`; their
   decision parameter reuses [policies.Decision](missions/policies/decision.go).
-- [`PlacementPolicy`](missions/policies/placement_policy.go) and
-  [`ContinuationPolicy`](missions/policies/continuation_policy.go) are standalone
-  contracts for the next rule refactor; they are not yet fields of `MissionPolicies`
-  or consumed by the runtime/adapters. Keep the current mission JSON and rules
-  unchanged until adoption. Placement has one same-agent action group; aggregation
-  and model-review scopes are independent and may overlap. Nil/empty lists declare
-  no override. Names must be nonblank, trimmed and unique within each list, without
-  requiring membership in mission coverage. Clone every slice independently,
-  including when caller-provided lists share a backing array. Aggregation covers
-  each execution's saved direct children; model review remains the runtime default
-  for failures and empty proposals. Placement and continuation do not override
-  completion or sharing settings.
+- [`PlacementPolicy`](missions/policies/placement_policy.go) is optional under
+  `MissionPolicies.Placement`. Its one `same_agent` group is read by preflight,
+  dispatch, affinity and session placement. Omitted/null placement and nil/empty
+  action lists add no constraint. Validate trimmed, unique nonblank names without
+  requiring membership in mission coverage. Clone the pointer and list independently.
+  Reject the old `same-agent` rule rather than accepting both configurations.
+- [`ContinuationPolicy`](missions/policies/continuation_policy.go) remains a
+  standalone contract for the next step; continuation behavior still uses rules.
+  Its aggregation/model-review scopes are independent and may overlap. Clone each
+  slice independently, even when inputs share a backing array. Aggregation covers
+  saved direct children; failures and empty proposals still require model review.
+  Placement and continuation do not override completion or sharing settings.
 - Operation transitions own tasks, questions, continuations and events together.
   Use [OperationStore](operations/operation_store.go) mutation contracts rather
   than rebuilding a saved operation from a stale caller snapshot.

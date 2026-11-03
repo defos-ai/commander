@@ -61,8 +61,9 @@
   [default-missions.json](../admin/missions/default-missions.json) and seeds them
   through the API. The controller reads mission definitions from its store; it
   must not seed or import them during startup.
-- Mission policy belongs in the definition's rules. Agents propose actions;
-  the controller applies those rules without host or agent special cases.
+- Mission behavior belongs in its policies and continuation rules. Agents propose
+  actions; the controller applies the saved definition without host or agent
+  special cases.
 - Existing operations retain their mission snapshot when the catalog changes.
   Keep mission validation and authoring behavior in the framework and Admin.
 

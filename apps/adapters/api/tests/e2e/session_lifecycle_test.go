@@ -363,7 +363,7 @@ func TestE2ESessionGroupLookaheadAndIndependentOwners(t *testing.T) {
 		}
 		return done == 2
 	})
-	// No same-agent rule means different tasks can use different exact owners.
+	// No same-agent placement policy means different tasks can use different exact owners.
 	separate := s.Start("ungrouped")
 	a := s.Assign(separate, "use-resource", map[string]string{"session_scope": firstScope, "session_id": first.ID})
 	b := s.Assign(separate, "use-resource", map[string]string{"session_scope": secondScope, "session_id": second.ID})

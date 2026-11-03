@@ -23,7 +23,10 @@ func TestMissionMongoStore(t *testing.T) {
 	ctx := t.Context()
 	original := missions.Mission{
 		Name: "alpha", Objectives: []string{"Review a page", "Summarize findings"},
-		Completion:      &policies.CompletionPolicy{DecisionBy: policies.Operator},
+		Completion: &policies.CompletionPolicy{DecisionBy: policies.Operator},
+		Policies: &policies.MissionPolicies{Placement: &policies.PlacementPolicy{
+			SameAgent: []string{"discover", "check"},
+		}},
 		RequiredActions: []string{"discover", "check"}, OptionalActions: []string{"publish"}, StartingActions: []string{"discover"},
 		ActionDefinitions: []actions.Definition{fixtures.ActionDefinition()},
 		Rules: missions.RuleSet{
@@ -67,6 +70,10 @@ func TestMissionMongoStore(t *testing.T) {
 	if decision, ok := document.Lookup("completion", "decision_by").StringValueOK(); !ok || decision != string(policies.Operator) {
 		t.Fatal("provider changed the completion setting or its stored field names")
 	}
+	placement, err := document.Lookup("policies", "placement", "same_agent").Array().Values()
+	if err != nil || len(placement) != 2 || placement[0].StringValue() != "discover" || placement[1].StringValue() != "check" {
+		t.Fatalf("provider changed the placement policy or its stored field names: %v, %v", placement, err)
+	}
 	definitions, err := document.Lookup("action_definitions").Array().Values()
 	if err != nil || len(definitions) != 1 {
 		t.Fatalf("stored action definitions: %v, %v", definitions, err)
@@ -83,6 +90,7 @@ func TestMissionMongoStore(t *testing.T) {
 	}
 	stored.Objectives[0] = "modified by reader"
 	stored.Completion.DecisionBy = policies.Model
+	stored.Policies.Placement.SameAgent[0] = "modified by reader"
 	stored.RequiredActions[0] = "modified by reader"
 	stored.OptionalActions[0] = "modified by reader"
 	stored.ActionDefinitions[0].Name = "modified by reader"
@@ -113,6 +121,7 @@ func TestMissionMongoStore(t *testing.T) {
 	updated.OptionalActions, updated.Rules = nil, nil
 	updated.ActionDefinitions = nil
 	updated.Completion = nil
+	updated.Policies = nil
 	if err := catalog.Upsert(ctx, updated); err != nil {
 		t.Fatal(err)
 	}
@@ -126,11 +135,16 @@ func TestMissionMongoStore(t *testing.T) {
 	if _, err := document.LookupErr("completion"); err == nil {
 		t.Fatal("upsert retained a removed completion setting")
 	}
+	if _, err := document.LookupErr("policies"); err == nil {
+		t.Fatal("upsert retained a removed placement policy")
+	}
 	invalidSchema := updated.Clone()
 	invalidSchema.InputSchema = json.RawMessage(`{"type":"invalid-type"}`)
 	invalidCompletion := updated.Clone()
 	invalidCompletion.Completion = &policies.CompletionPolicy{DecisionBy: "unknown"}
-	for _, invalid := range []missions.Mission{invalidSchema, invalidCompletion} {
+	invalidPlacement := updated.Clone()
+	invalidPlacement.Policies = &policies.MissionPolicies{Placement: &policies.PlacementPolicy{SameAgent: []string{"discover", "discover"}}}
+	for _, invalid := range []missions.Mission{invalidSchema, invalidCompletion, invalidPlacement} {
 		if err := catalog.Upsert(ctx, invalid); err == nil {
 			t.Fatal("invalid mission replaced a valid one")
 		}

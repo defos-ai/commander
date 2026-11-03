@@ -104,12 +104,26 @@ func TestMissionSharingPolicy(t *testing.T) {
 	if !reflect.DeepEqual(created.Policies, definition.Policies) || !reflect.DeepEqual(described.Policies, definition.Policies) {
 		t.Fatal("MCP mission creation or detail lost the sharing policy")
 	}
+	var first operations.Operation
+	a.Call("start_operation", fixtures.Object{"mission_name": definition.Name, "input": fixtures.Object{}}, &first)
+	if !reflect.DeepEqual(first.Mission.Policies, created.Policies) || len(first.Tasks) != 0 {
+		t.Fatal("operation lost mission policies or policies started work")
+	}
+	definition.Policies.Placement.SameAgent[1] = "review-vulnerabilities"
 	definition.Policies.Sharing[0].ToActions[0] = "review-vulnerabilities"
 	definition.Policies.Sharing[0].Include = []policies.SharingKind{policies.ShareDecisions}
 	a.Call("update_mission", fixtures.MissionDefinition(definition), &updated)
 	a.Call("describe_mission", fixtures.Object{"mission_name": definition.Name}, &described)
 	if !reflect.DeepEqual(updated.Policies, definition.Policies) || !reflect.DeepEqual(described.Policies, definition.Policies) {
 		t.Fatal("MCP mission update or detail lost the sharing policy")
+	}
+	if !reflect.DeepEqual(a.Get(first.ID).Mission.Policies, created.Policies) {
+		t.Fatal("mission update changed an existing operation's policies")
+	}
+	var second operations.Operation
+	a.Call("start_operation", fixtures.Object{"mission_name": definition.Name, "input": fixtures.Object{}}, &second)
+	if !reflect.DeepEqual(second.Mission.Policies, definition.Policies) {
+		t.Fatal("new operation did not retain updated placement and sharing policies")
 	}
 
 	invalid := fixtures.MissionDefinition(definition)
@@ -118,6 +132,20 @@ func TestMissionSharingPolicy(t *testing.T) {
 	_, err := invalidClient.Session.CallTool(invalidClient.Context, &mcp.CallToolParams{Name: "update_mission", Arguments: invalid})
 	if err == nil || !strings.Contains(err.Error(), "include") {
 		t.Fatalf("unsupported sharing kind should be an invalid argument: %v", err)
+	}
+	for _, placement := range fixtures.InvalidPlacementPolicies() {
+		candidate := fixtures.MissionDefinition(definition)
+		candidate["policies"] = fixtures.Object{"placement": placement}
+		_, err = invalidClient.Session.CallTool(invalidClient.Context, &mcp.CallToolParams{Name: "update_mission", Arguments: candidate})
+		if err == nil {
+			t.Fatalf("invalid placement should be an invalid argument: %+v", placement)
+		}
+	}
+	legacyRule := fixtures.MissionDefinition(definition)
+	legacyRule["rules"] = fixtures.Object{"same-agent": fixtures.Object{"for_actions": []string{"find-vulnerabilities"}}}
+	_, err = invalidClient.Session.CallTool(invalidClient.Context, &mcp.CallToolParams{Name: "update_mission", Arguments: legacyRule})
+	if err == nil {
+		t.Fatal("same-agent must be rejected as a rule")
 	}
 	for _, field := range []string{"context", "sharing"} {
 		legacy := fixtures.MissionDefinition(definition)
@@ -132,11 +160,23 @@ func TestMissionSharingPolicy(t *testing.T) {
 			t.Fatalf("old root %s field should be rejected: %v", field, err)
 		}
 	}
+	for _, placement := range []any{nil, fixtures.Object{}, fixtures.Object{"same_agent": nil}, fixtures.Object{"same_agent": []string{}}} {
+		candidate := fixtures.MissionDefinition(definition)
+		candidate["policies"] = fixtures.Object{"placement": placement}
+		updated = missions.Mission{}
+		a.Call("update_mission", candidate, &updated)
+		if updated.Policies == nil || placement == nil && updated.Policies.Placement != nil || placement != nil && (updated.Policies.Placement == nil || len(updated.Policies.Placement.SameAgent) != 0) {
+			t.Fatal("empty placement should declare no affinity group")
+		}
+	}
 	definition.Policies = nil
 	updated, described = missions.Mission{}, missions.Mission{}
 	a.Call("update_mission", fixtures.MissionDefinition(definition), &updated)
 	a.Call("describe_mission", fixtures.Object{"mission_name": definition.Name}, &described)
 	if updated.Policies != nil || described.Policies != nil {
-		t.Fatal("null sharing policy was not removed")
+		t.Fatal("null policies were not removed")
+	}
+	for _, operation := range []operations.Operation{first, second} {
+		a.CancelActiveOperation(operation.ID)
 	}
 }

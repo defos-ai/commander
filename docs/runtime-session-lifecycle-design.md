@@ -30,7 +30,7 @@ authorization credential; extension permissions and host authorization still app
 | Concept | Authority | What it answers |
 | --- | --- | --- |
 | Runtime session | Durable session record | Which exact process owns this resource, and does it still reserve its scope? |
-| `same-agent` affinity | Retained task dispatches in one operation | Which process must execute this operation's grouped actions? |
+| `policies.placement.same_agent` affinity | Retained task dispatches in one operation | Which process must execute this operation's grouped actions? |
 | Execution checkpoint | Immutable named fact in one execution | What did this execution record before or after an external effect? |
 
 Completing an operation does not close a session. Closing or abandoning a session
@@ -316,7 +316,7 @@ closure is independently confirmed.
 
 ## Composition with same-agent affinity
 
-The following table applies when the task belongs to the mission's `same-agent`
+The following table applies when the task belongs to the mission's `policies.placement.same_agent`
 group. Tasks outside that group retain their session constraint and ordinary
 readiness checks but do not acquire the group's affinity restriction.
 

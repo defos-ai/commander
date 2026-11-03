@@ -10,7 +10,6 @@ import (
 	"github.com/defos-ai/commander/framework/comms/messages"
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
 	agentmodel "github.com/defos-ai/commander/framework/domain/agents"
-	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/domain/sessions"
 	runtimeSessions "github.com/defos-ai/commander/framework/sessions"
@@ -117,7 +116,7 @@ func (r *Runner) selectAgent(ctx context.Context, operation operations.Operation
 	}
 	owner := placement.OwnerAgentID
 	var affinityCandidates []string
-	grouped := slices.Contains(operation.Mission.Rules[missions.SameAgent].ForActions, task.ActionName)
+	grouped := slices.Contains(operation.Mission.SameAgentActions(), task.ActionName)
 	if grouped {
 		boundAgentID, err := operation.AffinityAgentID()
 		if err != nil {

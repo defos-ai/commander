@@ -17,7 +17,12 @@ type CreateMissionRequest struct {
 }
 
 type MissionPoliciesRequest struct {
-	Sharing []MissionSharingPolicyRequest `json:"sharing,omitempty"`
+	Placement *MissionPlacementPolicyRequest `json:"placement,omitempty"`
+	Sharing   []MissionSharingPolicyRequest  `json:"sharing,omitempty"`
+}
+
+type MissionPlacementPolicyRequest struct {
+	SameAgent []string `json:"same_agent,omitempty"`
 }
 
 type MissionSharingPolicyRequest struct {
@@ -54,7 +59,12 @@ type MissionResponse struct {
 }
 
 type MissionPoliciesResponse struct {
-	Sharing []MissionSharingPolicyResponse `json:"sharing,omitempty"`
+	Placement *MissionPlacementPolicyResponse `json:"placement,omitempty"`
+	Sharing   []MissionSharingPolicyResponse  `json:"sharing,omitempty"`
+}
+
+type MissionPlacementPolicyResponse struct {
+	SameAgent []string `json:"same_agent,omitempty"`
 }
 
 type MissionSharingPolicyResponse struct {

@@ -161,7 +161,7 @@ func TestRulesOperationKeepsItsMissionSnapshot(t *testing.T) {
 	catalog := config.MissionStore.(*fakes.MissionStore)
 	catalog.Change(func(m *missions.Mission) {
 		m.Completion = &policies.CompletionPolicy{DecisionBy: policies.Operator}
-		m.Policies = &policies.MissionPolicies{Sharing: fixtures.SharingPolicy()}
+		m.Policies = &policies.MissionPolicies{Placement: fixtures.AffinityPolicy(), Sharing: fixtures.SharingPolicy()}
 		m.Rules = missions.RuleSet{
 			missions.AggregateResults:  {ForActions: []string{"inspect"}},
 			missions.DecideNextActions: {ForActions: []string{"discover"}, Params: &missions.RuleParams{DecisionBy: policies.Model}},
@@ -173,6 +173,7 @@ func TestRulesOperationKeepsItsMissionSnapshot(t *testing.T) {
 	op := fixtures.Start(t, r)
 	catalog.Change(func(m *missions.Mission) {
 		m.Completion.DecisionBy = policies.Model
+		m.Policies.Placement.SameAgent[0] = "follow-up"
 		m.Policies.Sharing[0].FromActions[0] = "follow-up"
 		m.Policies.Sharing[0].ToActions[0] = "discover"
 		m.Policies.Sharing[0].Include[0] = policies.ShareDecisions
@@ -182,7 +183,7 @@ func TestRulesOperationKeepsItsMissionSnapshot(t *testing.T) {
 		t.Fatal("a new operation did not receive the updated completion policy")
 	}
 	if !reflect.DeepEqual(later.Mission.Policies, catalog.Snapshot().Policies) {
-		t.Fatal("a new operation did not receive the updated sharing policy")
+		t.Fatal("a new operation did not receive the updated placement and sharing policies")
 	}
 	catalog.Change(func(m *missions.Mission) { m.Rules[missions.DecideNextActions].ForActions[0] = "inspect" })
 	catalog.Change(func(m *missions.Mission) { m.Rules[missions.DecideNextActions].Params.DecisionBy = "changed" })
@@ -190,6 +191,7 @@ func TestRulesOperationKeepsItsMissionSnapshot(t *testing.T) {
 	op.Mission.Rules[missions.DecideNextActions].ForActions[0] = "returned snapshot changed"
 	op.Mission.Rules[missions.DecideNextActions].Params.DecisionBy = "changed"
 	op.Mission.Completion.DecisionBy = policies.Model
+	op.Mission.Policies.Placement.SameAgent[0] = "returned placement changed"
 	op.Mission.Policies.Sharing[0].FromActions[0] = "returned source changed"
 	op.Mission.Policies.Sharing[0].ToActions[0] = "returned recipient changed"
 	op.Mission.Policies.Sharing[0].Include[0] = "returned kind changed"
@@ -202,8 +204,8 @@ func TestRulesOperationKeepsItsMissionSnapshot(t *testing.T) {
 	if settled.Mission.Completion == nil || settled.Mission.Completion.DecisionBy != policies.Operator {
 		t.Fatal("catalog or returned snapshot edits changed the running operation's completion policy")
 	}
-	if !reflect.DeepEqual(settled.Mission.Policies, &policies.MissionPolicies{Sharing: fixtures.SharingPolicy()}) {
-		t.Fatalf("catalog or returned snapshot edits changed the running operation's sharing policy: %+v", settled.Mission.Policies)
+	if !reflect.DeepEqual(settled.Mission.Policies, &policies.MissionPolicies{Placement: fixtures.AffinityPolicy(), Sharing: fixtures.SharingPolicy()}) {
+		t.Fatalf("catalog or returned snapshot edits changed the running operation's placement or sharing policy: %+v", settled.Mission.Policies)
 	}
 }
 

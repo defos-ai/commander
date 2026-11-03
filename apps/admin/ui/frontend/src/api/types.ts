@@ -13,7 +13,12 @@ export interface Mission {
 }
 
 export interface MissionPolicies {
+  placement?: PlacementPolicy | null;
   sharing?: SharingRoute[] | null;
+}
+
+export interface PlacementPolicy {
+  same_agent?: string[] | null;
 }
 
 export interface SharingRoute {
@@ -22,7 +27,7 @@ export interface SharingRoute {
   include: ('results' | 'artifacts' | 'decisions')[];
 }
 
-export type MissionRuleName = 'aggregate-results' | 'decide-next-actions' | 'same-agent';
+export type MissionRuleName = 'aggregate-results' | 'decide-next-actions';
 
 export interface MissionRule {
   for_actions: string[];

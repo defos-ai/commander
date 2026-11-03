@@ -57,6 +57,13 @@
   `404 mission_not_found`. Concurrent edits are last-write-wins. Updates affect
   future operations only, never their retained mission snapshots. Read the saved
   definition after uncertain writes; never retry an update automatically.
+- Optional mission `policies.placement.same_agent` uses independent placement
+  request/response DTOs mapped to the shared `PlacementPolicy`. Clone the optional
+  policy pointer and its action-name slice independently. Omitted/null/empty
+  placement or action lists declare no affinity. Names are trimmed, nonblank and
+  unique; they need not belong to mission coverage. Strict OpenAPI/MCP schemas
+  reject unknown fields and the removed `rules.same-agent` form. Preserve placement
+  in mission responses and operation snapshots; edits affect future operations.
 - Optional mission `completion` maps through independent API request/response DTOs
   to [`policies.CompletionPolicy`](../../../framework/domain/missions/policies/completion_policy.go).
   Clone its pointer at mapping boundaries; omission

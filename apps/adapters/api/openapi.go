@@ -34,6 +34,7 @@ func openAPIDocument() ([]byte, error) {
 	}{
 		{"About", reflect.TypeFor[models.AboutResponse]()},
 		{"MissionSharingPolicy", reflect.TypeFor[models.MissionSharingPolicyResponse]()},
+		{"MissionPlacementPolicy", reflect.TypeFor[models.MissionPlacementPolicyResponse]()},
 		{"MissionPolicies", reflect.TypeFor[models.MissionPoliciesResponse]()},
 		{"MissionCompletionPolicy", reflect.TypeFor[models.MissionCompletionPolicyResponse]()},
 		{"MissionRuleParams", reflect.TypeFor[models.MissionRuleParamsResponse]()},
@@ -41,6 +42,7 @@ func openAPIDocument() ([]byte, error) {
 		{"ActionDefinition", reflect.TypeFor[models.ActionDefinitionResponse]()},
 		{"Mission", reflect.TypeFor[models.MissionResponse]()},
 		{"MissionSharingPolicyRequest", reflect.TypeFor[models.MissionSharingPolicyRequest]()},
+		{"MissionPlacementPolicyRequest", reflect.TypeFor[models.MissionPlacementPolicyRequest]()},
 		{"MissionPoliciesRequest", reflect.TypeFor[models.MissionPoliciesRequest]()},
 		{"MissionCompletionPolicyRequest", reflect.TypeFor[models.MissionCompletionPolicyRequest]()},
 		{"MissionRuleParamsRequest", reflect.TypeFor[models.MissionRuleParamsRequest]()},
@@ -71,6 +73,9 @@ func openAPIDocument() ([]byte, error) {
 			objectives.Items.Pattern = `\S`
 			objectives.Description = "Ordered mission objectives. Include at least one nonblank objective."
 		}
+		if placement := schema.Properties["placement"]; placement != nil {
+			placement.Type, placement.Types = "", []string{"object", "null"}
+		}
 		if sharing := schema.Properties["sharing"]; sharing != nil {
 			sharing.Type, sharing.Types = "", []string{"array", "null"}
 			sharing.Description = "Optional action-based sharing routes retained in each operation's mission snapshot. Omitted, null or empty sharing declares no routes. Source and recipient actions need not appear in required_actions or optional_actions; routes do not start tasks or change readiness. The controller forwards accepted results, artifact metadata and saved task-scoped answered questions to matching active actions in the same operation. Shared answers preserve their original scope and operator/model origin; operation-wide questions are excluded."
@@ -92,9 +97,16 @@ func openAPIDocument() ([]byte, error) {
 				property.Items.Pattern = `^\S(?:[\s\S]*\S)?$`
 			}
 			schema.Properties["include"].Items.Enum = []any{"results", "artifacts", "decisions"}
+		case "MissionPlacementPolicy", "MissionPlacementPolicyRequest":
+			schema.AdditionalProperties = &jsonschema.Schema{Not: &jsonschema.Schema{}}
+			property := schema.Properties["same_agent"]
+			property.Type, property.Types = "", []string{"array", "null"}
+			property.UniqueItems = true
+			property.Items.Pattern = `^\S(?:[\s\S]*\S)?$`
+			property.Description = "Optional action names bound to the first dispatched agent in each operation. Omitted, null or empty declares no affinity. Names need not appear in mission action coverage; this constraint neither starts nor orders work."
 		case "MissionPolicies", "MissionPoliciesRequest":
 			schema.AdditionalProperties = &jsonschema.Schema{Not: &jsonschema.Schema{}}
-			schema.Description = "Optional mission policies retained in each operation. Only sharing is grouped here; completion and rules remain at the mission root. An empty object declares no sharing routes."
+			schema.Description = "Optional placement and sharing policies retained in each operation. Completion and continuation rules remain at the mission root. An empty object declares no policy overrides."
 		case "MissionCompletionPolicy", "MissionCompletionPolicyRequest":
 			schema.Required = []string{"decision_by"}
 			schema.AdditionalProperties = &jsonschema.Schema{Not: &jsonschema.Schema{}}
@@ -107,7 +119,7 @@ func openAPIDocument() ([]byte, error) {
 			schema.Properties["action_definitions"].Description = "Desired action contracts referenced by this mission. Metadata only: defining an action does not register an executor or satisfy readiness."
 			schema.Properties["required_actions"].Description = "Actions included in mission preflight readiness checks."
 			schema.Properties["optional_actions"].Description = "Additional actions the mission may use. Unscheduled optional actions do not block mission preflight; queued optional actions participate in readiness checks. Names are unique and must not overlap required_actions."
-			schema.Properties["rules"].Description = "Mission policies keyed by aggregate-results, decide-next-actions or same-agent. Valid proposed actions run automatically by default. aggregate-results collects direct children of one execution; decide-next-actions with decision_by=model requests model review. same-agent binds its for_actions to the first selected agent instance within each operation, with no fallback; it accepts no parameters and does not order tasks. Failures and empty proposals also require model review."
+			schema.Properties["rules"].Description = "Continuation rules keyed by aggregate-results or decide-next-actions. Valid proposed actions run automatically by default. aggregate-results collects direct children of one execution; decide-next-actions with decision_by=model requests model review. Placement belongs in policies.placement.same_agent. Failures and empty proposals also require model review."
 		case "ActionRequirement":
 			schema.Properties["kind"].Enum = []any{"executable", "configuration", "secret"}
 			schema.Properties["kind"].Description = "executable and configuration requirements need host setup. secret identifies an unavailable declared Commander-managed secret shared by name across agents."
@@ -269,8 +281,8 @@ func constrainMissionRequestSchema(schema *jsonschema.Schema, model string) {
 		schema.Properties["action_definitions"].Description = "Up to 100 desired action contracts, unique by name and referenced by required_actions or optional_actions. Metadata only: creation does not install actions, grant secrets or change readiness."
 		rules := schema.Properties["rules"]
 		rules.Type, rules.Types = "", []string{"object", "null"}
-		rules.PropertyNames = &jsonschema.Schema{Enum: []any{"aggregate-results", "decide-next-actions", "same-agent"}}
-		rules.Description = "Mission policies keyed by aggregate-results, decide-next-actions or same-agent. decide-next-actions requires params.decision_by=model. Shared mission validation checks cross-field constraints and resolves schema references locally; external schema references are rejected."
+		rules.PropertyNames = &jsonschema.Schema{Enum: []any{"aggregate-results", "decide-next-actions"}}
+		rules.Description = "Continuation rules keyed by aggregate-results or decide-next-actions. Placement belongs in policies.placement.same_agent. decide-next-actions requires params.decision_by=model. Shared mission validation checks cross-field constraints and resolves schema references locally; external schema references are rejected."
 	}
 }
 
@@ -279,7 +291,7 @@ func openAPICreateMissionPath(paths map[string]any) {
 	create["description"] = "Creates a reusable mission only if its exact name is absent. The shared mission validator checks action lists, desired action_definitions, rules and locally resolvable JSON Schema objects. Actions need not be installed. Definitions are metadata and do not register actions or satisfy readiness. No controller is required; creation does not run work or change existing operation snapshots. Query parameters are not accepted."
 	create["requestBody"] = map[string]any{
 		"required":    true,
-		"description": "One JSON object, at most 1 MiB. Requires application/json; charset parameters are accepted. Unknown mission, action definition, rule and parameter fields are rejected. Schema objects may contain JSON Schema extension keywords. Invalid definitions return invalid_request.",
+		"description": "One JSON object, at most 1 MiB. Requires application/json; charset parameters are accepted. Unknown mission, policy, action definition, rule and parameter fields are rejected. Schema objects may contain JSON Schema extension keywords. Invalid definitions return invalid_request.",
 		"content":     map[string]any{"application/json": map[string]any{"schema": endpoints.OpenAPIRef("CreateMissionRequest")}},
 	}
 	responses := create["responses"].(map[string]any)

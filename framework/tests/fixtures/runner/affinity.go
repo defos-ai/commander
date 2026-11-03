@@ -7,6 +7,7 @@ import (
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/missions"
+	"github.com/defos-ai/commander/framework/domain/missions/policies"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/id"
 	fakes "github.com/defos-ai/commander/framework/tests/fakes/runner"
@@ -15,8 +16,8 @@ import (
 func AffinityOperation() operations.Operation {
 	op := operations.Operation{
 		ID: id.OperationID(), Status: operations.Planning,
-		Mission: missions.Mission{Rules: missions.RuleSet{
-			missions.SameAgent: {ForActions: []string{"checkout-template", "build-agent"}},
+		Mission: missions.Mission{Policies: &policies.MissionPolicies{
+			Placement: &policies.PlacementPolicy{SameAgent: []string{"checkout-template", "build-agent"}},
 		}},
 	}
 	for _, name := range []string{"checkout-template", "build-agent", "other-action", "another-action"} {
@@ -43,9 +44,11 @@ func AffinityPreflightAgent(agentID string, names ...string) agents.Agent {
 func AffinityConfig() runner.Config {
 	config := Config()
 	config.MissionStore.(*fakes.MissionStore).Change(func(m *missions.Mission) {
-		m.Rules = missions.RuleSet{
-			missions.SameAgent: {ForActions: []string{"inspect", "discover"}},
-		}
+		m.Policies = &policies.MissionPolicies{Placement: AffinityPolicy()}
 	})
 	return config
+}
+
+func AffinityPolicy() *policies.PlacementPolicy {
+	return &policies.PlacementPolicy{SameAgent: []string{"inspect", "discover"}}
 }

@@ -148,7 +148,7 @@ Read the [agent guide](../AGENTS.md) and [root guide](../../../AGENTS.md) first.
   redacted and the probe out of artifacts. Failures preserve source and return no
   artifacts. Constructor inspection checks declarations, not implementation behavior.
 - Workspace storage is local to the owning builder. The bundled `build-agent`
-  mission binds checkout and build with the controller's `same-agent` rule.
+  mission binds checkout and build through `policies.placement.same_agent`.
   Do not route a workspace to another builder or duplicate affinity in the action.
 
 ## Deployment

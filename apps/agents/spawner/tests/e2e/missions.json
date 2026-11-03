@@ -4,7 +4,7 @@
     "objectives": ["Keep repeated work on the same agent while other operations use spare agents."],
     "required_actions": ["fixture-echo"],
     "starting_actions": ["fixture-echo"],
-    "rules": {"same-agent": {"for_actions": ["fixture-echo"]}},
+    "policies": {"placement": {"same_agent": ["fixture-echo"]}},
     "input_schema": {
       "type": "object",
       "properties": {"message": {"type": "string"}},

@@ -10,6 +10,8 @@ interactive questions, execution progress and operator-controlled completion.
 - Create and edit mission objectives, actions, rules and schemas through Admin,
   HTTP API, MCP or Admin CLI. Names stay unchanged; running operations retain
   their original mission definition.
+- Use `policies.placement.same_agent` to keep related actions on one agent
+  instance, including when it is busy or temporarily unavailable.
 - Set `completion.decision_by` to `operator` to require explicit completion.
   Model submissions save `completion_draft`; operators review or edit it in
   Admin before completing through the existing API. Omitted/model policy keeps
@@ -58,6 +60,9 @@ interactive questions, execution progress and operator-controlled completion.
   external MCP clients must schedule their own fresh read before a model answer.
 - Express mission workflows through objectives, actions and rules; mission steps
   have been removed.
+- Move `rules.same-agent.for_actions` to `policies.placement.same_agent` in mission
+  definitions. The old placement rule is no longer accepted; stored definitions
+  and operation snapshots are not automatically converted.
 - Only spawner starts automatically. Enable Compose's `builder` profile or install
   Builder when needed. Bundled missions are `build-agent` and `install-agent`;
   `review-website` is no longer seeded. Existing saved missions are preserved.

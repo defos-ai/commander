@@ -144,6 +144,12 @@
   and JSON/Form switches. Omitted/null policies or omitted/null/empty sharing
   declare no routes; the shared API owns policy semantics. The controller forwards
   results, artifact metadata and saved task-scoped answers to matching active actions.
+- Optional `policies.placement.same_agent` is authored in the full JSON editor and
+  shown separately in mission details as **Same agent actions**. Validate the
+  placement response shape and preserve its original tokens through unrelated
+  Form edits and JSON/Form switches. Omitted/null/empty placement or `same_agent`
+  lists declare no group. Placement is no longer accepted in the `rules` map;
+  its remaining entries cover aggregation and model review.
 - Mission details offer **Details / JSON** views. The `/missions/<name>/json`
   route survives reload and browser history. Retain validated response text from
   the same detail request; never reconstruct exported JSON from parsed JavaScript
@@ -243,7 +249,8 @@
   they describe policies, not execution dependencies.
   List required and optional mission actions separately; optional declarations
   alone do not indicate blocked readiness before those actions are queued.
-- Accept and display the `same-agent` mission rule. Operation `affinity` is a
+- Accept and display the mission's `policies.placement.same_agent` group.
+  Operation `affinity` is a
   read-only placement view: show its owner or first-dispatch binding note, and
   give history errors precedence over unbound wording. Show queued-for-owner
   hints only on matching queued tasks in active operations. Retain terminal
