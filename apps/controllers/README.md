@@ -41,6 +41,8 @@ not need the encryption key.
 
 Configure providers in [`default/cli/`](default/cli/). Use the
 [framework controller](../../framework/controller/) when writing another host.
+See the [worker layout](../../docs/overview.md#controller-workers) for how the
+controller hosts its components.
 
 ### Agent selection
 

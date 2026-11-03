@@ -38,6 +38,26 @@ Learn how to [create missions and choose policies](features/missions.md),
 Use the [feature guides](features/README.md) for operations, questions, secrets,
 sessions and data sharing.
 
+## Controller workers
+
+[`NewController`](../framework/controller/controller.go) is the single entry point:
+it assembles the configured workers and owns their startup and shutdown. Each
+worker owns its logic and dependencies.
+
+```mermaid
+flowchart TB
+    Controller[Controller]
+    Controller --> Command[Command]
+    Controller --> Operation[Operation]
+    Controller --> Coordination[Coordination]
+    Controller --> Event[Event]
+    Controller --> Sharing[Sharing]
+    Controller -.-> Session["Session (optional)"]
+    Controller -.-> Secret["Secret (optional)"]
+```
+
+Session and secret workers are included when their stores are configured.
+
 ## Dependencies
 
 | If you want to… | Start here |
