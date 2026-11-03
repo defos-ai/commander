@@ -239,8 +239,13 @@ func TestAgentRequestsDynamicSecretOnlyWhenUsedAndReusesInstalledValue(t *testin
 			if !in.Private {
 				return output{Matched: true}, nil
 			}
-			privateCalls.Add(1)
-			value, err := action.RequestSecret(ctx, "TOKEN")
+			var value []byte
+			var err error
+			if privateCalls.Add(1) == 1 {
+				value, err = action.RequestSecret(ctx, "TOKEN")
+			} else {
+				value, err = action.RequestReusableSecret(ctx, "TOKEN")
+			}
 			defer clear(value)
 			if err == nil {
 				undeclared, lookupErr := action.Secret(ctx, "TOKEN")

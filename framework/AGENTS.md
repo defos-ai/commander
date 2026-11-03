@@ -426,6 +426,17 @@
   reads use `operations.AssessTaskRequirements` to match live work to its saved
   assignment and deadline; this projection does not change task state, suspend
   timeouts, or authorize retries. Static action readiness remains unchanged.
+- `action.RequestSecret` accepts at most one
+  [`SecretRequestOptions`](agent/action/secret_request_options.go); omitted type
+  means `SecretReusable`. `RequestReusableSecret` and `RequestTransientSecret`
+  select their type and delegate to it. Reject conflicting types and all transient
+  defaults, including nonnil empty values. Options keep defaults out of JSON and
+  formatted diagnostics. `SecretOptionsRequester` receives a cloned default that
+  is cleared when the call returns; never clear caller-owned buffers. Preserve
+  existing `SecretRequester` providers for reusable calls without defaults, and
+  return `ErrSecretRequestUnsupported` when they cannot honor the options. The
+  built-in runtime currently supports reusable requests without defaults; typed
+  transient delivery and default seeding require their coordinated follow-up.
 - Controller secret synchronization has its own worker with paired
   `SecretStore`/`SecretRequestStore`. Persist before publishing and check the live
   recipient's registered type and current stored version. Agents may request any
