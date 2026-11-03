@@ -38,7 +38,6 @@ type Worker struct {
 	agent          func(context.Context, string) (agents.Agent, error)
 	logger         *slog.Logger
 	queue          chan sharedData
-	done           chan struct{}
 }
 
 func NewWorker(ctx context.Context, config Config) *Worker {
@@ -46,11 +45,9 @@ func NewWorker(ctx context.Context, config Config) *Worker {
 		ctx: ctx, bus: config.Bus, operationStore: config.Operations,
 		executionStore: config.Executions, artifactStore: config.Artifacts,
 		agent: config.Agent, logger: config.Logger,
-		queue: make(chan sharedData, sharingQueueSize), done: make(chan struct{}),
+		queue: make(chan sharedData, sharingQueueSize),
 	}
 }
-
-func (w *Worker) Done() <-chan struct{} { return w.done }
 
 type sharedData struct {
 	AgentID    string
@@ -86,7 +83,6 @@ func (w *Worker) queueSharedData(source sharedData) {
 }
 
 func (w *Worker) Run() {
-	defer close(w.done)
 	for {
 		select {
 		case <-w.ctx.Done():

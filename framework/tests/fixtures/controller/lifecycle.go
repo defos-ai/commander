@@ -1,0 +1,36 @@
+package fixtures
+
+import (
+	"context"
+	"errors"
+	"testing"
+	"time"
+
+	"github.com/defos-ai/commander/framework/controller"
+	fakes "github.com/defos-ai/commander/framework/tests/fakes/controller"
+)
+
+func StartLifecycleController(t *testing.T, cleanupError error) (context.Context, *controller.Controller, *fakes.Bus, *fakes.Inventory, *fakes.Gate) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	t.Cleanup(cancel)
+	bus, inventory, gate := fakes.NewBus(), &fakes.Inventory{}, fakes.NewGate()
+	bus.BlockClose(gate, cleanupError)
+	c, err := controller.NewController(ctx, bus, controller.ControllerConfig{
+		AgentStore: inventory, ActionStore: fakes.UnusedActions{}, ArtifactStore: fakes.UnusedArtifacts{},
+		ExecutionStore: fakes.UnusedExecutions{}, HeartbeatTimeout: time.Hour, LeaseSweepInterval: time.Hour,
+	})
+	if err != nil {
+		gate.Open()
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		gate.Open()
+		closing, done := context.WithTimeout(context.Background(), time.Second)
+		defer done()
+		if err := c.Close(closing); !errors.Is(err, cleanupError) {
+			t.Errorf("controller cleanup: %v", err)
+		}
+	})
+	return ctx, c, bus, inventory, gate
+}

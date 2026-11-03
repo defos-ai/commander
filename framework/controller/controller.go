@@ -58,7 +58,6 @@ type ControllerConfig struct {
 // The host supplies controller-owned database stores.
 type Controller struct {
 	sessions           *runtimeSessions.Coordinator
-	sessionsDone       chan struct{}
 	state              *state.State
 	id                 string
 	controllerType     string
@@ -76,8 +75,7 @@ type Controller struct {
 	leaseSweepInterval time.Duration
 	closeOnce          sync.Once
 	closeErr           error // written before cleanupDone closes
-	eventsDone         chan struct{}
-	loopDone           chan struct{}
+	workersDone        chan struct{}
 	requests           chan func()
 	cleanupDone        chan struct{}
 }
@@ -158,9 +156,9 @@ func NewController(ctx context.Context, bus comms.Bus, config ControllerConfig) 
 		executionStore: config.ExecutionStore, operationStore: config.OperationStore, logger: config.Logger,
 		events: events, cancel: cancel, inventory: config.AgentStore,
 		leaseRegistry: registry, leaseSweepInterval: config.LeaseSweepInterval,
-		state:      state.New(lifetime, config.HeartbeatTimeout),
-		eventsDone: make(chan struct{}), loopDone: make(chan struct{}), cleanupDone: make(chan struct{}),
-		requests: make(chan func()), sessionsDone: make(chan struct{}),
+		state:       state.New(lifetime, config.HeartbeatTimeout),
+		workersDone: make(chan struct{}), cleanupDone: make(chan struct{}),
+		requests: make(chan func()),
 	}
 	if config.SessionStore != nil {
 		c.sessions, err = runtimeSessions.New(config.SessionStore, config.OperationStore, config.ExecutionStore, config.AgentStore, config.ActionStore, c.controlSessionRemote)
@@ -183,10 +181,7 @@ func NewController(ctx context.Context, bus comms.Bus, config ControllerConfig) 
 		Bus: bus, Operations: config.OperationStore, Executions: config.ExecutionStore,
 		Artifacts: config.ArtifactStore, Agent: c.Agent, Logger: config.Logger,
 	})
-	go c.reconcileSessionControls()
-	go c.run()
-	go c.sharing.Run()
-	go c.consumeEvents(config.ActionStore)
+	c.start(config.ActionStore)
 
 	return c, nil
 }

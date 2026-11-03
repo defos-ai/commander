@@ -16,7 +16,6 @@ import (
 // Only this loop mutates coordination state. Remote action waits run in callers;
 // the event consumer submits one delivery and waits for processing before ACK.
 func (c *Controller) run() {
-	defer close(c.loopDone)
 	defer c.state.Close()
 	ticker := time.NewTicker(c.leaseSweepInterval)
 	defer ticker.Stop()
@@ -44,7 +43,6 @@ func (c *Controller) run() {
 }
 
 func (c *Controller) consumeEvents(actions actions.ActionStore) {
-	defer close(c.eventsDone)
 	events := consumers.EventConsumer{
 		Bus: c.bus, Inventory: c.inventory, Actions: actions, Executions: c.executionStore, Artifacts: c.artifactStore, State: c.state,
 		Secrets: c.secrets, Operations: c.operationStore,

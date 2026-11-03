@@ -44,7 +44,6 @@ func (c *Controller) controlSessionRemote(ctx context.Context, request sessions.
 	return sessions.Session{}, errors.New("owner did not report the requested session")
 }
 func (c *Controller) reconcileSessionControls() {
-	defer close(c.sessionsDone)
 	if c.sessions == nil {
 		return
 	}

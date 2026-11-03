@@ -155,6 +155,11 @@
   public recovery, owner placement and lifecycle behavior.
 - Use existing controller and runner owner loops for runtime mutation. Update
   persistence, consumers and recovery together when changing lifecycle behavior.
+- Controller lifecycle startup joins its owner loop, event consumer, session
+  controls and sharing worker through one completion signal. Keep remote waits
+  outside the owner loop. `Done` signals cancellation; `Close` waits for workers
+  and subscription cleanup under its caller's context before hosts release
+  providers. Cleanup runs separately so it cannot block `Close` past that deadline.
 - Only one active controller per database is supported. Registration and selector
   capacity do not establish distributed ownership or global capacity.
 - Apply operation mutations atomically to the latest saved record through

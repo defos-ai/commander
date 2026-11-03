@@ -14,12 +14,15 @@ import (
 )
 
 type Bus struct {
-	events   chan messages.Message
-	commands chan messages.Message
-	acked    chan string
-	rejected chan string
-	closed   chan struct{}
-	inbox    comms.Inbox
+	events     chan messages.Message
+	commands   chan messages.Message
+	acked      chan string
+	rejected   chan string
+	closed     chan struct{}
+	inbox      comms.Inbox
+	closeGate  *Gate
+	closeError error
+	closeCalls atomic.Int32
 }
 
 func (b *Bus) Publish(ctx context.Context, _ string, m messages.Message) error {
@@ -53,7 +56,14 @@ func (b *Bus) Next(ctx context.Context) (comms.Delivery, error) {
 		return nil, ctx.Err()
 	}
 }
-func (b *Bus) Close() error { close(b.closed); return nil }
+func (b *Bus) Close() error {
+	if b.closeCalls.Add(1) > 1 {
+		return comms.ErrClosed
+	}
+	b.closeGate.wait()
+	close(b.closed)
+	return b.closeError
+}
 
 type delivery struct {
 	message  messages.Message
@@ -139,6 +149,8 @@ func (b *Bus) Acknowledged() <-chan string       { return b.acked }
 func (b *Bus) Rejected() <-chan string           { return b.rejected }
 func (b *Bus) Closed() <-chan struct{}           { return b.closed }
 func (b *Bus) Inbox() comms.Inbox                { return b.inbox }
+func (b *Bus) CloseCalls() int                   { return int(b.closeCalls.Load()) }
+func (b *Bus) BlockClose(gate *Gate, err error)  { b.closeGate, b.closeError = gate, err }
 func (b *Bus) Send(ctx context.Context, message messages.Message) error {
 	select {
 	case b.events <- message:
