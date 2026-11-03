@@ -20,7 +20,11 @@ func (c *Controller) start(list ...workers.Worker) {
 				err = fmt.Errorf("%T stopped while the controller was running", worker)
 			}
 			if c.lifetime.Err() == nil || (err != nil && err != context.Canceled && err != ErrControllerClosed && err != runner.ErrClosed) {
-				c.fail(err)
+				if worker == c.commands {
+					c.beginClose(err)
+				} else {
+					c.fail(err)
+				}
 			}
 		})
 	}
@@ -36,7 +40,7 @@ func (c *Controller) Done() <-chan struct{} { return c.lifetime.Done() }
 
 func (c *Controller) Err() error { return context.Cause(c.lifetime) }
 
-// Close stops admission, drains Runner, then joins core workers and cleanup.
+// Close stops admission and joins command intake, Runner, then core workers.
 // Independently hosted agents and the caller-owned bus remain running.
 func (c *Controller) Close(ctx context.Context) error {
 	if ctx == nil {
@@ -75,9 +79,10 @@ func (c *Controller) beginClose(cause error) {
 		// Worker cleanup can outlast one Close caller; retries join this same work.
 		go func() {
 			defer close(c.cleanupDone)
+			commandErr := c.commands.Close(context.Background())
 			runnerErr := c.runner.Close(context.Background())
 			c.cancelCore(context.Cause(c.lifetime))
-			c.closeErr = errors.Join(runnerErr, closeWorkers(context.Background(), c.coreWorkers))
+			c.closeErr = errors.Join(commandErr, runnerErr, closeWorkers(context.Background(), c.coreWorkers))
 		}()
 	})
 }

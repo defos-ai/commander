@@ -7,6 +7,7 @@ import (
 	"github.com/defos-ai/commander/framework/comms"
 	"github.com/defos-ai/commander/framework/controller/consumers"
 	"github.com/defos-ai/commander/framework/controller/workers"
+	"github.com/defos-ai/commander/framework/controller/workers/command"
 	"github.com/defos-ai/commander/framework/controller/workers/coordination"
 	"github.com/defos-ai/commander/framework/controller/workers/event"
 	"github.com/defos-ai/commander/framework/controller/workers/runner"
@@ -97,5 +98,13 @@ func assemble(c *Controller, bus comms.Bus, config ControllerConfig) (result []w
 		return nil, err
 	}
 	list = append(list, c.runner)
+	c.commands, err = command.New(c.lifetime, command.Dependencies{
+		Bus: bus, ControllerType: config.Type, ControllerID: config.ID,
+		Controller: c, Operations: c.runner, Logger: config.Logger,
+	})
+	if err != nil {
+		return nil, err
+	}
+	list = append(list, c.commands)
 	return list, nil
 }

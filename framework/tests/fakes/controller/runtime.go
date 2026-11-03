@@ -2,6 +2,8 @@ package fakes
 
 import (
 	"context"
+	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -14,6 +16,9 @@ import (
 )
 
 type Bus struct {
+	routingMu  sync.Mutex
+	routes     map[string]*routedSubscription
+	closeRules map[string]subscriptionCleanup
 	events     chan messages.Message
 	commands   chan messages.Message
 	acked      chan string
@@ -25,7 +30,10 @@ type Bus struct {
 	closeCalls atomic.Int32
 }
 
-func (b *Bus) Publish(ctx context.Context, _ string, m messages.Message) error {
+func (b *Bus) Publish(ctx context.Context, topic string, m messages.Message) error {
+	if route := b.route(topic); route != nil {
+		return route.publish(ctx, m)
+	}
 	select {
 	case b.commands <- m:
 		return nil
@@ -33,9 +41,23 @@ func (b *Bus) Publish(ctx context.Context, _ string, m messages.Message) error {
 		return ctx.Err()
 	}
 }
-func (b *Bus) Subscribe(_ context.Context, inbox comms.Inbox) (comms.Subscription, error) {
-	b.inbox = inbox
-	return b, nil
+func (b *Bus) Subscribe(ctx context.Context, inbox comms.Inbox) (comms.Subscription, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if strings.HasPrefix(inbox.Topic, "controllers.") && strings.HasSuffix(inbox.Topic, ".events") {
+		b.inbox = inbox
+		return b, nil
+	}
+	b.routingMu.Lock()
+	defer b.routingMu.Unlock()
+	if _, exists := b.routes[inbox.Topic]; exists {
+		return nil, comms.ErrInboxInUse
+	}
+	cleanup := b.closeRules[inbox.Topic]
+	subscription := &routedSubscription{messages: make(chan messages.Message, 16), closed: make(chan struct{}), cleanup: cleanup}
+	b.routes[inbox.Topic] = subscription
+	return subscription, nil
 }
 func (b *Bus) Next(ctx context.Context) (comms.Delivery, error) {
 	select {
@@ -152,7 +174,8 @@ type UnusedExecutions struct{ executions.ExecutionStore }
 type UnusedArtifacts struct{ artifacts.ArtifactStore }
 
 func NewBus() *Bus {
-	return &Bus{events: make(chan messages.Message, 16), commands: make(chan messages.Message, 16), acked: make(chan string, 16), rejected: make(chan string, 16), closed: make(chan struct{})}
+	return &Bus{routes: make(map[string]*routedSubscription), closeRules: make(map[string]subscriptionCleanup),
+		events: make(chan messages.Message, 16), commands: make(chan messages.Message, 16), acked: make(chan string, 16), rejected: make(chan string, 16), closed: make(chan struct{})}
 }
 func (b *Bus) Commands() <-chan messages.Message { return b.commands }
 func (b *Bus) Acknowledged() <-chan string       { return b.acked }

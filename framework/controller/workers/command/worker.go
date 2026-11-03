@@ -1,4 +1,4 @@
-package adapter
+package command
 
 import (
 	"context"
@@ -7,82 +7,117 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
-	"sync/atomic"
 
 	"github.com/defos-ai/commander/framework/comms"
 	adapterevents "github.com/defos-ai/commander/framework/comms/clients/adapter/events"
 	controllercommands "github.com/defos-ai/commander/framework/comms/clients/controller/commands"
 	"github.com/defos-ai/commander/framework/comms/messages"
 	controllerconsumers "github.com/defos-ai/commander/framework/controller/consumers"
+	"github.com/defos-ai/commander/framework/controller/workers"
 	"github.com/defos-ai/commander/framework/domain"
 	"github.com/defos-ai/commander/framework/domain/sessions"
 	"github.com/defos-ai/commander/framework/id"
 )
 
-// Consumer processes adapter commands independently of agent events. A bounded
-// number of commands can wait for actions without blocking other commands or agent events.
-type Consumer struct {
+type Dependencies struct {
+	Bus            comms.Bus
+	ControllerType string
+	ControllerID   string
+	Controller     controllercommands.Controller
+	Operations     controllercommands.Operations
+	Logger         *slog.Logger
+}
+
+type Worker struct {
+	lifecycle     *workers.Lifecycle
 	bus           comms.Bus
 	commands      comms.Subscription
 	cancellations comms.Subscription
 	controller    controllercommands.Controller
 	operations    controllercommands.Operations
 	logger        *slog.Logger
-	ctx           context.Context
-	cancel        context.CancelFunc
-	running       atomic.Bool
 	ledger        requestLedger
 	closeOnce     sync.Once
-	closeErr      error
+	cleanupDone   chan struct{}
+	closeErr      error // written before cleanupDone closes
 }
 
-// NewConsumer subscribes before returning so a host can advertise readiness
-// only after both commands and cancellation notices have a receiver.
-func NewConsumer(ctx context.Context, bus comms.Bus, controllerType, controllerID string, controller controllercommands.Controller, operations controllercommands.Operations, logger *slog.Logger) (*Consumer, error) {
-	if ctx == nil || bus == nil || controller == nil || operations == nil {
-		return nil, errors.New("adapter consumer requires a bus, controller, and operations")
+func New(ctx context.Context, deps Dependencies) (*Worker, error) {
+	if ctx == nil || deps.Bus == nil || deps.Controller == nil || deps.Operations == nil {
+		return nil, errors.New("command worker requires a context, bus, controller and operations")
 	}
-	if err := messages.ValidateControllerType(controllerType); err != nil {
+	if err := messages.ValidateControllerType(deps.ControllerType); err != nil {
 		return nil, err
 	}
-	if !id.ValidRuntime(controllerID, id.Controller) {
-		return nil, errors.New("adapter consumer requires a valid controller process ID")
+	if !id.ValidRuntime(deps.ControllerID, id.Controller) {
+		return nil, errors.New("command worker requires a valid controller process ID")
 	}
-	commands, err := bus.Subscribe(ctx, comms.Inbox{Topic: messages.ControllerCommands(controllerType), Name: controllerID, Mode: comms.TransientExclusive})
+	lifetime := workers.NewLifecycle(ctx)
+	commands, err := deps.Bus.Subscribe(lifetime.Context(), comms.Inbox{Topic: messages.ControllerCommands(deps.ControllerType), Name: deps.ControllerID, Mode: comms.TransientExclusive})
 	if err != nil {
+		lifetime.Cancel()
 		return nil, err
 	}
-	cancellations, err := bus.Subscribe(ctx, comms.Inbox{Topic: messages.ControllerCancellations(controllerType), Name: controllerID, Mode: comms.TransientExclusive})
+	cancellations, err := deps.Bus.Subscribe(lifetime.Context(), comms.Inbox{Topic: messages.ControllerCancellations(deps.ControllerType), Name: deps.ControllerID, Mode: comms.TransientExclusive})
 	if err != nil {
+		lifetime.Cancel()
 		return nil, errors.Join(err, commands.Close())
 	}
-	lifetime, cancel := context.WithCancel(ctx)
-	return &Consumer{ctx: lifetime, cancel: cancel, bus: bus, commands: commands, cancellations: cancellations, controller: controller, operations: operations, logger: logger, ledger: requestLedger{active: make(map[string]*requestState), canceled: make(map[string]string)}}, nil
+	return &Worker{
+		lifecycle: lifetime, bus: deps.Bus, commands: commands, cancellations: cancellations,
+		controller: deps.Controller, operations: deps.Operations, logger: deps.Logger,
+		ledger:      requestLedger{active: make(map[string]*requestState), canceled: make(map[string]string)},
+		cleanupDone: make(chan struct{}),
+	}, nil
 }
 
-func (c *Consumer) Close() error {
+func (c *Worker) Close(ctx context.Context) error {
+	c.lifecycle.Cancel()
 	c.closeOnce.Do(func() {
-		c.cancel()
-		c.closeErr = errors.Join(c.commands.Close(), c.cancellations.Close())
+		go func() {
+			defer close(c.cleanupDone)
+			commandsDone, cancellationsDone := make(chan error, 1), make(chan error, 1)
+			go func() {
+				err := c.commands.Close()
+				if errors.Is(err, comms.ErrClosed) {
+					err = nil
+				}
+				commandsDone <- err
+			}()
+			go func() {
+				err := c.cancellations.Close()
+				if errors.Is(err, comms.ErrClosed) {
+					err = nil
+				}
+				cancellationsDone <- err
+			}()
+			c.closeErr = errors.Join(<-commandsDone, <-cancellationsDone)
+		}()
 	})
-	return c.closeErr
+	if err := c.lifecycle.Close(ctx); err != nil {
+		return err
+	}
+	select {
+	case <-c.cleanupDone:
+		return c.closeErr
+	default:
+	}
+	select {
+	case <-c.cleanupDone:
+		return c.closeErr
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
-// Consume may be restarted after it returns; completed replies stay cached.
-// Only this goroutine accesses the ledger. The two bus consumers join their
-// workers before returning, including workers finishing during cancellation.
-func (c *Consumer) Consume(ctx context.Context) error {
-	if !c.running.CompareAndSwap(false, true) {
-		return errors.New("adapter consumer is already running")
-	}
-	defer c.running.Store(false)
+func (c *Worker) Run(ctx context.Context) error {
+	return c.lifecycle.Run(ctx, c.run)
+}
+
+// This loop owns the ledger until both consumers have joined their requests.
+func (c *Worker) run(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	stop := context.AfterFunc(c.ctx, cancel)
-	defer stop()
-	if c.ctx.Err() != nil {
-		cancel()
-	}
 	coordinator := requestCoordinator{claims: make(chan requestClaim), completions: make(chan requestCompletion), cancellations: make(chan requestCancellation)}
 	finished := make(chan error, 2)
 	go func() {
@@ -117,7 +152,7 @@ func continueAfterInvalidInput(_ messages.Message, err error) bool {
 	return errors.Is(err, controllerconsumers.ErrInvalidMessage)
 }
 
-func (c *Consumer) consumeRequest(ctx context.Context, coordinator requestCoordinator, m messages.Message) error {
+func (c *Worker) consumeRequest(ctx context.Context, coordinator requestCoordinator, m messages.Message) error {
 	if err := m.Validate(); err != nil {
 		return controllerconsumers.InvalidMessage(err)
 	}
@@ -159,7 +194,7 @@ func (c *Consumer) consumeRequest(ctx context.Context, coordinator requestCoordi
 	return (adapterevents.Client{Bus: c.bus}).Publish(ctx, state.reply)
 }
 
-func (c *Consumer) consumeCancellation(ctx context.Context, coordinator requestCoordinator, m messages.Message) error {
+func (c *Worker) consumeCancellation(ctx context.Context, coordinator requestCoordinator, m messages.Message) error {
 	if err := m.Validate(); err != nil {
 		return controllerconsumers.InvalidMessage(err)
 	}
@@ -176,7 +211,7 @@ func (c *Consumer) consumeCancellation(ctx context.Context, coordinator requestC
 	return nil
 }
 
-func (c *Consumer) dispatch(ctx context.Context, method string, params json.RawMessage) (any, error) {
+func (c *Worker) dispatch(ctx context.Context, method string, params json.RawMessage) (any, error) {
 	switch method {
 	case controllercommands.MethodControlSession:
 		var p sessions.Control

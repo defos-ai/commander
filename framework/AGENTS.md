@@ -166,14 +166,15 @@
   shared contract and lifecycle helper. Use coordination and runner owner loops
   for runtime mutation. Update persistence, consumers and recovery together when
   changing lifecycle behavior.
-- Controller lifecycle startup joins the runner, coordination, events, sessions,
-  secret reconciliation and sharing through one completion signal. Keep remote
-  waits outside the owner loop. Each worker owns its blocking `Run(ctx)` and
+- Controller lifecycle startup joins command intake, the runner, coordination,
+  events, sessions, secret reconciliation and sharing through one completion
+  signal. Keep remote waits outside the owner loop. Each worker owns its blocking `Run(ctx)` and
   `Close(ctx)`; the controller retains the complete list before starting it.
-  `Done` signals that public admission has stopped. Graceful shutdown cancels
-  admission and joins the runner while coordination and event handling remain
-  available for accepted results. Then cancel the core lifetime and close its
-  workers concurrently. Fatal core errors cancel that lifetime immediately and
+  `Done` signals that public admission has stopped. Shared admission cancellation
+  may begin command and runner draining together. Graceful shutdown joins command
+  requests and subscription cleanup first, then the runner, while coordination
+  and event handling remain available for accepted results. Then cancel the core
+  lifetime and close its workers concurrently. Fatal core errors cancel that lifetime immediately and
   fence admission before pending callers wake. `Close` waits under its caller's
   context; cleanup continues independently after a timeout so retries await the
   same work and error. Hosts retain their providers until shutdown finishes.
@@ -181,8 +182,9 @@
   synchronously without launching task execution or background observation.
   Controller assembly injects the same session worker, explicit sharing capability
   and a typed executor that uses coordination directly, so draining bypasses public
-  admission. Adapters use `Controller.Operations()`; do not construct another runner
-  beside the controller. Standalone runner hosts must start
+  admission. Assembly subscribes the command and cancellation inboxes after
+  recovery; adapters submit through that owned worker. Do not construct another
+  runner or command consumer beside the controller. Standalone runner hosts must start
   [`Worker.Run`](controller/workers/runner/lifecycle.go) before submitting mutations.
   `Run` is blocking and single-use: concurrent calls return `ErrAlreadyRunning`;
   calls after shutdown return `ErrClosed`. Constructor-context cancellation,
@@ -325,9 +327,9 @@
   are logged without changing accepted outcomes.
   Cancel and join it during shutdown. Recovery reads do not replay sharing, and
   saved source IDs let receivers deduplicate accepted event redeliveries.
-- After a successful answer save, the runner notifies executors supporting
-  `ShareQuestionAnswer`. The controller delegates only operation/question IDs to
-  the worker, which [rereads the saved decision](controller/workers/sharing/decisions.go)
+- After a successful answer save, the runner notifies its explicitly injected
+  sharing capability with only operation/question IDs. The sharing worker
+  [rereads the saved decision](controller/workers/sharing/decisions.go)
   and matches its task to the original execution claim before routing. Preserve
   question IDs, content, timestamps and answer origin; multiple decisions can
   belong to one execution.

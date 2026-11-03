@@ -14,6 +14,7 @@ import (
 	"github.com/defos-ai/commander/framework/controller/consumers"
 	"github.com/defos-ai/commander/framework/controller/leases"
 	"github.com/defos-ai/commander/framework/controller/workers"
+	"github.com/defos-ai/commander/framework/controller/workers/command"
 	"github.com/defos-ai/commander/framework/controller/workers/coordination"
 	"github.com/defos-ai/commander/framework/controller/workers/event"
 	"github.com/defos-ai/commander/framework/controller/workers/runner"
@@ -42,17 +43,16 @@ var (
 )
 
 type ControllerConfig struct {
-	SessionStore   sessions.Store
-	MissionStore   missions.MissionStore
-	OperationStore operations.OperationStore
-	ReportStore    reports.ReportStore
-	Type           string
-	ID             string
-	ArtifactStore  artifacts.ArtifactStore
-	AgentStore     agentmodel.AgentStore
-	ActionStore    actionmodel.ActionStore
-	ExecutionStore executions.ExecutionStore
-	// SecretStore and SecretRequestStore enable encrypted delivery together.
+	SessionStore       sessions.Store
+	MissionStore       missions.MissionStore
+	OperationStore     operations.OperationStore
+	ReportStore        reports.ReportStore
+	Type               string
+	ID                 string
+	ArtifactStore      artifacts.ArtifactStore
+	AgentStore         agentmodel.AgentStore
+	ActionStore        actionmodel.ActionStore
+	ExecutionStore     executions.ExecutionStore
 	SecretStore        secrets.SecretStore
 	SecretRequestStore secrets.RequestStore
 	SecretDecryptor    consumers.SecretDecryptor
@@ -74,6 +74,7 @@ type Controller struct {
 	sharing        *sharing.Worker
 	events         *event.Worker
 	runner         *runner.Worker
+	commands       *command.Worker
 	workers        []workers.Worker
 	coreWorkers    []workers.Worker
 	lifetime       context.Context

@@ -2,22 +2,23 @@
 
 ## Host wiring and lifecycle
 
-- [default/cli/cli.go](default/cli/cli.go) composes registration, the controller
-  and adapter-command consumer. Configuration lives in `cli/config.go`;
+- [default/cli/cli.go](default/cli/cli.go) composes registration and the controller.
+  Configuration lives in `cli/config.go`;
   concrete providers and their cleanup belong in `cli/factory.go`.
 - Keep framework scheduling and recovery in [framework/controller](../../framework/controller/).
   A host supplies dependencies and policies; it must not duplicate the runner's
   owner loop or introduce its own operation mutation path.
 - Supply mission, operation and report stores through `ControllerConfig`.
-  The controller constructs, recovers, starts and joins its runner. Pass
-  `Controller.Operations()` to the adapter-command consumer; do not create another
-  runner or manage controller worker `Run` calls from the CLI.
-- Mark registration ready only after controller construction and consumer startup.
-  On shutdown, mark draining, stop command intake, close the controller, then
-  registration and providers. Controller shutdown joins the runner before closing
-  coordination and events. Keep the controller lifetime detached from the CLI's
-  shutdown signal until command intake stops, and use bounded shutdown contexts
-  that survive parent cancellation. Do not add an unbounded worker wait after an
+  The controller constructs, recovers, starts and joins its runner. Assembly
+  supplies its operation commands directly to the owned command worker.
+  Do not create another runner or command consumer, or manage worker `Run` calls
+  from the CLI.
+- Mark registration ready only after controller construction completes recovery
+  and subscribes command/cancellation inboxes. On shutdown, mark draining, close
+  the controller, then registration and providers. Controller shutdown stops
+  admission and joins command requests and subscription cleanup, then the runner,
+  before closing coordination and events. Use bounded shutdown contexts that
+  survive parent cancellation. Do not add an unbounded worker wait after an
   expired `Close` deadline.
 - Keep the current one-active-controller-per-database assumption explicit.
   Registration and provider support do not implement distributed ownership or

@@ -12,6 +12,15 @@ helper; implementation subpackages expose `Worker`, `Dependencies` and `New`.
 If assembly fails, cancel both lifetimes and close every constructed worker,
 including workers whose `Run` has not started. No runtime loop starts in assembly.
 
+- [Commands](command/worker.go) owns adapter command and cancellation subscriptions,
+  concurrent request handlers and their private request ledger. Subscribe after
+  runner recovery and before readiness. Keep request ID/adapter/payload checks,
+  cached replies and cancellation notices that overtake requests intact. The ledger
+  owner must keep processing completions until both consumers join their handlers.
+  Cancel before independently closing both subscriptions; `Close` joins Run and
+  once-only subscription cleanup within the caller's deadline. Intake failures
+  stop admission through the ordered shutdown path; they do not cancel core
+  routing before the runner joins.
 - [Coordination](coordination/worker.go) owns the command mailbox, pending replies,
   inventory observation state, lease expiry and durable dispatch/recovery. Remote
   waits stay outside its owner loop. `submit` retains a buffered reply so caller
@@ -38,8 +47,8 @@ including workers whose `Run` has not started. No runtime loop starts in assembl
   assembly supplies mandatory mission, operation and report stores, the same
   session worker, an explicit sharing capability and a typed coordination
   executor. Keep its catalog and execution paths independent of public host
-  admission so accepted results can drain during shutdown. Expose operation
-  commands through `Controller.Operations()`; hosts do not construct a second runner.
+  admission so accepted results can drain during shutdown. Assembly injects it
+  into the command worker; hosts do not construct a second runner or command consumer.
 
 `coordination.Worker.Apply` scopes event and secret mutation to its owner loop.
 Keep the supplied state inside that synchronous callback; events bind a local
@@ -56,10 +65,11 @@ through `Close`.
 Keep the shutdown hook limited to lifecycle shutdown. Do not pass Controller or
 a collection of host callbacks into workers. Cancel before releasing pending
 callers so they see the original fatal cause. Retain the complete worker list
-before starting any Run call. Graceful shutdown stops admission and joins the
-runner, then cancels the core lifetime and closes its workers concurrently outside
-owner callbacks. Coordination and events remain available during the runner's
-drain. Fatal worker errors cancel core work immediately and fence pending callers
+before starting any Run call. Shared admission cancellation can begin command and
+runner draining together. Graceful shutdown joins command requests and cleanup,
+then the runner, before canceling and closing core workers concurrently outside
+owner callbacks. Coordination and events remain available during both drains.
+Fatal core errors cancel core work immediately and fence pending callers
 with their original cause. The caller's deadline bounds waiting, and retries await
 the same cleanup.
 

@@ -10,7 +10,6 @@ import (
 
 	faultcontrollerfakes "github.com/defos-ai/commander/apps/adapters/api/tests/fakes/faultcontroller"
 	"github.com/defos-ai/commander/framework/controller"
-	"github.com/defos-ai/commander/framework/controller/consumers/adapter"
 	"github.com/defos-ai/commander/framework/domain/controllers"
 	fsactions "github.com/defos-ai/commander/providers/fs/actions"
 	"github.com/defos-ai/commander/providers/fs/agents"
@@ -50,10 +49,6 @@ func run() error {
 		defer done()
 		_ = coordination.Close(shutdown)
 	}()
-	commands := must(adapter.NewConsumer(ctx, bus, "default", coordination.ID(), coordination, coordination.Operations(), nil))
-	commandsDone := make(chan error, 1)
-	go func() { commandsDone <- commands.Consume(ctx) }()
-	defer func() { cancel(); _ = commands.Close(); <-commandsDone }()
 	registration := must(controller.Register(ctx, must(fscontrollers.NewControllerFsStore(root)), controller.RegistrationConfig{
 		ID: coordination.ID(), Type: "default", AgentSelector: "round-robin",
 	}))

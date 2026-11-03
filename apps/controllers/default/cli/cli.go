@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/defos-ai/commander/framework/controller"
-	adapterconsumer "github.com/defos-ai/commander/framework/controller/consumers/adapter"
 	"github.com/defos-ai/commander/framework/controller/workers/runner"
 	"github.com/defos-ai/commander/framework/crypto"
 	"github.com/defos-ai/commander/framework/domain/controllers"
@@ -81,7 +80,7 @@ func serve(ctx context.Context, configuration config, logger *slog.Logger, optio
 		defer cancel()
 		result = errors.Join(result, registration.Close(shutdown))
 	}()
-	// Keep routing available until the runner has suspended its accepted tasks.
+	// Mark registration draining before the controller stops command admission.
 	coordination, err := controller.NewController(context.WithoutCancel(ctx), deps.Bus, controller.ControllerConfig{
 		Type: controllerType, ID: configuration.controllerID, HeartbeatTimeout: configuration.heartbeatTimeout,
 		ArtifactStore: deps.ArtifactStore, AgentStore: deps.AgentStore, ActionStore: deps.ActionStore,
@@ -99,26 +98,6 @@ func serve(ctx context.Context, configuration config, logger *slog.Logger, optio
 		shutdown, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		defer cancel()
 		result = errors.Join(result, coordination.Close(shutdown))
-	}()
-	commandCtx, cancelCommands := context.WithCancel(context.WithoutCancel(ctx))
-	defer cancelCommands()
-	commands, err := adapterconsumer.NewConsumer(ctx, deps.Bus, controllerType, coordination.ID(), coordination, coordination.Operations(), logger)
-	if err != nil {
-		return err
-	}
-	commandsDone := make(chan struct{})
-	var commandErr error
-	go func() {
-		defer close(commandsDone)
-		commandErr = commands.Consume(commandCtx)
-	}()
-	defer func() {
-		cancelCommands()
-		result = errors.Join(result, commands.Close())
-		<-commandsDone
-		if commandErr != nil && !errors.Is(commandErr, context.Canceled) {
-			result = errors.Join(result, commandErr)
-		}
 	}()
 	if err := registration.SetStatus(ctx, controllers.Ready, ""); err != nil {
 		return fmt.Errorf("controller ready registration: %w", err)
@@ -138,8 +117,6 @@ func serve(ctx context.Context, configuration config, logger *slog.Logger, optio
 		return nil
 	case <-coordination.Done():
 		return fmt.Errorf("controller coordination stopped: %w", coordination.Err())
-	case <-commandsDone:
-		return errors.New("adapter consumer stopped")
 	}
 }
 

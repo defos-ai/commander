@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/defos-ai/commander/framework/comms/clients/controller/commands"
 	"github.com/defos-ai/commander/framework/comms/messages"
 	"github.com/defos-ai/commander/framework/controller"
 	"github.com/defos-ai/commander/framework/domain/actions"
@@ -61,6 +62,24 @@ func (f OwnedOperations) Start(t *testing.T) *controller.Controller {
 		}
 	})
 	return c
+}
+
+func (f OwnedOperations) CommandClient(t *testing.T) *commands.Client {
+	t.Helper()
+	adapterID, err := id.AdapterID("fixture")
+	if err != nil {
+		t.Fatal(err)
+	}
+	client, err := commands.NewClient(f.Context, f.Bus, adapterID, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := client.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	return client
 }
 
 func (f OwnedOperations) SeedQueued(t *testing.T) operations.Operation {

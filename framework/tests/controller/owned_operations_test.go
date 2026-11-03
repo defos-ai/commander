@@ -35,11 +35,12 @@ func TestControllerCloseKeepsRoutingUntilAcceptedOperationResultsDrain(t *testin
 			hostFixture.Context = hostContext
 			c := hostFixture.Start(t)
 			work := c.Operations()
-			op, err := work.Start(ctx, commands.StartOperationCommand{MissionName: "review", Input: []byte(`{}`)})
+			client := fixture.CommandClient(t)
+			op, err := client.Start(ctx, commands.StartOperationCommand{MissionName: "review", Input: []byte(`{}`)})
 			if err != nil {
 				t.Fatal(err)
 			}
-			task, err := work.Assign(ctx, commands.AssignTaskCommand{OperationID: op.ID, ActionName: "inspect", Input: []byte(`{}`)})
+			task, err := client.Assign(ctx, commands.AssignTaskCommand{OperationID: op.ID, ActionName: "inspect", Input: []byte(`{}`)})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -89,6 +90,12 @@ func TestControllerCloseKeepsRoutingUntilAcceptedOperationResultsDrain(t *testin
 			}
 			if bus.CloseCalls() != 0 {
 				t.Fatal("subscription cleanup started before accepted operation results drained")
+			}
+			for _, topic := range []string{messages.ControllerCommands(messages.DefaultControllerType), messages.ControllerCancellations(messages.DefaultControllerType)} {
+				fixtures.Receive(t, ctx, bus.InboxClosed(topic))
+				if bus.InboxCloseCalls(topic) != 1 {
+					t.Fatalf("command intake cleanup repeated while core events remained active: %s", topic)
+				}
 			}
 			fixtures.Observe(t, ctx, bus, controllerevents.AgentHeartbeat, "")
 			before, err := fixture.Config.OperationStore.Get(ctx, op.ID)
