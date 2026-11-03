@@ -9,7 +9,7 @@ import { connection, credentials, mission, mockAPI, mockEditableMission } from '
 describe('mission editing', () => {
   it('edits objectives, action roles and details while preserving policies and untouched JSON tokens', async () => {
     const name = 'Review / #1?';
-    const definition = String.raw`{"name":"Review / #1?","objectives":["Review the service."],"policies":{"completion":{"\u0064ecision_by":"operator"},"continuation":{"aggregate_results":["disco\u0076er-pages"],"model_review":["disco\u0076er-pages","capture-\u0070age"]},"sharing":[{"from_actions":["\u0064iscover-pages"],"to_actions":["capture-page"],"include":["results","artifacts"]}]},"required_actions":["discover-pages"],"optional_actions":["capture-page"],"starting_actions":["discover-pages"],"input_schema":{"type":"object","properties":{"id":{"const":9007199254740993},"path":{"const":"\u0061\\path"}}},"output_schema":{}}`;
+    const definition = String.raw`{"name":"Review / #1?","objectives":["Review the service."],"policies":{"completion":{"\u0064ecision_by":"operator"},"continuation":{"aggregate_results":["disco\u0076er-pages"],"model_review":["disco\u0076er-pages","capture-\u0070age"]},"sharing":[{"from_actions":["\u0064iscover-pages"],"to_actions":["capture-page"],"include":["results","artifacts"]}],"session":[{"\u0063reate_action":"discover-\u0070ages","use_actions":["capture-\u0070age"]}]},"required_actions":["discover-pages"],"optional_actions":["capture-page"],"starting_actions":["discover-pages"],"input_schema":{"type":"object","properties":{"id":{"const":9007199254740993},"path":{"const":"\u0061\\path"}}},"output_schema":{}}`;
     const fetch = mockEditableMission(definition);
     render(<MissionsPage connection={connection} credentials={credentials} onSignIn={vi.fn()} selectedID={name} onSelect={vi.fn()} />);
 
@@ -45,17 +45,20 @@ describe('mission editing', () => {
     expect(body).toContain(String.raw`"\u0064iscover-pages"`);
     expect(body).toContain(String.raw`"capture-\u0070age"`);
     expect(body).toContain(String.raw`"\u0064ecision_by"`);
+    expect(body).toContain(String.raw`"\u0063reate_action"`);
+    expect(body).toContain(String.raw`"discover-\u0070ages"`);
     expect(body.match(/"disco\\u0076er-pages"/g)).toHaveLength(2);
     expect(JSON.parse(body)).toMatchObject({ name, objectives: ['Check release health.'], required_actions: ['discover-pages', 'capture-page'],
       policies: { completion: { decision_by: 'model' },
         continuation: { aggregate_results: ['discover-pages'], model_review: ['discover-pages', 'capture-page'] },
-        sharing: [{ from_actions: ['discover-pages'], to_actions: ['capture-page'], include: ['results', 'artifacts'] }] },
+        sharing: [{ from_actions: ['discover-pages'], to_actions: ['capture-page'], include: ['results', 'artifacts'] }],
+        session: [{ create_action: 'discover-pages', use_actions: ['capture-page'] }] },
       optional_actions: [], output_schema: { type: 'object', properties: { summary: { type: 'string' } } } });
     expect(JSON.parse(body)).not.toHaveProperty('completion');
     expect(fetch.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
   });
 
-  it.each([undefined, null, {}, { continuation: { aggregate_results: null, model_review: [] }, completion: null, sharing: null }])(
+  it.each([undefined, null, {}, { continuation: { aggregate_results: null, model_review: [] }, completion: null, sharing: null, session: null }, { session: [] }])(
     'formats edit JSON while preserving omitted or disabled policies (%j), raw tokens and typing', async policies => {
     const policyField = policies === undefined ? '' : `,"policies":${JSON.stringify(policies)}`;
     const definition = String.raw`{"name":"review-service","objectives":["Review the service."],"required_actions":[],"starting_actions":[],"input_schema":{"type":"object","properties":{"id":{"const":9007199254740993},"path":{"const":"\u0061\\path"}}},"output_schema":{"type":"object"},"extension":{"exact":1.2300e+42}${policyField}}`;
@@ -129,6 +132,11 @@ describe('mission editing', () => {
     fireEvent.change(policies, { target: { value: '{"placement":null}' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
     expect(policies).toHaveValue('{"placement":null}');
+    expect(screen.getByRole('combobox', { name: 'Completion decision' })).toBeDisabled();
+    const invalidSession = '{"session":[{"create_action":"discover-pages","use_actions":[]}]}';
+    fireEvent.change(policies, { target: { value: invalidSession } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    expect(policies).toHaveValue(invalidSession);
     expect(screen.getByRole('combobox', { name: 'Completion decision' })).toBeDisabled();
     fireEvent.change(policies, { target: { value: '{"continuation":{"aggregate_results":["discover-pages"],"model_review":["discover-pages"]}}' } });
     fireEvent.click(screen.getByRole('button', { name: 'JSON' }));

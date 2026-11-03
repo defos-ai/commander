@@ -29,6 +29,21 @@ export function MissionDetails({ mission }: { mission: Mission }) {
     <section className="mission-section"><h2>{t($ => $.missionPolicies.continuation)}</h2>
       <MissionContinuation policy={mission.policies?.continuation} />
     </section>
+    <section className="mission-section"><h2>{t($ => $.missionPolicies.sessionBindings)}</h2>
+      <p className="mission-muted">{t($ => $.missionPolicies.sessionHint)}</p>
+      {mission.policies?.session?.length ? <div className="mission-fields-scroll" tabIndex={0} role="region" aria-label={t($ => $.missionPolicies.sessionBindings)}>
+        <table className="mission-fields" aria-label={t($ => $.missionPolicies.sessionBindings)}>
+          <thead><tr>
+            <th scope="col">{t($ => $.missionPolicies.createAction)}</th>
+            <th scope="col">{t($ => $.missionPolicies.useActions)}</th>
+          </tr></thead>
+          <tbody>{mission.policies.session.map(policy => <tr key={policy.create_action}>
+            <th scope="row">{policy.create_action}</th>
+            <td><ActionNames names={policy.use_actions} /></td>
+          </tr>)}</tbody>
+        </table>
+      </div> : <p className="mission-muted">{t($ => $.missionPolicies.noSessionBindings)}</p>}
+    </section>
     <SchemaDetails schema={mission.input_schema} direction="input" />
     <SchemaDetails schema={mission.output_schema} direction="output" />
   </div>;

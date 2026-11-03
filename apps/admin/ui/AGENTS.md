@@ -143,7 +143,7 @@
   to Form. Mission edits affect future operations;
   the controller still enforces each operation's saved policy.
 - **Policies (JSON)** edits the complete `policies` object: `continuation`,
-  `completion` and `sharing`. Share field-shape validation between
+  `completion`, `sharing` and `session`. Share field-shape validation between
   responses, Form transitions and writes; reject the old root `rules` and
   `completion` fields and removed nested `placement`, including null values. Preserve raw
   number/string tokens and untouched omitted/null/empty representations through
@@ -151,6 +151,12 @@
   Keep invalid drafts editable in their original mode; reject submission and
   unrepresentable mode switches without discarding the source. The shared API owns
   references and policy semantics.
+- `policies.session` groups a `create_action` with nonempty unique `use_actions`.
+  Show these as **Session bindings** in mission details. The controller supplies
+  routing IDs and binds use actions to their creator's accepted session; the
+  policy does not schedule those actions or close the resource. Omitted/null/empty
+  lists declare no bindings. Preserve them through the raw Policies editor; the
+  API owns cross-group validation and runtime capability checks.
 - `policies.continuation.aggregate_results` and `model_review` are independent
   action lists and may overlap. Show their actions and effects in a **Continuation**
   table. Omitted/null/empty lists declare no overrides. Valid proposals run

@@ -9,4 +9,9 @@ export default {
   reviewProposals: 'Review valid proposals before continuing',
   defaults: 'Valid proposals run automatically unless model review is required. Failed work and invalid or empty proposals require model review. An action can aggregate child results and require model review.',
   empty: 'No continuation overrides.',
+  sessionBindings: 'Session bindings',
+  createAction: 'Create action',
+  useActions: 'Use actions',
+  sessionHint: 'The controller routes use actions to the session created by the corresponding create action.',
+  noSessionBindings: 'No managed session bindings.',
 } as const;

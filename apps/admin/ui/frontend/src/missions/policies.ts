@@ -1,4 +1,4 @@
-import type { MissionPolicies, SharingRoute } from '../api/types';
+import type { MissionPolicies, MissionSessionPolicy, SharingRoute } from '../api/types';
 
 function object(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -28,9 +28,16 @@ function completionPolicy(value: unknown): boolean {
     (value.decision_by === 'model' || value.decision_by === 'operator'));
 }
 
+function sessionPolicy(value: unknown): value is MissionSessionPolicy {
+  return object(value) && Object.keys(value).every(key => ['create_action', 'use_actions'].includes(key)) &&
+    typeof value.create_action === 'string' && value.create_action !== '' && value.create_action.trim() === value.create_action &&
+    actionNames(value.use_actions) && value.use_actions.length > 0;
+}
+
 export function isMissionPolicies(value: unknown): value is MissionPolicies | null | undefined {
-  return value == null || (object(value) && Object.keys(value).every(key => ['continuation', 'completion', 'sharing'].includes(key)) &&
+  return value == null || (object(value) && Object.keys(value).every(key => ['continuation', 'completion', 'sharing', 'session'].includes(key)) &&
     actionPolicy(value.continuation, ['aggregate_results', 'model_review']) &&
     completionPolicy(value.completion) &&
-    (value.sharing == null || (Array.isArray(value.sharing) && value.sharing.every(sharingRoute))));
+    (value.sharing == null || (Array.isArray(value.sharing) && value.sharing.every(sharingRoute))) &&
+    (value.session == null || (Array.isArray(value.session) && value.session.every(sessionPolicy))));
 }
