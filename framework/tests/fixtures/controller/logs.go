@@ -10,9 +10,11 @@ import (
 	"github.com/defos-ai/commander/framework/controller"
 	"github.com/defos-ai/commander/framework/controller/consumers"
 	"github.com/defos-ai/commander/framework/domain/executions"
+	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/id"
 	"github.com/defos-ai/commander/framework/internal/state"
 	fakes "github.com/defos-ai/commander/framework/tests/fakes/controller"
+	runnerfakes "github.com/defos-ai/commander/framework/tests/fakes/runner"
 )
 
 type LogConsumer struct {
@@ -52,6 +54,7 @@ func StartLogController(t *testing.T, executionStore executions.ExecutionStore) 
 	inventory := &fakes.Inventory{}
 	c, err := controller.NewController(ctx, bus, controller.ControllerConfig{
 		AgentStore: inventory, ActionStore: fakes.UnusedActions{}, ArtifactStore: fakes.UnusedArtifacts{},
+		MissionStore: runnerfakes.NewMissionStore(missions.Mission{}), OperationStore: runnerfakes.NewOperationStore(), ReportStore: runnerfakes.ReportStore{},
 		ExecutionStore:   executionStore,
 		HeartbeatTimeout: time.Hour, LeaseSweepInterval: time.Hour,
 	})

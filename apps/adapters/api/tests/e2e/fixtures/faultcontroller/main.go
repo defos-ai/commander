@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -12,7 +11,6 @@ import (
 	faultcontrollerfakes "github.com/defos-ai/commander/apps/adapters/api/tests/fakes/faultcontroller"
 	"github.com/defos-ai/commander/framework/controller"
 	"github.com/defos-ai/commander/framework/controller/consumers/adapter"
-	"github.com/defos-ai/commander/framework/controller/workers/runner"
 	"github.com/defos-ai/commander/framework/domain/controllers"
 	fsactions "github.com/defos-ai/commander/providers/fs/actions"
 	"github.com/defos-ai/commander/providers/fs/agents"
@@ -33,7 +31,7 @@ func must[T any](value T, err error) T {
 	return value
 }
 
-func run() (result error) {
+func run() error {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 	root := os.Getenv("DATABASE_URL")
@@ -45,38 +43,14 @@ func run() (result error) {
 		AgentStore: must(agents.NewAgentFsStore(root)), ActionStore: faultcontrollerfakes.Catalog{ActionStore: must(fsactions.NewActionFsStore(root)), Peer: os.Getenv("FIXTURE_PEER")},
 		ArtifactStore: must(artifacts.NewArtifactFsStore(root)), ExecutionStore: must(executions.NewExecutionFsStore(root)),
 		SessionStore: faultcontrollerfakes.SessionStore{Store: must(sessions.NewSessionFsStore(root)), Peer: os.Getenv("FIXTURE_PEER")}, OperationStore: operationStore,
+		MissionStore: must(missions.NewMissionFsStore(root)), ReportStore: must(reports.NewReportFsStore(os.Getenv("STORAGE_URL"))),
 	}))
 	defer func() {
 		shutdown, done := context.WithTimeout(context.Background(), 5*time.Second)
 		defer done()
 		_ = coordination.Close(shutdown)
 	}()
-	execution := must(runner.New(context.Background(), coordination, runner.Dependencies{
-		MissionStore: must(missions.NewMissionFsStore(root)), OperationStore: operationStore,
-		ReportStore: must(reports.NewReportFsStore(os.Getenv("STORAGE_URL"))), AgentCatalog: coordination, Sessions: coordination.RuntimeSessions(),
-	}))
-	runnerDone := make(chan struct{})
-	var runnerErr error
-	go func() {
-		defer close(runnerDone)
-		runnerErr = execution.Run(context.Background())
-	}()
-	defer func() {
-		shutdown, done := context.WithTimeout(context.Background(), 5*time.Second)
-		defer done()
-		result = errors.Join(result, execution.Close(shutdown))
-		select {
-		case <-runnerDone:
-			if runnerErr != nil && runnerErr != runner.ErrClosed && !errors.Is(result, runnerErr) {
-				result = errors.Join(result, runnerErr)
-			}
-		case <-shutdown.Done():
-			if !errors.Is(result, shutdown.Err()) {
-				result = errors.Join(result, shutdown.Err())
-			}
-		}
-	}()
-	commands := must(adapter.NewConsumer(ctx, bus, "default", coordination.ID(), coordination, execution, nil))
+	commands := must(adapter.NewConsumer(ctx, bus, "default", coordination.ID(), coordination, coordination.Operations(), nil))
 	commandsDone := make(chan error, 1)
 	go func() { commandsDone <- commands.Consume(ctx) }()
 	defer func() { cancel(); _ = commands.Close(); <-commandsDone }()
@@ -96,8 +70,6 @@ func run() (result error) {
 		return nil
 	case <-coordination.Done():
 		return coordination.Err()
-	case <-runnerDone:
-		return errors.New("operation runner stopped")
 	}
 }
 

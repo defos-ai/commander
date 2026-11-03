@@ -87,6 +87,8 @@ func serve(ctx context.Context, configuration config, logger *slog.Logger, optio
 		ArtifactStore: deps.ArtifactStore, AgentStore: deps.AgentStore, ActionStore: deps.ActionStore,
 		ExecutionStore: deps.ExecutionStore, Logger: logger,
 		SessionStore: deps.SessionStore, OperationStore: deps.OperationStore,
+		MissionStore: deps.MissionStore, ReportStore: deps.ReportStore,
+		AgentSelector: agentSelector, TaskTimeout: configuration.taskTimeout,
 		SecretStore: deps.SecretStore, SecretRequestStore: deps.SecretRequestStore,
 		SecretDecryptor: decryptor,
 	})
@@ -98,41 +100,9 @@ func serve(ctx context.Context, configuration config, logger *slog.Logger, optio
 		defer cancel()
 		result = errors.Join(result, coordination.Close(shutdown))
 	}()
-	execution, err := runner.New(context.WithoutCancel(ctx), coordination, runner.Dependencies{
-		MissionStore: deps.MissionStore, OperationStore: deps.OperationStore,
-		Sessions:    coordination.RuntimeSessions(),
-		ReportStore: deps.ReportStore, AgentCatalog: coordination,
-		AgentSelector: agentSelector, Logger: logger,
-		TaskTimeout: configuration.taskTimeout,
-	})
-	if err != nil {
-		return err
-	}
-	runnerDone := make(chan struct{})
-	var runnerErr error
-	go func() {
-		defer close(runnerDone)
-		runnerErr = execution.Run(context.WithoutCancel(ctx))
-	}()
-	defer func() {
-		shutdown, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-		defer cancel()
-		result = errors.Join(result, execution.Close(shutdown))
-		select {
-		case <-runnerDone:
-			// Close can win before the Run goroutine starts.
-			if runnerErr != nil && runnerErr != runner.ErrClosed && !errors.Is(result, runnerErr) {
-				result = errors.Join(result, runnerErr)
-			}
-		case <-shutdown.Done():
-			if !errors.Is(result, shutdown.Err()) {
-				result = errors.Join(result, shutdown.Err())
-			}
-		}
-	}()
 	commandCtx, cancelCommands := context.WithCancel(context.WithoutCancel(ctx))
 	defer cancelCommands()
-	commands, err := adapterconsumer.NewConsumer(ctx, deps.Bus, controllerType, coordination.ID(), coordination, execution, logger)
+	commands, err := adapterconsumer.NewConsumer(ctx, deps.Bus, controllerType, coordination.ID(), coordination, coordination.Operations(), logger)
 	if err != nil {
 		return err
 	}
@@ -168,8 +138,6 @@ func serve(ctx context.Context, configuration config, logger *slog.Logger, optio
 		return nil
 	case <-coordination.Done():
 		return fmt.Errorf("controller coordination stopped: %w", coordination.Err())
-	case <-runnerDone:
-		return errors.New("operation runner stopped")
 	case <-commandsDone:
 		return errors.New("adapter consumer stopped")
 	}

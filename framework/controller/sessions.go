@@ -15,9 +15,11 @@ func (c *Controller) RuntimeSessions() runtime.Coordinator {
 	return c.sessions
 }
 
-func (c *Controller) ControlSession(ctx context.Context, request sessions.Control) (sessions.Session, error) {
+func (c *Controller) ControlSession(ctx context.Context, control sessions.Control) (sessions.Session, error) {
 	if c.sessions == nil {
 		return sessions.Session{}, errors.New("runtime session persistence is not configured")
 	}
-	return c.sessions.Control(ctx, request)
+	return request(ctx, c, func(ctx context.Context) (sessions.Session, error) {
+		return c.sessions.Control(ctx, control)
+	})
 }

@@ -19,7 +19,6 @@ import (
 	"github.com/defos-ai/commander/framework/agent/action"
 	controllercommands "github.com/defos-ai/commander/framework/comms/clients/controller/commands"
 	"github.com/defos-ai/commander/framework/controller"
-	"github.com/defos-ai/commander/framework/controller/workers/runner"
 	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/artifacts"
 	"github.com/defos-ai/commander/framework/domain/operations"
@@ -42,8 +41,6 @@ type SharingStack struct {
 	Controller *controller.Controller
 	analyzers  map[string]*fakes.SharingAnalyzer
 	agents     []sharingAgent
-	runner     *runner.Worker
-	runnerDone chan error
 	server     *httptest.Server
 	client     *http.Client
 	cancel     context.CancelFunc
@@ -102,14 +99,10 @@ func NewSharingStack(t *testing.T) *SharingStack {
 	s.Controller, err = controller.NewController(ctx, s.Bus, controller.ControllerConfig{
 		ArtifactStore: s.Artifacts, ExecutionStore: config.ExecutionStore, AgentStore: config.AgentStore,
 		ActionStore: config.ActionStore, OperationStore: config.OperationStore,
+		MissionStore: config.MissionStore, ReportStore: config.ReportStore, TaskTimeout: 20 * time.Second,
 	})
 	require(err)
-	s.runner, err = runner.New(ctx, s.Controller, runner.Dependencies{MissionStore: config.MissionStore,
-		OperationStore: config.OperationStore, ReportStore: config.ReportStore, AgentCatalog: s.Controller, TaskTimeout: 20 * time.Second})
-	require(err)
-	s.runnerDone = make(chan error, 1)
-	go func() { s.runnerDone <- s.runner.Run(ctx) }()
-	config.Operations = s.runner
+	config.Operations = s.Controller.Operations()
 	handler, err := api.NewHandler(config)
 	require(err)
 	s.server = httptest.NewServer(handler)
@@ -241,7 +234,7 @@ func (s *SharingStack) AwaitQuestion(t *testing.T, operationID, key string) mode
 }
 
 func (s *SharingStack) AnswerAsModel(operationID, questionID, answer string) error {
-	_, err := s.runner.Answer(s.Context, controllercommands.AnswerQuestionCommand{
+	_, err := s.Controller.Operations().Answer(s.Context, controllercommands.AnswerQuestionCommand{
 		OperationID: operationID, QuestionID: questionID, Answer: answer, AnsweredBy: operations.AnswerModel,
 	})
 	return err
@@ -294,22 +287,6 @@ func (s *SharingStack) close(t *testing.T) {
 	}
 	shutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if s.runner != nil {
-		closeErr := s.runner.Close(shutdown)
-		if closeErr != nil {
-			t.Error(closeErr)
-		}
-		select {
-		case err := <-s.runnerDone:
-			if err != nil && err != runner.ErrClosed && !errors.Is(closeErr, err) {
-				t.Error(err)
-			}
-		case <-shutdown.Done():
-			if !errors.Is(closeErr, shutdown.Err()) {
-				t.Error(shutdown.Err())
-			}
-		}
-	}
 	if s.Controller != nil {
 		if err := s.Controller.Close(shutdown); err != nil {
 			t.Error(err)

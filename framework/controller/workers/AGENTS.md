@@ -1,6 +1,6 @@
 # Working on controller workers
 
-[NewController](../controller.go) constructs the host and shared lifetime, then
+[NewController](../controller.go) constructs admission and core lifetimes, then
 owns worker startup and joining; each worker owns its cleanup.
 [Assembly](../assembly.go) receives the existing host and `ControllerConfig`, builds
 the list of [Worker](worker.go) instances and returns it without calling `Run` or
@@ -9,8 +9,8 @@ Workers never import the parent controller package or construct providers.
 Dependency structs describe the stores and capabilities each worker consumes.
 This package owns the common worker contract and shared [Lifecycle](lifecycle.go)
 helper; implementation subpackages expose `Worker`, `Dependencies` and `New`.
-If assembly fails, cancel the shared lifetime before closing every constructed
-worker, including workers whose `Run` has not started.
+If assembly fails, cancel both lifetimes and close every constructed worker,
+including workers whose `Run` has not started. No runtime loop starts in assembly.
 
 - [Coordination](coordination/worker.go) owns the command mailbox, pending replies,
   inventory observation state, lease expiry and durable dispatch/recovery. Remote
@@ -34,10 +34,12 @@ worker, including workers whose `Run` has not started.
 - [Sharing](sharing/worker.go) owns its bounded queue and best-effort forwarding.
   Read accepted records and observe recipients through `AgentReader`; never
   mutate coordination state or change accepted execution outcomes on failure.
-- [Runner](runner/worker.go) owns operation scheduling and recovery. It now lives
-  here but remains outside the controller's assembled worker list: hosts still
-  start and join its single-use `Run` explicitly. Preserve the existing shutdown
-  order until controller ownership is introduced separately.
+- [Runner](runner/worker.go) owns operation scheduling and recovery. Controller
+  assembly supplies mandatory mission, operation and report stores, the same
+  session worker, an explicit sharing capability and a typed coordination
+  executor. Keep its catalog and execution paths independent of public host
+  admission so accepted results can drain during shutdown. Expose operation
+  commands through `Controller.Operations()`; hosts do not construct a second runner.
 
 `coordination.Worker.Apply` scopes event and secret mutation to its owner loop.
 Keep the supplied state inside that synchronous callback; events bind a local
@@ -54,9 +56,12 @@ through `Close`.
 Keep the shutdown hook limited to lifecycle shutdown. Do not pass Controller or
 a collection of host callbacks into workers. Cancel before releasing pending
 callers so they see the original fatal cause. Retain the complete worker list
-before starting any Run call. Host shutdown cancels first, closes workers
-concurrently outside owner callbacks and joins them within its caller's deadline.
-Retries await the same cleanup and preserve its error.
+before starting any Run call. Graceful shutdown stops admission and joins the
+runner, then cancels the core lifetime and closes its workers concurrently outside
+owner callbacks. Coordination and events remain available during the runner's
+drain. Fatal worker errors cancel core work immediately and fence pending callers
+with their original cause. The caller's deadline bounds waiting, and retries await
+the same cleanup.
 
 Run isolated framework build, vet and race tests, downstream controller/API host
 checks and the session E2Es after ownership or lifecycle changes. Extend retained

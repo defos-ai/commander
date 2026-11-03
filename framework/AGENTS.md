@@ -158,24 +158,31 @@
   public recovery, owner placement and lifecycle behavior.
 - Controller owns worker lifetime, startup, shutdown and delegating facades.
   [NewController](controller/controller.go) owns `ControllerConfig`, defaults and
-  validation, and constructs the host and shared lifetime.
+  validation, and constructs the host with admission and core lifetimes.
   [Assembly](controller/assembly.go) receives that host and config, then builds and
   returns the worker list without calling `Run` or starting workers.
   `NewController` starts the returned list; [worker subpackages](controller/workers/AGENTS.md)
-  retain their logic and private state. The parent workers package contains only
-  their shared contract. Use coordination and runner owner loops for runtime
-  mutation. Update persistence, consumers and recovery together when changing
-  lifecycle behavior.
-- Controller lifecycle startup joins coordination, events, sessions, secret
-  reconciliation and sharing through one completion signal. Keep remote waits
-  outside the owner loop. Each worker owns its blocking `Run(ctx)` and
+  retain their logic and private state. The parent workers package owns their
+  shared contract and lifecycle helper. Use coordination and runner owner loops
+  for runtime mutation. Update persistence, consumers and recovery together when
+  changing lifecycle behavior.
+- Controller lifecycle startup joins the runner, coordination, events, sessions,
+  secret reconciliation and sharing through one completion signal. Keep remote
+  waits outside the owner loop. Each worker owns its blocking `Run(ctx)` and
   `Close(ctx)`; the controller retains the complete list before starting it.
-  `Done` signals cancellation. Shutdown cancels the shared lifetime before closing
-  workers concurrently; `Close` waits under its caller's context before hosts
-  release providers. Worker-owned cleanup continues independently after a caller
-  timeout, so later `Close` calls can await the same work and error.
+  `Done` signals that public admission has stopped. Graceful shutdown cancels
+  admission and joins the runner while coordination and event handling remain
+  available for accepted results. Then cancel the core lifetime and close its
+  workers concurrently. Fatal core errors cancel that lifetime immediately and
+  fence admission before pending callers wake. `Close` waits under its caller's
+  context; cleanup continues independently after a timeout so retries await the
+  same work and error. Hosts retain their providers until shutdown finishes.
 - [`runner.New`](controller/workers/runner/worker.go) restores saved state
-  synchronously without launching task execution or background observation. The host must start
+  synchronously without launching task execution or background observation.
+  Controller assembly injects the same session worker, explicit sharing capability
+  and a typed executor that uses coordination directly, so draining bypasses public
+  admission. Adapters use `Controller.Operations()`; do not construct another runner
+  beside the controller. Standalone runner hosts must start
   [`Worker.Run`](controller/workers/runner/lifecycle.go) before submitting mutations.
   `Run` is blocking and single-use: concurrent calls return `ErrAlreadyRunning`;
   calls after shutdown return `ErrClosed`. Constructor-context cancellation,

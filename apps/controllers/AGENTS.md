@@ -2,24 +2,23 @@
 
 ## Host wiring and lifecycle
 
-- [default/cli/cli.go](default/cli/cli.go) composes registration, coordination,
-  the runner and adapter-command consumer. Configuration lives in `cli/config.go`;
+- [default/cli/cli.go](default/cli/cli.go) composes registration, the controller
+  and adapter-command consumer. Configuration lives in `cli/config.go`;
   concrete providers and their cleanup belong in `cli/factory.go`.
 - Keep framework scheduling and recovery in [framework/controller](../../framework/controller/).
   A host supplies dependencies and policies; it must not duplicate the runner's
   owner loop or introduce its own operation mutation path.
-- `runner.New` completes recovery synchronously and starts no execution
-  loop. Start its blocking, single-use `Run` explicitly and monitor its return.
-  Keep constructor and Run lifetimes detached from the host's shutdown signal so
-  command intake stops before runner shutdown; do not detach individual operations.
-- Mark registration ready only after the runner and consumers start. On shutdown,
-  mark draining, stop command intake, close the runner, then coordination, then
-  registration and providers. Keep coordination available while the runner suspends
-  accepted tasks, and use bounded shutdown contexts that survive parent cancellation.
-  Join the Run call within that bound; an expired `Close` deadline must not become
-  an unbounded wait on its goroutine.
-  During cleanup, ignore only the exact `runner.ErrClosed` return when Close won
-  before Run started; retain wrapped persistence errors and unexpected-exit checks.
+- Supply mission, operation and report stores through `ControllerConfig`.
+  The controller constructs, recovers, starts and joins its runner. Pass
+  `Controller.Operations()` to the adapter-command consumer; do not create another
+  runner or manage controller worker `Run` calls from the CLI.
+- Mark registration ready only after controller construction and consumer startup.
+  On shutdown, mark draining, stop command intake, close the controller, then
+  registration and providers. Controller shutdown joins the runner before closing
+  coordination and events. Keep the controller lifetime detached from the CLI's
+  shutdown signal until command intake stops, and use bounded shutdown contexts
+  that survive parent cancellation. Do not add an unbounded worker wait after an
+  expired `Close` deadline.
 - Keep the current one-active-controller-per-database assumption explicit.
   Registration and provider support do not implement distributed ownership or
   capacity across controllers.
@@ -42,6 +41,7 @@
 - [runner.AgentSelector](../../framework/controller/workers/runner/agent_selector.go)
   chooses only among supplied eligible candidates. Affinity, readiness, capacity
   checks and durable dispatch reservation remain the runner's responsibility.
+  Inject it through `ControllerConfig.AgentSelector`.
 - Selection runs serially in the owner loop. Return promptly, honor cancellation,
   and do not dispatch work or retain mutable candidate snapshots. An empty ID
   defers work; errors or invalid IDs leave it queued.
@@ -55,8 +55,9 @@
 - Dispatched tasks remain bound to their recorded agent and command. Never silently
   reassign an execution whose outcome is unknown or retry it from host code.
 - `--task-timeout` overrides `TASK_TIMEOUT`; both require a positive Go duration
-  and default to `operations.DefaultTaskTimeout` (15 minutes). Pass the value into the runner,
-  including embedded hosts. This is the initial result wait for new dispatches;
+  and default to `operations.DefaultTaskTimeout` (15 minutes). Pass the value through
+  `ControllerConfig.TaskTimeout`, including embedded hosts. This is the initial
+  result wait for new dispatches;
   retain saved deadlines during recovery. Heartbeats, questions and log activity
   do not extend the deadline. Expiry does not cancel the remote process.
 - Lifecycle changes need coordinated persistence, consumers and restart recovery.

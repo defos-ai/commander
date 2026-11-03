@@ -9,19 +9,23 @@ import (
 	"time"
 
 	"github.com/defos-ai/commander/framework/comms"
+	controllercommands "github.com/defos-ai/commander/framework/comms/clients/controller/commands"
 	"github.com/defos-ai/commander/framework/comms/messages"
 	"github.com/defos-ai/commander/framework/controller/consumers"
 	"github.com/defos-ai/commander/framework/controller/leases"
 	"github.com/defos-ai/commander/framework/controller/workers"
 	"github.com/defos-ai/commander/framework/controller/workers/coordination"
 	"github.com/defos-ai/commander/framework/controller/workers/event"
+	"github.com/defos-ai/commander/framework/controller/workers/runner"
 	"github.com/defos-ai/commander/framework/controller/workers/session"
 	"github.com/defos-ai/commander/framework/controller/workers/sharing"
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
 	agentmodel "github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/artifacts"
 	"github.com/defos-ai/commander/framework/domain/executions"
+	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/domain/operations"
+	"github.com/defos-ai/commander/framework/domain/reports"
 	"github.com/defos-ai/commander/framework/domain/secrets"
 	"github.com/defos-ai/commander/framework/domain/sessions"
 	"github.com/defos-ai/commander/framework/id"
@@ -39,7 +43,9 @@ var (
 
 type ControllerConfig struct {
 	SessionStore   sessions.Store
+	MissionStore   missions.MissionStore
 	OperationStore operations.OperationStore
+	ReportStore    reports.ReportStore
 	Type           string
 	ID             string
 	ArtifactStore  artifacts.ArtifactStore
@@ -52,6 +58,9 @@ type ControllerConfig struct {
 	SecretDecryptor    consumers.SecretDecryptor
 	HeartbeatTimeout   time.Duration
 	LeaseSweepInterval time.Duration
+	AgentSelector      runner.AgentSelector
+	TaskTimeout        time.Duration
+	Capacity           int
 	Logger             *slog.Logger
 }
 
@@ -64,9 +73,13 @@ type Controller struct {
 	sessions       *session.Worker
 	sharing        *sharing.Worker
 	events         *event.Worker
+	runner         *runner.Worker
 	workers        []workers.Worker
+	coreWorkers    []workers.Worker
 	lifetime       context.Context
 	cancel         context.CancelCauseFunc
+	coreLifetime   context.Context
+	cancelCore     context.CancelCauseFunc
 	closeOnce      sync.Once
 	closeErr       error // written before cleanupDone closes
 	workersDone    chan struct{}
@@ -120,6 +133,9 @@ func NewController(ctx context.Context, bus comms.Bus, config ControllerConfig) 
 	if config.ExecutionStore == nil {
 		return nil, errors.New("controller requires an execution store")
 	}
+	if config.MissionStore == nil || config.OperationStore == nil || config.ReportStore == nil {
+		return nil, errors.New("controller requires mission, operation and report stores")
+	}
 	if (config.SecretStore == nil) != (config.SecretRequestStore == nil) {
 		return nil, errors.New("controller secret distribution requires both secret and request stores")
 	}
@@ -130,13 +146,26 @@ func NewController(ctx context.Context, bus comms.Bus, config ControllerConfig) 
 		config.Logger = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
 	lifetime, cancel := context.WithCancelCause(ctx)
+	// Core workers remain available until accepted runner results have drained.
+	coreLifetime, cancelCore := context.WithCancelCause(context.WithoutCancel(ctx))
+	stopStartup := context.AfterFunc(ctx, func() { cancelCore(context.Cause(ctx)) })
 	c := &Controller{
 		id: config.ID, controllerType: config.Type, lifetime: lifetime, cancel: cancel,
+		coreLifetime: coreLifetime, cancelCore: cancelCore,
 		workersDone: make(chan struct{}), cleanupDone: make(chan struct{}),
 	}
 	workers, err := assemble(c, bus, config)
 	if err != nil {
+		stopStartup()
 		return nil, err
+	}
+	stopShutdown := context.AfterFunc(lifetime, func() { c.beginClose(context.Cause(lifetime)) })
+	stopStartup()
+	if err := ctx.Err(); err != nil {
+		stopShutdown()
+		c.beginClose(err)
+		<-c.cleanupDone
+		return nil, errors.Join(err, c.closeErr)
 	}
 	c.start(workers...)
 	return c, nil
@@ -146,6 +175,4 @@ func (c *Controller) ID() string { return c.id }
 
 func (c *Controller) Type() string { return c.controllerType }
 
-func (c *Controller) ShareQuestionAnswer(operationID, questionID string) {
-	c.sharing.ShareQuestionAnswer(operationID, questionID)
-}
+func (c *Controller) Operations() controllercommands.Operations { return c.runner }
