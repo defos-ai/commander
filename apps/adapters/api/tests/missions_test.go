@@ -21,12 +21,18 @@ func TestMissionCatalogAndRepeatedCleanup(t *testing.T) {
 	if buildIndex < 0 || !reflect.DeepEqual(catalog.Items[buildIndex], build) || !slices.Equal(build.RequiredActions, []string{"checkout-template", "build-agent"}) || !slices.Equal(build.OptionalActions, []string{"publish-agent", "release-agent"}) {
 		t.Fatalf("build mission lost its optional publication action: %+v", build)
 	}
+	if build.Policies == nil || len(build.Policies.Session) != 1 || build.Policies.Session[0].CreateAction != "checkout-template" || !slices.Equal(build.Policies.Session[0].UseActions, []string{"build-agent"}) {
+		t.Fatalf("build mission lost its checkout/build session binding: %+v", build.Policies)
+	}
 	assertSchema(t, a, "Mission", a.Request(http.MethodGet, "/api/v1/missions/build-agent", nil))
 	created := a.Request(http.MethodPost, "/api/v1/operations", fixtures.Object{"mission_name": "build-agent", "input": fixtures.Object{
 		"instructions": "Create a fixture agent",
 		"actions":      []fixtures.Object{{"name": "inspect", "description": "Inspect supplied input.", "input_schema": fixtures.Object{"type": "object"}, "output_schema": fixtures.Object{"type": "object"}}},
 	}})
 	buildOperation := fixtures.Decode[models.OperationResponse](t, created, http.StatusCreated)
+	if !reflect.DeepEqual(buildOperation.Mission.Policies, build.Policies) {
+		t.Fatal("build operation lost the bundled session policy")
+	}
 	if buildOperation.Preflight == nil || len(buildOperation.Preflight.Actions) != 2 {
 		t.Fatalf("build preflight included optional publication: %+v", buildOperation.Preflight)
 	}

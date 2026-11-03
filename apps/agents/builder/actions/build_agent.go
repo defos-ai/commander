@@ -23,7 +23,7 @@ import (
 )
 
 const BuildAgentName = "build-agent"
-const BuildAgentDescription = "Implement the requested Commander agent with Codex from explicit action contracts and instructions in the workspace session returned by checkout-template. Supply its exact session_scope and session_id; the controller routes work to the owning builder. Each action needs a unique name, description, input/output object schemas and any required secret names. Run Go tests and build ./cmd, then verify registered actions, generated identity and release structure before returning its source archive and package metadata. Contract checks compare names, descriptions, schemas and required secret names without discovery or execution. Temporary assets verify manifest generation; this does not test Docker, six native platforms or GitHub Actions. Requires the managed OPENAI_API_KEY secret; never include keys in instructions or contracts. Does not publish or launch the agent."
+const BuildAgentDescription = "Implement the requested Commander agent with Codex from explicit action contracts and instructions in the workspace session returned by checkout-template. A mission session policy supplies routing fields; without a binding, supply checkout's exact session_scope and session_id. The controller routes work to the owning builder. Each action needs a unique name, description, input/output object schemas and any required secret names. Run Go tests and build ./cmd, then verify registered actions, generated identity and release structure before returning its source archive and package metadata. Contract checks compare names, descriptions, schemas and required secret names without discovery or execution. Temporary assets verify manifest generation; this does not test Docker, six native platforms or GitHub Actions. Requires the managed OPENAI_API_KEY secret; never include keys in instructions or contracts. Does not publish or launch the agent."
 
 type BuildAgentInput struct {
 	SessionScope string                   `json:"session_scope"`
@@ -76,8 +76,8 @@ func NewBuildAgent(provider *workspaces.Provider) (*BuildAgent, error) {
 		InputSchema: json.RawMessage(`{
   "type":"object",
   "properties":{
-    "session_scope":{"type":"string","format":"uuid"},
-    "session_id":{"type":"string","format":"uuid","description":"Workspace session returned by checkout-template."},
+    "session_scope":{"type":"string","format":"uuid","description":"Supplied by a mission session policy; otherwise use checkout's scope."},
+    "session_id":{"type":"string","format":"uuid","description":"Supplied by a mission session policy; otherwise use checkout's session ID."},
     "instructions":{"type":"string","minLength":1,"maxLength":32000,"pattern":"\\S"},
     "actions":{
       "type":"array","minItems":1,"maxItems":100,

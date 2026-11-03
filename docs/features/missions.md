@@ -34,7 +34,7 @@ executor, install dependencies or make an action ready.
 ## Example: build source for review
 
 Save this definition, then start an operation and assign `checkout-template`
-with input matching its advertised action schema:
+with `{}`:
 
 ```json
 {
@@ -46,6 +46,7 @@ with input matching its advertised action schema:
   "input_schema": {"type": "object"},
   "output_schema": {"type": "object"},
   "policies": {
+    "session": [{"create_action": "checkout-template", "use_actions": ["build-agent"]}],
     "continuation": {"model_review": ["build-agent"]},
     "completion": {"decision_by": "operator"}
   }
@@ -53,9 +54,9 @@ with input matching its advertised action schema:
 ```
 
 The controller selects the agent. Check its action schemas and readiness before
-assigning work; mission input and an individual action's input are separate. For
-checkout, use the operation ID as `session_scope`; build with the returned
-`session_scope` and `session_id`.
+assigning work; mission input and an individual action's input are separate.
+The session policy supplies routing IDs for checkout and build. After checkout
+succeeds, assign build with the requested instructions and action contracts.
 See the [bundled missions](../../apps/admin/missions/default-missions.json)
 for complete workflows.
 
@@ -67,17 +68,19 @@ for complete workflows.
 | `continuation.model_review` | Review matching results before running proposed follow-ups |
 | `completion.decision_by` | Allow model completion or require explicit operator completion |
 | [`sharing`](data-sharing.md) | Forward results, artifacts or decisions to active receiving actions |
+| [`session`](sessions.md) | Bind use actions to the resource created by a matching create action |
 
-All policies live under `policies`. Omitted continuation and sharing add no
-constraints or routes. Omitted/null completion defaults to `model`;
+All policies live under `policies`. Omitted continuation, sharing and session add no
+constraints, routes or bindings. Omitted/null completion defaults to `model`;
 an empty completion object is invalid.
 
 ### Resource ownership
 
 Use [sessions](sessions.md) for resources retained between actions, such as
-Builder workspaces or browser sessions. Pass the saved session identity to each
-action that uses it; the controller routes the task to its owner. Different
-sessions in one operation can belong to different agents.
+Builder workspaces or browser sessions. A `session` policy lets the controller
+supply the binding within an operation. Without one, pass the saved session
+identity explicitly. Different sessions in one operation can belong to different
+agents; the policy does not schedule actions or close resources.
 
 ### Continuation policy
 

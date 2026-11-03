@@ -9,7 +9,9 @@ operators use Commander; [README.md](README.md) is the feature index.
   inspecting and settling work in `operations.md`. Questions, secrets, sessions
   and data sharing have their own guides. Avoid repeating their full workflows.
 - Use current `policies.continuation`, `policies.completion` and
-  `policies.sharing` shapes. Resource ownership belongs to sessions. Mission edits affect future operations only.
+  `policies.sharing` shapes, with `policies.session` for controller-managed
+  create/use bindings. Explicit session IDs remain available without a mission
+  binding, including reuse across operations. Mission edits affect future operations only.
 - Keep component setup, flags and command references in component READMEs.
   Link implementation contracts, provider interfaces and checks in the relevant
   AGENTS files instead of copying them into feature guides.

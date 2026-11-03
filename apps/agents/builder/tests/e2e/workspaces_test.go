@@ -88,13 +88,17 @@ func TestE2EBuilderSuccessfulBuildPublishesItsSessionSourceArtifact(t *testing.T
 	s := fixtures.NewSuccessfulBuild(t)
 	owner := s.Builder(t, "00000001", "", "success")
 	operation := s.Start(t)
-	_, checkout := s.Checkout(t, operation, operation)
+	created, checkout := s.Checkout(t, operation, "")
 
-	task := s.Assign(t, operation, builderactions.BuildAgentName, fixtures.WorkspaceBuildInput(checkout))
+	task := s.Assign(t, operation, builderactions.BuildAgentName, fixtures.ManagedWorkspaceBuildInput())
 	finished := s.Finished(t, operation, task.ID)
 
 	if finished.Status != operations.TaskSucceeded || finished.AgentID != owner.ID || finished.Result == nil {
 		t.Fatalf("successful build did not retain its owner/output: %+v", finished)
+	}
+	if created.SessionIntent == nil || created.SessionIntent.Mode != sessions.Create || finished.SessionIntent == nil ||
+		finished.SessionIntent.Mode != sessions.Use || finished.SessionIntent.ID != created.ID || finished.SessionIntent.ScopeID != created.SessionIntent.ScopeID {
+		t.Fatalf("build did not use the controller-managed checkout binding: checkout=%+v build=%+v", created.SessionIntent, finished.SessionIntent)
 	}
 	var output builderactions.BuildAgentOutput
 	if err := json.Unmarshal(finished.Result.Output, &output); err != nil {

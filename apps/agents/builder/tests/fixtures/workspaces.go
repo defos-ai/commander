@@ -19,6 +19,7 @@ import (
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/artifacts"
 	"github.com/defos-ai/commander/framework/domain/missions"
+	"github.com/defos-ai/commander/framework/domain/missions/policies"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	secretmodel "github.com/defos-ai/commander/framework/domain/secrets"
 	"github.com/defos-ai/commander/framework/domain/sessions"
@@ -56,10 +57,12 @@ func NewWorkspaces(t *testing.T) *Workspaces {
 }
 
 func NewSuccessfulBuild(t *testing.T) *Workspaces {
-	return newWorkspaces(t, 90*time.Second)
+	return newWorkspaces(t, 90*time.Second, policies.SessionPolicy{
+		CreateAction: builderactions.CheckoutTemplateName, UseActions: []string{builderactions.BuildAgentName},
+	})
 }
 
-func newWorkspaces(t *testing.T, timeout time.Duration) *Workspaces {
+func newWorkspaces(t *testing.T, timeout time.Duration, sessionPolicies ...policies.SessionPolicy) *Workspaces {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), timeout)
 	t.Cleanup(cancel)
@@ -87,8 +90,12 @@ func newWorkspaces(t *testing.T, timeout time.Duration) *Workspaces {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := config.MissionStore.Upsert(ctx, missions.Mission{Name: "workspace-lifecycle", Objectives: []string{"Build using an owned workspace."},
-		InputSchema: json.RawMessage(`{}`), OutputSchema: json.RawMessage(`{}`)}); err != nil {
+	mission := missions.Mission{Name: "workspace-lifecycle", Objectives: []string{"Build using an owned workspace."},
+		InputSchema: json.RawMessage(`{}`), OutputSchema: json.RawMessage(`{}`)}
+	if len(sessionPolicies) > 0 {
+		mission.Policies = &policies.MissionPolicies{Session: sessionPolicies}
+	}
+	if err := config.MissionStore.Upsert(ctx, mission); err != nil {
 		t.Fatal(err)
 	}
 	control := workspaceValue(controller.NewController(ctx, bus, config))
@@ -213,9 +220,18 @@ func WorkspaceBuildInput(checkout builderactions.CheckoutTemplateOutput) builder
 		Actions: []actionmodel.Definition{{Name: "inspect", Description: "Inspect supplied input.", InputSchema: json.RawMessage(`{"type":"object"}`), OutputSchema: json.RawMessage(`{"type":"object"}`)}}}
 }
 
+func ManagedWorkspaceBuildInput() map[string]any {
+	input := WorkspaceBuildInput(builderactions.CheckoutTemplateOutput{})
+	return map[string]any{"instructions": input.Instructions, "actions": input.Actions}
+}
+
 func (s *Workspaces) Checkout(t *testing.T, operationID, scope string) (operations.Task, builderactions.CheckoutTemplateOutput) {
 	t.Helper()
-	task := s.Assign(t, operationID, builderactions.CheckoutTemplateName, builderactions.CheckoutTemplateInput{SessionScope: scope})
+	input := map[string]string{}
+	if scope != "" {
+		input["session_scope"] = scope
+	}
+	task := s.Assign(t, operationID, builderactions.CheckoutTemplateName, input)
 	task = s.Finished(t, operationID, task.ID)
 	if task.Status != operations.TaskSucceeded || task.Result == nil {
 		t.Fatalf("checkout failed: %+v", task)
