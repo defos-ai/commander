@@ -8,6 +8,7 @@ import (
 
 	"github.com/defos-ai/commander/framework/comms"
 	"github.com/defos-ai/commander/framework/controller/leases"
+	"github.com/defos-ai/commander/framework/controller/workers"
 	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/artifacts"
 	"github.com/defos-ai/commander/framework/domain/executions"
@@ -25,6 +26,7 @@ type Dependencies struct {
 }
 
 type Worker struct {
+	lifecycle      *workers.Lifecycle
 	state          *state.State
 	requests       chan func()
 	bus            comms.Bus
@@ -50,8 +52,10 @@ func New(ctx context.Context, deps Dependencies) (*Worker, error) {
 	if _, err := registry.Sweep(ctx, time.Now().UTC()); err != nil {
 		return nil, fmt.Errorf("expire agent leases: %w", err)
 	}
+	lifetime := workers.NewLifecycle(ctx)
 	return &Worker{
-		state: state.New(ctx, deps.HeartbeatTimeout), requests: make(chan func()),
+		lifecycle: lifetime,
+		state:     state.New(lifetime.Context(), deps.HeartbeatTimeout), requests: make(chan func()),
 		bus: deps.Bus, inventory: deps.Inventory, executionStore: deps.Executions,
 		artifactStore: deps.Artifacts, leaseRegistry: registry, sweepInterval: deps.SweepInterval, stop: deps.Stop,
 	}, nil
@@ -60,7 +64,13 @@ func New(ctx context.Context, deps Dependencies) (*Worker, error) {
 // Stop fences admission before the owner loop releases failed observations or callers.
 func (c *Worker) Stop(err error) { c.stop(err) }
 
-func (c *Worker) Run(ctx context.Context) (err error) {
+func (c *Worker) Run(ctx context.Context) error {
+	return c.lifecycle.Run(ctx, c.run)
+}
+
+func (c *Worker) Close(ctx context.Context) error { return c.lifecycle.Close(ctx) }
+
+func (c *Worker) run(ctx context.Context) (err error) {
 	defer func() {
 		c.Stop(err)
 		c.state.Close()

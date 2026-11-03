@@ -168,9 +168,12 @@
   lifecycle behavior.
 - Controller lifecycle startup joins coordination, events, sessions, secret
   reconciliation and sharing through one completion signal. Keep remote waits
-  outside the owner loop. `Done` signals cancellation; `Close` waits for workers
-  and subscription cleanup under its caller's context before hosts release
-  providers. Cleanup runs separately so it cannot block `Close` past that deadline.
+  outside the owner loop. Each worker owns its blocking `Run(ctx)` and
+  `Close(ctx)`; the controller retains the complete list before starting it.
+  `Done` signals cancellation. Shutdown cancels the shared lifetime before closing
+  workers concurrently; `Close` waits under its caller's context before hosts
+  release providers. Worker-owned cleanup continues independently after a caller
+  timeout, so later `Close` calls can await the same work and error.
 - [`runner.New`](controller/workers/runner/worker.go) restores saved state
   synchronously without launching task execution or background observation. The host must start
   [`Worker.Run`](controller/workers/runner/lifecycle.go) before submitting mutations.

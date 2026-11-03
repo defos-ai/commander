@@ -12,6 +12,7 @@ import (
 	"github.com/defos-ai/commander/framework/comms/messages"
 	"github.com/defos-ai/commander/framework/controller/consumers"
 	"github.com/defos-ai/commander/framework/controller/leases"
+	"github.com/defos-ai/commander/framework/controller/workers"
 	"github.com/defos-ai/commander/framework/controller/workers/coordination"
 	"github.com/defos-ai/commander/framework/controller/workers/event"
 	"github.com/defos-ai/commander/framework/controller/workers/session"
@@ -63,6 +64,7 @@ type Controller struct {
 	sessions       *session.Worker
 	sharing        *sharing.Worker
 	events         *event.Worker
+	workers        []workers.Worker
 	lifetime       context.Context
 	cancel         context.CancelCauseFunc
 	closeOnce      sync.Once

@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/defos-ai/commander/framework/comms"
 	"github.com/defos-ai/commander/framework/controller/workers"
 )
 
 func (c *Controller) start(list ...workers.Worker) {
+	c.workers = append([]workers.Worker(nil), list...)
 	var group sync.WaitGroup
-	for _, worker := range list {
+	for _, worker := range c.workers {
 		group.Go(func() {
 			err := worker.Run(c.lifetime)
 			if err == nil && c.lifetime.Err() == nil {
@@ -54,13 +54,20 @@ func (c *Controller) beginClose(cause error) {
 	c.closeOnce.Do(func() {
 		// Interrupt database operations without waiting for the event consumer.
 		c.cancel(errors.Join(ErrControllerClosed, cause))
-		// Subscription cleanup may need a remote or filesystem lock. Keep it
-		// outside the caller's Close path so its context still bounds shutdown.
+		// Worker cleanup can outlast one Close caller; retries join this same work.
 		go func() {
 			defer close(c.cleanupDone)
-			if err := c.events.Close(); err != nil && !errors.Is(err, comms.ErrClosed) {
-				c.closeErr = err
-			}
+			c.closeErr = closeWorkers(context.Background(), c.workers)
 		}()
 	})
+}
+
+func closeWorkers(ctx context.Context, list []workers.Worker) error {
+	var group sync.WaitGroup
+	errorsByWorker := make([]error, len(list))
+	for i, worker := range list {
+		group.Go(func() { errorsByWorker[i] = worker.Close(ctx) })
+	}
+	group.Wait()
+	return errors.Join(errorsByWorker...)
 }

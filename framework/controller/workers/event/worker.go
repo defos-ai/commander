@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"sync"
 
 	"github.com/defos-ai/commander/framework/comms"
 	"github.com/defos-ai/commander/framework/comms/messages"
 	"github.com/defos-ai/commander/framework/controller/consumers"
+	"github.com/defos-ai/commander/framework/controller/workers"
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/artifacts"
@@ -47,25 +49,32 @@ type Dependencies struct {
 }
 
 type Worker struct {
+	lifecycle    *workers.Lifecycle
 	subscription comms.Subscription
 	consumer     consumers.EventConsumer
 	coordination Coordinator
 	sessions     SessionObserver
 	sharing      ResultSharing
 	logger       *slog.Logger
+	closeOnce    sync.Once
+	cleanupDone  chan struct{}
+	closeErr     error // written before cleanupDone closes
 }
 
 func New(ctx context.Context, deps Dependencies) (*Worker, error) {
 	if deps.Bus == nil || deps.Coordination == nil || deps.Logger == nil {
 		return nil, errors.New("events require a bus, coordination and logger")
 	}
-	subscription, err := deps.Bus.Subscribe(ctx, comms.Inbox{
+	lifetime := workers.NewLifecycle(ctx)
+	subscription, err := deps.Bus.Subscribe(lifetime.Context(), comms.Inbox{
 		Topic: messages.ControllerEvents(deps.ControllerType), Name: deps.ControllerID, Mode: comms.TransientExclusive,
 	})
 	if err != nil {
+		lifetime.Cancel()
 		return nil, err
 	}
 	return &Worker{
+		lifecycle: lifetime, cleanupDone: make(chan struct{}),
 		subscription: subscription, coordination: deps.Coordination, sessions: deps.Sessions, sharing: deps.Sharing, logger: deps.Logger,
 		consumer: consumers.EventConsumer{
 			Bus: deps.Bus, Inventory: deps.Inventory, Actions: deps.Actions, Executions: deps.Executions,
@@ -75,6 +84,10 @@ func New(ctx context.Context, deps Dependencies) (*Worker, error) {
 }
 
 func (w *Worker) Run(ctx context.Context) error {
+	return w.lifecycle.Run(ctx, w.run)
+}
+
+func (w *Worker) run(ctx context.Context) error {
 	consumer := comms.Consumer{
 		Subscription: w.subscription, Logger: w.logger,
 		ContinueOnError: recoverableEvent,
@@ -99,7 +112,32 @@ func (w *Worker) Run(ctx context.Context) error {
 	})
 }
 
-func (w *Worker) Close() error { return w.subscription.Close() }
+func (w *Worker) Close(ctx context.Context) error {
+	w.lifecycle.Cancel()
+	// Cleanup must also run when Consume is blocked waiting on the subscription.
+	w.closeOnce.Do(func() {
+		go func() {
+			defer close(w.cleanupDone)
+			if err := w.subscription.Close(); !errors.Is(err, comms.ErrClosed) {
+				w.closeErr = err
+			}
+		}()
+	})
+	if err := w.lifecycle.Close(ctx); err != nil {
+		return err
+	}
+	select {
+	case <-w.cleanupDone:
+		return w.closeErr
+	default:
+	}
+	select {
+	case <-w.cleanupDone:
+		return w.closeErr
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
 
 func recoverableEvent(message messages.Message, err error) bool {
 	return message.Type == messages.ExecutionLogged || errors.Is(err, consumers.ErrInvalidMessage)

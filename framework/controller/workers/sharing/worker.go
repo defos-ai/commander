@@ -8,6 +8,7 @@ import (
 
 	"github.com/defos-ai/commander/framework/comms"
 	"github.com/defos-ai/commander/framework/comms/messages"
+	"github.com/defos-ai/commander/framework/controller/workers"
 	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/artifacts"
 	"github.com/defos-ai/commander/framework/domain/executions"
@@ -34,6 +35,7 @@ type Dependencies struct {
 }
 
 type Worker struct {
+	lifecycle      *workers.Lifecycle
 	ctx            context.Context
 	bus            comms.Bus
 	operationStore operations.OperationStore
@@ -45,8 +47,9 @@ type Worker struct {
 }
 
 func New(ctx context.Context, config Dependencies) *Worker {
+	life := workers.NewLifecycle(ctx)
 	return &Worker{
-		ctx: ctx, bus: config.Bus, operationStore: config.Operations,
+		lifecycle: life, ctx: life.Context(), bus: config.Bus, operationStore: config.Operations,
 		executionStore: config.Executions, artifactStore: config.Artifacts,
 		agents: config.Agents, logger: config.Logger,
 		queue: make(chan sharedData, sharingQueueSize),
@@ -87,6 +90,14 @@ func (w *Worker) queueSharedData(source sharedData) {
 }
 
 func (w *Worker) Run(ctx context.Context) error {
+	return w.lifecycle.Run(ctx, w.run)
+}
+
+func (w *Worker) Close(ctx context.Context) error {
+	return w.lifecycle.Close(ctx)
+}
+
+func (w *Worker) run(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():

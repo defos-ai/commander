@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"context"
 	"errors"
 
 	"github.com/defos-ai/commander/framework/comms"
@@ -13,24 +14,30 @@ import (
 	"github.com/defos-ai/commander/framework/controller/workers/sharing"
 )
 
-func assemble(c *Controller, bus comms.Bus, config ControllerConfig) ([]workers.Worker, error) {
+func assemble(c *Controller, bus comms.Bus, config ControllerConfig) (result []workers.Worker, err error) {
+	// Retain constructed workers for cleanup even when an error returns a nil list.
+	var list []workers.Worker
+	defer func() {
+		if err != nil {
+			c.cancel(err)
+			err = errors.Join(err, closeWorkers(context.Background(), list))
+		}
+	}()
 	coordination, err := coordination.New(c.lifetime, coordination.Dependencies{
 		Bus: bus, Inventory: config.AgentStore, Executions: config.ExecutionStore, Artifacts: config.ArtifactStore,
 		HeartbeatTimeout: config.HeartbeatTimeout, SweepInterval: config.LeaseSweepInterval, Stop: c.beginClose,
 	})
 	if err != nil {
-		c.cancel(err)
 		return nil, err
 	}
 	c.coordination = coordination
-	list := []workers.Worker{coordination}
+	list = append(list, coordination)
 	if config.SessionStore != nil {
 		c.sessions, err = session.New(session.Dependencies{
 			Store: config.SessionStore, Operations: config.OperationStore, Executions: config.ExecutionStore,
 			Agents: config.AgentStore, Actions: config.ActionStore, Remote: coordination, Logger: config.Logger,
 		})
 		if err != nil {
-			c.cancel(err)
 			return nil, err
 		}
 		list = append(list, c.sessions)
@@ -43,7 +50,6 @@ func assemble(c *Controller, bus comms.Bus, config ControllerConfig) ([]workers.
 			Decryptor: config.SecretDecryptor, Coordination: coordination, ReconcileInterval: config.LeaseSweepInterval,
 		})
 		if err != nil {
-			c.cancel(err)
 			return nil, err
 		}
 		secretEvents = secrets
@@ -53,6 +59,7 @@ func assemble(c *Controller, bus comms.Bus, config ControllerConfig) ([]workers.
 		Bus: bus, Operations: config.OperationStore, Executions: config.ExecutionStore,
 		Artifacts: config.ArtifactStore, Agents: coordination, Logger: config.Logger,
 	})
+	list = append(list, c.sharing)
 	var sessions event.SessionObserver
 	if c.sessions != nil {
 		sessions = c.sessions
@@ -64,15 +71,13 @@ func assemble(c *Controller, bus comms.Bus, config ControllerConfig) ([]workers.
 		Coordination: coordination, Logger: config.Logger,
 	})
 	if err != nil {
-		c.cancel(err)
 		return nil, err
 	}
+	list = append(list, c.events)
 	if secrets != nil {
 		if err := secrets.Reconcile(c.lifetime); err != nil {
-			c.cancel(err)
-			return nil, errors.Join(err, c.events.Close())
+			return nil, err
 		}
 	}
-	list = append(list, c.sharing, c.events)
 	return list, nil
 }

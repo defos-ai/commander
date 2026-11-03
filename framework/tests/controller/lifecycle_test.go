@@ -153,3 +153,75 @@ func TestControllerFatalWorkerFailureStopsAdmissionAndPreservesCause(t *testing.
 		})
 	}
 }
+
+func TestEventWorkerCloseOwnsSubscriptionWithoutStoppingItsParent(t *testing.T) {
+	for _, test := range []struct {
+		name      string
+		start     bool
+		cancelRun bool
+	}{
+		{name: "before run"},
+		{name: "while running", start: true},
+		{name: "run context cancelled", start: true, cancelRun: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			cleanupError := errors.New("subscription cleanup failed")
+			fixture := fixtures.NewEventLifecycle(t, cleanupError)
+			ctx := fixture.Context
+			runContext, cancelRun := context.WithCancel(ctx)
+			defer cancelRun()
+			var running <-chan error
+			expectedAgents := 0
+			if test.start {
+				expectedAgents = 1
+				running = fixture.StartEvents(runContext)
+				fixtures.Observe(t, ctx, fixture.Bus, controllerevents.AgentStarted, "")
+			} else {
+				fixtures.Send(t, ctx, fixture.Bus, controllerevents.AgentStarted, "")
+			}
+			if test.cancelRun {
+				cancelRun()
+				if err := fixtures.Receive(t, ctx, running); err != nil && !errors.Is(err, context.Canceled) {
+					t.Fatalf("Run cancellation lost its result: %v", err)
+				}
+			}
+			closing, cancelClose := context.WithTimeout(ctx, 30*time.Millisecond)
+			defer cancelClose()
+			first, concurrent := make(chan error, 1), make(chan error, 1)
+
+			go func() { first <- fixture.Events.Close(closing) }()
+			fixtures.Receive(t, ctx, fixture.CleanupGate.Entered())
+			go func() { concurrent <- fixture.Events.Close(ctx) }()
+			firstError := fixtures.Receive(t, ctx, first)
+
+			if !errors.Is(firstError, context.DeadlineExceeded) || ctx.Err() != nil {
+				t.Fatalf("Close did not bound cleanup independently of its parent: close=%v, parent=%v", firstError, ctx.Err())
+			}
+			if !test.start {
+				if err := fixtures.Receive(t, ctx, fixture.StartEvents(runContext)); err == nil {
+					t.Fatal("Close before Run allowed the event subscription to start")
+				}
+			} else if !test.cancelRun {
+				if err := fixtures.Receive(t, ctx, running); err != nil && !errors.Is(err, context.Canceled) {
+					t.Fatalf("Close did not stop the running event consumer: %v", err)
+				}
+			}
+			select {
+			case err := <-concurrent:
+				t.Fatalf("concurrent Close skipped pending subscription cleanup: %v", err)
+			default:
+			}
+			fixture.CleanupGate.Open()
+
+			if err := fixtures.Receive(t, ctx, concurrent); !errors.Is(err, cleanupError) {
+				t.Fatalf("concurrent Close lost the subscription cleanup error: %v", err)
+			}
+			if err := fixture.Events.Close(closing); !errors.Is(err, cleanupError) || fixture.Bus.CloseCalls() != 1 {
+				t.Fatalf("retry changed or repeated subscription cleanup: result=%v calls=%d", err, fixture.Bus.CloseCalls())
+			}
+			if agents, err := fixture.Coordination.Agents(ctx); err != nil || ctx.Err() != nil || len(agents) != expectedAgents {
+				t.Fatalf("closing events changed its parent's coordination: agents=%v error=%v parent=%v", agents, err, ctx.Err())
+			}
+		})
+	}
+}

@@ -9,6 +9,7 @@ import (
 	"github.com/defos-ai/commander/framework/comms"
 	"github.com/defos-ai/commander/framework/comms/messages"
 	"github.com/defos-ai/commander/framework/controller/consumers"
+	"github.com/defos-ai/commander/framework/controller/workers"
 	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/secrets"
 	"github.com/defos-ai/commander/framework/internal/state"
@@ -30,6 +31,7 @@ type Dependencies struct {
 }
 
 type Worker struct {
+	lifecycle         *workers.Lifecycle
 	consumer          consumers.SecretEventConsumer
 	coordination      Coordinator
 	reconcileInterval time.Duration
@@ -49,6 +51,7 @@ func New(deps Dependencies) (*Worker, error) {
 		deps.ReconcileInterval = time.Second
 	}
 	return &Worker{
+		lifecycle: workers.NewLifecycle(context.Background()),
 		consumer: consumers.SecretEventConsumer{
 			Bus: deps.Bus, Inventory: deps.Inventory, Secrets: deps.Secrets,
 			Requests: deps.Requests, Decryptor: deps.Decryptor,
@@ -58,6 +61,14 @@ func New(deps Dependencies) (*Worker, error) {
 }
 
 func (w *Worker) Run(ctx context.Context) error {
+	return w.lifecycle.Run(ctx, w.run)
+}
+
+func (w *Worker) Close(ctx context.Context) error {
+	return w.lifecycle.Close(ctx)
+}
+
+func (w *Worker) run(ctx context.Context) error {
 	ticker := time.NewTicker(w.reconcileInterval)
 	defer ticker.Stop()
 	for {

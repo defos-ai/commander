@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/defos-ai/commander/framework/controller/workers"
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/executions"
@@ -28,6 +29,7 @@ type Dependencies struct {
 }
 
 type Worker struct {
+	lifecycle  *workers.Lifecycle
 	admitted   map[string]bool
 	bound      map[string]string
 	observed   map[model.Reference]uint64
@@ -49,13 +51,22 @@ func New(dependencies Dependencies) (*Worker, error) {
 		dependencies.Logger = slog.Default()
 	}
 	return &Worker{
-		store: dependencies.Store, operations: dependencies.Operations, executions: dependencies.Executions,
+		lifecycle: workers.NewLifecycle(context.Background()),
+		store:     dependencies.Store, operations: dependencies.Operations, executions: dependencies.Executions,
 		agents: dependencies.Agents, actions: dependencies.Actions, remote: dependencies.Remote, logger: dependencies.Logger,
 		gate: make(chan struct{}, 1), admitted: map[string]bool{}, bound: map[string]string{}, observed: map[model.Reference]uint64{},
 	}, nil
 }
 
 func (w *Worker) Run(ctx context.Context) error {
+	return w.lifecycle.Run(ctx, w.run)
+}
+
+func (w *Worker) Close(ctx context.Context) error {
+	return w.lifecycle.Close(ctx)
+}
+
+func (w *Worker) run(ctx context.Context) error {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	for {
