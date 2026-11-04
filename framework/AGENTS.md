@@ -21,20 +21,22 @@
   recreated keys get fresh IDs.
   Requests identify the recipient agent and secret key. Omitted `type` means
   reusable; transient metadata requires canonical operation, task and command IDs.
-  Type and execution IDs are immutable replay identity. Transient records currently
-  support pending, cancelled and expired states only; reusable deliveries and
-  fulfillment cannot be attached. Values remain outside transient records.
+  Type and execution IDs are immutable replay identity. Transient fulfillment
+  retains only the delivery ID and receipt time; reusable delivery snapshots and
+  installation evidence cannot be attached. Values remain outside transient records.
   Operation/task waits use `MissingRequirements` separately. Request fulfillment
   records a specific delivery acknowledged by its recipient, never mere availability.
   Historical fulfillment does not establish current readiness. Domain validation
   proves neither encryption nor authorization; both belong above the stores.
 - [`secrets.RequestStore`](domain/secrets/request_store.go) persists a request,
-  its one immutable encrypted delivery and installation acknowledgement together.
+  its reusable encrypted delivery and installation acknowledgement together.
   Reserve before publishing; retries reuse the saved ID, timestamps and ciphertext.
   New versions use fresh requests. Keep exact replays idempotent and preserve
   terminal records. Fulfillment matches saved delivery evidence, not a separate
   SecretStore's latest value or a live agent's readiness; hosts own those checks.
   Delivery history retains encrypted copies even after deleting the primary secret.
+  `FulfillTransient` saves receipt metadata only after the controller verifies its
+  held delivery. It never persists transient values, ciphertext or fingerprints.
 - `ControllerConfig.SecretDecryptor` decrypts the reserved encrypted snapshot
   before publishing its metadata and requested value to the recipient. Inject
   the host's cipher; clear returned plaintext, sanitize decryptor errors and
@@ -439,12 +441,16 @@
   is cleared when the call returns; never clear caller-owned buffers. Preserve
   existing `SecretRequester` providers for reusable calls without defaults, and
   return `ErrSecretRequestUnsupported` when they cannot honor the options. The
-  built-in runtime currently supports reusable requests without defaults; typed
-  transient delivery and default seeding require their coordinated follow-up.
-  The current synchronization wire and reconciliation deliver only agent-wide
-  reusable requests. Expire overdue transient metadata but never resolve it from
-  the managed secret store. Transient delivery will use execution-scoped memory,
-  without persisting values or renewing a code request automatically.
+  built-in runtime supports reusable and transient requests without defaults;
+  default seeding remains unsupported. Transient requests bind to the accepted
+  execution, use the original request TTL bounded by caller/command lifetimes,
+  and never renew automatically. Each call has its own request and memory wait,
+  even for the same name. Keep transient values out of the reusable agent cache.
+  Clear owned bytes after handoff, cancellation, expiry and service shutdown;
+  retain only bounded receipt/cancellation metadata for exact transport retries.
+  Reject stale or mismatched replies before accepting bytes, including detached
+  callers whose execution has ended. A delivery receipt proves arrival, never
+  successful website submission; uncertain browser work needs explicit recovery.
 - Controller secret synchronization has its own worker with paired
   `SecretStore`/`SecretRequestStore`. Persist before publishing and check the live
   recipient's registered type and current stored version. Agents may request any
@@ -453,6 +459,15 @@
   mailbox so inventory observations and deliveries retain one owner.
   Only the controller decrypts for delivery. Keep trusted-bus and finite-lease revocation limits
   explicit; historical fulfillment does not authorize dispatch by itself.
+  Transient exchange additionally verifies the durable execution claim and active
+  operation/task/deadline. `secret.Worker.ProvideTransient` is the internal value
+  entry point; authenticated API/UI submission is not wired yet. Retain one exact
+  delivery in controller memory until receipt, cancellation or expiry; changed
+  submissions conflict. After a receipt, clear bytes before saving its metadata,
+  retaining receipt time for uncertain-write reconciliation without resending bytes.
+  Startup cancels saved pending transient requests because memory does not survive
+  controller restart. Retries of terminal requests report that state without
+  reopening it. Never resolve a transient name from reusable storage.
 - Preserve schema validation of action input, output and proposed next actions.
   Public snapshots must remain independent.
 - `action.ExecutionFromContext` exposes the current command/work identity for

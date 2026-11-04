@@ -21,11 +21,12 @@ var (
 	ErrRequestExpired = errors.New("secret request has expired")
 )
 
-// Fulfillment records the version acknowledged by the requesting agent for a
-// particular delivery. It is historical evidence, not proof of current readiness.
+// Fulfillment records receipt, never successful use of the delivered value.
+// Transient receipts identify only their delivery; reusable receipts also identify
+// the managed secret version.
 type Fulfillment struct {
-	SecretID      string `json:"secret_id"`
-	SecretVersion uint64 `json:"secret_version"`
+	SecretID      string `json:"secret_id,omitempty"`
+	SecretVersion uint64 `json:"secret_version,omitempty"`
 	DeliveryID    string `json:"delivery_id"`
 }
 
@@ -93,12 +94,16 @@ func (request Request) Validate() error {
 		return errors.New("invalid secret request status")
 	}
 	if request.Status == Fulfilled {
-		if kind != SecretReusable {
-			return errors.New("transient requests cannot use reusable secret fulfillment")
-		}
 		value := request.Fulfillment
-		if value == nil || !id.Valid(value.SecretID) || value.SecretVersion == 0 || !id.Valid(value.DeliveryID) {
-			return errors.New("fulfilled secret request requires secret identity, version and delivery ID")
+		if value == nil || !id.Valid(value.DeliveryID) {
+			return errors.New("fulfilled secret request requires its delivery ID")
+		}
+		if kind == SecretTransient {
+			if value.SecretID != "" || value.SecretVersion != 0 {
+				return errors.New("transient fulfillment must not identify a reusable secret")
+			}
+		} else if !id.Valid(value.SecretID) || value.SecretVersion == 0 {
+			return errors.New("reusable fulfillment requires secret identity and version")
 		}
 	} else if request.Fulfillment != nil {
 		return errors.New("unfulfilled secret request must not have fulfillment data")
@@ -134,6 +139,30 @@ func (request Request) Fulfill(secret Metadata, deliveryID string, now time.Time
 		return Request{}, errors.New("secret must be available at fulfillment time")
 	}
 	request.Status, request.ResolvedAt, request.Fulfillment = Fulfilled, now, &fulfillment
+	return request, nil
+}
+
+func (request Request) FulfillTransient(deliveryID string, now time.Time) (Request, error) {
+	if err := request.Validate(); err != nil {
+		return Request{}, err
+	}
+	if request.EffectiveType() != SecretTransient {
+		return Request{}, ErrRequestConflict
+	}
+	if !id.Valid(deliveryID) {
+		return Request{}, errors.New("transient fulfillment requires a canonical delivery ID")
+	}
+	if request.Status == Fulfilled {
+		if request.Fulfillment.DeliveryID != deliveryID {
+			return Request{}, ErrRequestConflict
+		}
+		return request.Clone(), nil
+	}
+	if err := request.pendingAt(now); err != nil {
+		return Request{}, err
+	}
+	request.Status, request.ResolvedAt = Fulfilled, now
+	request.Fulfillment = &Fulfillment{DeliveryID: deliveryID}
 	return request, nil
 }
 

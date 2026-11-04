@@ -9,7 +9,7 @@ import (
 )
 
 // One execution owns these counts, serialized with snapshots by stateGate.
-// Secret transport requests and cached values retain their agent-wide lifetime.
+// Reusable caching and receipt retries have independent lifetimes.
 type workSecretWaits struct {
 	agent     *Agent
 	context   context.Context

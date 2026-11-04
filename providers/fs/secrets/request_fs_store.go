@@ -109,7 +109,7 @@ func (s *RequestFsStore) SaveDelivery(ctx context.Context, delivery secretmodel.
 			return nil, secretmodel.ErrUnknownRequest
 		}
 		for otherIndex, record := range records {
-			if otherIndex != index && record.Delivery != nil && record.Delivery.ID == snapshot.ID {
+			if otherIndex != index && record.DeliveryID() == snapshot.ID {
 				return nil, secretmodel.ErrRequestConflict
 			}
 		}
@@ -125,6 +125,29 @@ func (s *RequestFsStore) SaveDelivery(ctx context.Context, delivery secretmodel.
 func (s *RequestFsStore) Acknowledge(ctx context.Context, installation secretmodel.Installation, now time.Time) error {
 	return s.mutate(ctx, installation.RequestID, func(record secretmodel.RequestRecord) (secretmodel.RequestRecord, error) {
 		return record.Acknowledge(installation, now)
+	})
+}
+
+func (s *RequestFsStore) FulfillTransient(ctx context.Context, requestID, deliveryID string, now time.Time) error {
+	if err := checkRequestContext(ctx, requestID); err != nil {
+		return err
+	}
+	return s.update(ctx, func(records []secretmodel.RequestRecord) ([]secretmodel.RequestRecord, error) {
+		index := findRequest(records, requestID)
+		if index < 0 {
+			return nil, secretmodel.ErrUnknownRequest
+		}
+		for otherIndex, record := range records {
+			if otherIndex != index && record.DeliveryID() == deliveryID {
+				return nil, secretmodel.ErrRequestConflict
+			}
+		}
+		next, err := records[index].FulfillTransient(deliveryID, now)
+		if err != nil {
+			return nil, err
+		}
+		records[index] = next
+		return records, nil
 	})
 }
 

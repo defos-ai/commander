@@ -51,6 +51,7 @@ func assemble(c *Controller, bus comms.Bus, config ControllerConfig) (result []w
 	if config.SecretStore != nil {
 		secrets, err = secret.New(secret.Dependencies{
 			Bus: bus, Inventory: config.AgentStore, Secrets: config.SecretStore, Requests: config.SecretRequestStore,
+			Executions: config.ExecutionStore, Operations: config.OperationStore,
 			Decryptor: config.SecretDecryptor, Coordination: coordinator, ReconcileInterval: config.LeaseSweepInterval,
 		})
 		if err != nil {
@@ -79,6 +80,9 @@ func assemble(c *Controller, bus comms.Bus, config ControllerConfig) (result []w
 	}
 	list = append(list, c.events)
 	if secrets != nil {
+		if err := secrets.InitializeTransient(c.coreLifetime); err != nil {
+			return nil, err
+		}
 		if err := secrets.Reconcile(c.coreLifetime); err != nil {
 			return nil, err
 		}

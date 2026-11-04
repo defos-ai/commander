@@ -40,6 +40,12 @@ including workers whose `Run` has not started. No runtime loop starts in assembl
   Both event handling and reconciliation execute inside coordination; never
   recursively submit from an owner callback. Startup reconciliation runs before
   workers start. Fatal writes fence new commands before returning.
+  Transient values remain in this component's memory, bound to an active execution
+  and fixed request deadline. Startup closes saved transient waits. Clear values
+  after receipt, cancellation, expiry or shutdown; retain receipt metadata only
+  while confirming an uncertain write. Its private handler gate serializes final
+  memory clearing with accepted callbacks. `ProvideTransient` copies caller bytes
+  before admission and transfers independent ownership to the coordination callback.
 - [Sharing](sharing/worker.go) owns its bounded queue and best-effort forwarding.
   Read accepted records and observe recipients through `AgentReader`; never
   mutate coordination state or change accepted execution outcomes on failure.

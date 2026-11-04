@@ -99,7 +99,10 @@ applies to all domain packages below this directory.
   Request type defaults to reusable; transient requests retain exact execution
   IDs and a fixed deadline, without values. Replay identity includes effective
   type and execution scope. Reusable delivery/fulfillment cannot satisfy transient
-  requests; only pending, cancellation and expiration are supported for them yet.
+  requests. Transient fulfillment retains only a delivery ID and receipt time,
+  without a reusable secret identity, delivery snapshot, value or hash. Stores
+  reserve delivery IDs permanently across both types; hosts validate transient
+  receipts against the in-memory exchange before persisting them.
 - Session [Scope and Record](sessions/lifecycle.go) own reservation and lifecycle;
   [Session](sessions/session.go) is an observed/query view. Preserve exact owner
   and original creation identity. Completing an operation does not close a

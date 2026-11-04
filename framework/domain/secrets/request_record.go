@@ -28,6 +28,12 @@ func (record RequestRecord) Validate() error {
 	if err := record.Request.Validate(); err != nil {
 		return err
 	}
+	if record.Request.EffectiveType() == SecretTransient {
+		if record.Delivery != nil || record.Installation != nil {
+			return ErrRequestConflict
+		}
+		return nil
+	}
 	if record.Delivery != nil {
 		if err := record.Delivery.Validate(); err != nil {
 			return err
@@ -71,6 +77,16 @@ func (record RequestRecord) Clone() RequestRecord {
 		record.Installation = &installation
 	}
 	return record
+}
+
+func (record RequestRecord) DeliveryID() string {
+	if record.Delivery != nil {
+		return record.Delivery.ID
+	}
+	if record.Request.Fulfillment != nil {
+		return record.Request.Fulfillment.DeliveryID
+	}
+	return ""
 }
 
 // MatchesRequest compares the original pending request, ignoring saved progress.
@@ -160,6 +176,19 @@ func (record RequestRecord) Cancel(now time.Time) (RequestRecord, error) {
 	record = record.Clone()
 	record.Request = request
 	return record, record.Validate()
+}
+
+func (record RequestRecord) FulfillTransient(deliveryID string, now time.Time) (RequestRecord, error) {
+	if err := record.Validate(); err != nil {
+		return RequestRecord{}, err
+	}
+	request, err := record.Request.FulfillTransient(deliveryID, now)
+	if err != nil {
+		return RequestRecord{}, err
+	}
+	record = record.Clone()
+	record.Request = request
+	return record, nil
 }
 
 func (record RequestRecord) Expire(now time.Time) (RequestRecord, error) {

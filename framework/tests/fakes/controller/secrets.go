@@ -102,10 +102,11 @@ func (store *SecretValues) Get(ctx context.Context, key secrets.Key) (secrets.Se
 func (store *SecretValues) ReadCount() uint64 { return store.reads.Load() }
 
 type SecretRequests struct {
-	records   map[string]secrets.RequestRecord
-	saveError error
-	listError error
-	afterSave func()
+	records      map[string]secrets.RequestRecord
+	saveError    error
+	fulfillError error
+	listError    error
+	afterSave    func()
 }
 
 func (store *SecretRequests) Create(ctx context.Context, request secrets.Request) error {
@@ -156,7 +157,7 @@ func (store *SecretRequests) ListPending(ctx context.Context) ([]secrets.Request
 func (store *SecretRequests) SaveDelivery(ctx context.Context, delivery secrets.Delivery) error {
 	err := store.mutate(ctx, delivery.RequestID, func(record secrets.RequestRecord) (secrets.RequestRecord, error) {
 		for requestID, saved := range store.records {
-			if requestID != delivery.RequestID && saved.Delivery != nil && saved.Delivery.ID == delivery.ID {
+			if requestID != delivery.RequestID && saved.DeliveryID() == delivery.ID {
 				return secrets.RequestRecord{}, secrets.ErrRequestConflict
 			}
 		}
@@ -177,6 +178,23 @@ func (store *SecretRequests) Acknowledge(ctx context.Context, installation secre
 		return record.Acknowledge(installation, now)
 	})
 }
+
+func (store *SecretRequests) FulfillTransient(ctx context.Context, requestID, deliveryID string, now time.Time) error {
+	err := store.mutate(ctx, requestID, func(record secrets.RequestRecord) (secrets.RequestRecord, error) {
+		for otherID, saved := range store.records {
+			if otherID != requestID && saved.DeliveryID() == deliveryID {
+				return secrets.RequestRecord{}, secrets.ErrRequestConflict
+			}
+		}
+		return record.FulfillTransient(deliveryID, now)
+	})
+	if err != nil {
+		return err
+	}
+	return store.fulfillError
+}
+
+func (store *SecretRequests) SetFulfillError(err error) { store.fulfillError = err }
 
 func (store *SecretRequests) Cancel(ctx context.Context, requestID string, now time.Time) error {
 	return store.mutate(ctx, requestID, func(record secrets.RequestRecord) (secrets.RequestRecord, error) {

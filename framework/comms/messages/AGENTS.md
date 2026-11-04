@@ -37,6 +37,13 @@
   Broker/filesystem access is the trusted publisher boundary; envelope fields do
   not authenticate an untrusted publisher.
   An installation acknowledgement never proves ongoing readiness or revocation.
+  Transient requests reuse synchronization with exact command/work binding and
+  their original fixed deadline. Values use separate transient responses; never
+  decode them as reusable metadata or install them in the shared cache. A receipt
+  correlates to the exact value delivery and confirms receipt only, not external
+  acceptance. Cancellation retains the original request metadata and is valid
+  after expiry. Error responses carry no value and may report expiry after the
+  deadline. Keep value bytes bounded and clear decoded copies after validation.
 - Execution question requests use command correlation plus a stable key; replies
   correlate to the individual request ID and preserve command/key/work identity.
   The independent agent event inbox delivers pending or answered saved questions

@@ -25,9 +25,7 @@ func encodeRequest(record secretmodel.RequestRecord) (requestDocument, error) {
 		return requestDocument{}, err
 	}
 	document := requestDocument{ID: record.Request.ID, Status: record.Request.Status}
-	if record.Delivery != nil {
-		document.DeliveryID = record.Delivery.ID
-	}
+	document.DeliveryID = record.DeliveryID()
 	var err error
 	document.Data, err = json.Marshal(record)
 	return document, err
@@ -46,10 +44,7 @@ func (document requestDocument) decode() (secretmodel.RequestRecord, error) {
 	if err := record.Validate(); err != nil {
 		return secretmodel.RequestRecord{}, err
 	}
-	deliveryID := ""
-	if record.Delivery != nil {
-		deliveryID = record.Delivery.ID
-	}
+	deliveryID := record.DeliveryID()
 	if record.Request.ID != document.ID || record.Request.Status != document.Status || deliveryID != document.DeliveryID {
 		return secretmodel.RequestRecord{}, errors.New("stored secret request does not match its indexed fields")
 	}

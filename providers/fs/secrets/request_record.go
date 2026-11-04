@@ -29,11 +29,11 @@ func decodeRequests(data []byte) ([]secretmodel.RequestRecord, error) {
 			return nil, errors.New("secret request collection contains duplicate request IDs")
 		}
 		requests[record.Request.ID] = true
-		if record.Delivery != nil {
-			if deliveries[record.Delivery.ID] {
+		if deliveryID := record.DeliveryID(); deliveryID != "" {
+			if deliveries[deliveryID] {
 				return nil, errors.New("secret request collection contains duplicate delivery IDs")
 			}
-			deliveries[record.Delivery.ID] = true
+			deliveries[deliveryID] = true
 		}
 	}
 	return records, nil

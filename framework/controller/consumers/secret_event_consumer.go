@@ -12,6 +12,8 @@ import (
 	controllerevents "github.com/defos-ai/commander/framework/comms/clients/controller/events"
 	"github.com/defos-ai/commander/framework/comms/messages"
 	"github.com/defos-ai/commander/framework/domain/agents"
+	"github.com/defos-ai/commander/framework/domain/executions"
+	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/domain/secrets"
 	"github.com/defos-ai/commander/framework/id"
 )
@@ -25,25 +27,32 @@ type SecretDecryptor interface {
 // The bus remains a trusted deployment boundary. Agents may request shared names;
 // declarations are readiness metadata, not authorization.
 type SecretEventConsumer struct {
-	Bus       comms.Bus
-	Inventory agents.AgentStore
-	Secrets   secrets.SecretStore
-	Requests  secrets.RequestStore
-	Decryptor SecretDecryptor
+	Bus        comms.Bus
+	Inventory  agents.AgentStore
+	Secrets    secrets.SecretStore
+	Requests   secrets.RequestStore
+	Decryptor  SecretDecryptor
+	Executions executions.ExecutionStore
+	Operations operations.OperationStore
+	transient  map[string]*transientDelivery
 }
 
-func (c SecretEventConsumer) Consume(ctx context.Context, message messages.Message) error {
+func (c *SecretEventConsumer) Consume(ctx context.Context, message messages.Message) error {
 	switch message.Type {
 	case controllerevents.SecretSyncRequested:
 		return c.request(ctx, message)
 	case controllerevents.SecretInstalled:
 		return c.installed(ctx, message)
+	case controllerevents.SecretTransientReceived:
+		return c.transientReceived(ctx, message)
+	case controllerevents.SecretRequestCanceled:
+		return c.transientCanceled(ctx, message)
 	default:
 		return InvalidMessage(errors.New("unsupported secret event"))
 	}
 }
 
-func (c SecretEventConsumer) request(ctx context.Context, message messages.Message) error {
+func (c *SecretEventConsumer) request(ctx context.Context, message messages.Message) error {
 	payload, err := controllerevents.DecodeSecretSyncRequested(message)
 	if err != nil {
 		return InvalidMessage(err)
@@ -59,6 +68,9 @@ func (c SecretEventConsumer) request(ctx context.Context, message messages.Messa
 	if !allowed {
 		return InvalidMessage(errors.New("secret request must match a live agent's registered type"))
 	}
+	if request.EffectiveType() == secrets.SecretTransient {
+		return c.transientRequested(ctx, request)
+	}
 	if err := c.Requests.Create(ctx, request); err != nil {
 		return secretTransitionError(err)
 	}
@@ -72,7 +84,27 @@ func (c SecretEventConsumer) request(ctx context.Context, message messages.Messa
 // Reconcile retries durable pending deliveries after restart or a missed agent
 // event. Missing values remain pending so supplying them later needs no new
 // request. A delivery reserved for an old version is never replaced in place.
-func (c SecretEventConsumer) Reconcile(ctx context.Context) error {
+func (c *SecretEventConsumer) Reconcile(ctx context.Context) error {
+	now := time.Now().UTC()
+	for requestID, delivery := range c.transient {
+		if delivery.receivedAt.IsZero() && !now.Before(delivery.message.ExpiresAt) {
+			c.discardTransient(requestID)
+		}
+	}
+	for requestID, delivery := range c.transient {
+		if !delivery.receivedAt.IsZero() {
+			record, err := c.Requests.Get(ctx, requestID)
+			if err != nil {
+				return err
+			}
+			if record.Request.Status == secrets.Pending {
+				if err := c.Requests.FulfillTransient(ctx, requestID, delivery.message.ID, delivery.receivedAt); err != nil {
+					return err
+				}
+			}
+			c.discardTransient(requestID)
+		}
+	}
 	records, err := c.Requests.ListPending(ctx)
 	if err != nil {
 		return err
@@ -85,11 +117,14 @@ func (c SecretEventConsumer) Reconcile(ctx context.Context) error {
 	return nil
 }
 
-func (c SecretEventConsumer) deliver(ctx context.Context, record secrets.RequestRecord, now time.Time) error {
+func (c *SecretEventConsumer) deliver(ctx context.Context, record secrets.RequestRecord, now time.Time) error {
 	if err := record.Validate(); err != nil {
 		return fmt.Errorf("invalid saved secret request: %w", err)
 	}
 	request := record.Request
+	if request.EffectiveType() == secrets.SecretTransient {
+		return c.deliverTransient(ctx, record, now)
+	}
 	if request.Status != secrets.Pending {
 		return nil
 	}
@@ -174,7 +209,7 @@ func (c SecretEventConsumer) deliver(ctx context.Context, record secrets.Request
 	return (agentevents.Client{Bus: c.Bus}).Publish(ctx, message)
 }
 
-func (c SecretEventConsumer) installed(ctx context.Context, message messages.Message) error {
+func (c *SecretEventConsumer) installed(ctx context.Context, message messages.Message) error {
 	payload, err := controllerevents.DecodeSecretInstalled(message)
 	if err != nil {
 		return InvalidMessage(err)
@@ -219,7 +254,7 @@ func (c SecretEventConsumer) installed(ctx context.Context, message messages.Mes
 	return secretTransitionError(c.Requests.Acknowledge(ctx, installation, now))
 }
 
-func (c SecretEventConsumer) allowed(ctx context.Context, request secrets.Request, now time.Time) (bool, error) {
+func (c *SecretEventConsumer) allowed(ctx context.Context, request secrets.Request, now time.Time) (bool, error) {
 	record, err := c.Inventory.Get(ctx, request.AgentID)
 	if errors.Is(err, agents.ErrUnknownAgent) {
 		return false, nil
@@ -234,7 +269,7 @@ func (c SecretEventConsumer) allowed(ctx context.Context, request secrets.Reques
 	return true, nil
 }
 
-func (c SecretEventConsumer) current(ctx context.Context, key secrets.Key, now time.Time) (secrets.Secret, bool, error) {
+func (c *SecretEventConsumer) current(ctx context.Context, key secrets.Key, now time.Time) (secrets.Secret, bool, error) {
 	secret, err := c.Secrets.Get(ctx, key)
 	if errors.Is(err, secrets.ErrUnknownSecret) {
 		return secrets.Secret{}, false, nil

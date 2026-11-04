@@ -102,6 +102,10 @@ sends its value and metadata only to the requesting agent. Agents acknowledge
 installation without receiving the encryption key. Saved delivery history stays
 encrypted.
 
+Transient requests bind a value to one execution and deadline. Retries retain
+their request and delivery identities; values remain in memory. A receipt means
+the agent received the value, not that an external service accepted it.
+
 Restrict bus access to trusted hosts. Deleting a secret does not immediately
 revoke installed copies. See [secret runtime limits](../../secrets/README.md#agent-requirements)
 and [wire implementation guidance](AGENTS.md).

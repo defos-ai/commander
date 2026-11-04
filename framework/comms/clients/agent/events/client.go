@@ -41,6 +41,12 @@ func (c Client) Publish(ctx context.Context, message messages.Message) error {
 		if err != nil {
 			return err
 		}
+	case SecretTransientResponded:
+		payload, err := DecodeTransientSecretResponse(message)
+		clear(payload.Value)
+		if err != nil {
+			return err
+		}
 	case CheckpointResponded:
 		if _, err := DecodeCheckpointResponse(message); err != nil {
 			return err

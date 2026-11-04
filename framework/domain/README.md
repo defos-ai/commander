@@ -97,7 +97,7 @@ certify that every objective was achieved.
 | [`Key`](secrets/key.go) | Identifies one deployment-wide secret by name, independently of agent type. | Secret service, agent requests, Controller distribution, Admin/Adapters. |
 | [`Metadata`](secrets/secret.go) | Exposes identity, version and validity without revealing the credential. | Secret service, Controller distribution, agent cache, Admin/Adapters. |
 | [`Secret`, `EncryptedValue`](secrets/secret.go) | Retain authenticated metadata and encrypted bytes for storage. | Secret service, [Cryptography], Controller decryptor, secret-store providers. |
-| [`Request`, `Fulfillment`](secrets/request.go) | Track bounded reusable requests or execution-scoped transient metadata; fulfillment records the reusable version/delivery acknowledged. | Agent synchronization, Controller distribution, request queries and Adapters. |
+| [`Request`, `Fulfillment`](secrets/request.go) | Track bounded reusable or execution-scoped transient requests and their delivery receipts, without retaining transient values. | Agent synchronization, Controller distribution, request queries and Adapters. |
 | [`Delivery`](secrets/delivery.go) | Reserves the exact encrypted snapshot and message identity before delivery; it does not prove publication or installation. | Controller distribution, RequestStore implementations. |
 | [`Installation`](secrets/delivery.go) | Records the recipient's acknowledgement of a specific delivery and secret version. | Agent acknowledgement publishing, Controller validation, RequestStore. |
 | [`RequestRecord`](secrets/request_record.go) | Keeps the request, reserved delivery and acknowledgement together for atomic lifecycle transitions. | Controller distribution and recovery, RequestStore implementations. |

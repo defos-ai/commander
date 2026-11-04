@@ -15,7 +15,6 @@ const (
 	SecretInstalled     = messages.SecretInstalled
 )
 
-// SecretSyncRequest asks for one shared secret independently of operations.
 type SecretSyncRequest struct {
 	Request secretmodel.Request `json:"request"`
 }
@@ -27,8 +26,8 @@ func (sync SecretSyncRequest) Validate() error {
 	if sync.Request.Status != secretmodel.Pending {
 		return errors.New("secret synchronization requires a pending request")
 	}
-	if sync.Request.EffectiveType() != secretmodel.SecretReusable || sync.Request.OperationID != "" {
-		return errors.New("secret synchronization supports only agent-wide reusable requests")
+	if sync.Request.EffectiveType() == secretmodel.SecretReusable && sync.Request.OperationID != "" {
+		return errors.New("reusable secret synchronization requires an agent-wide request")
 	}
 	return nil
 }
@@ -54,6 +53,10 @@ func NewSecretSyncRequested(request secretmodel.Request) (messages.Message, erro
 		return messages.Message{}, err
 	}
 	message.ID, message.CreatedAt, message.ExpiresAt = request.ID, request.RequestedAt, request.ExpiresAt
+	if request.EffectiveType() == secretmodel.SecretTransient {
+		message.CorrelationID = request.CommandID
+		message.Work = messages.WorkContext{OperationID: request.OperationID, TaskID: request.TaskID}
+	}
 	if _, err := DecodeSecretSyncRequested(message); err != nil {
 		return messages.Message{}, err
 	}
@@ -66,14 +69,21 @@ func DecodeSecretSyncRequested(message messages.Message) (SecretSyncRequest, err
 	if err := message.Validate(); err != nil {
 		return SecretSyncRequest{}, err
 	}
-	if message.Type != SecretSyncRequested || message.Work != (messages.WorkContext{}) || message.CorrelationID != "" {
-		return SecretSyncRequest{}, errors.New("secret synchronization requires no work or correlation context")
+	if message.Type != SecretSyncRequested || len(message.Payload) > 16*1024 {
+		return SecretSyncRequest{}, errors.New("invalid secret synchronization envelope")
 	}
 	var sync SecretSyncRequest
 	if err := domain.Decode(message.Payload, &sync); err != nil {
 		return SecretSyncRequest{}, errors.New("invalid secret synchronization request")
 	}
 	request := sync.Request
+	work, commandID := messages.WorkContext{}, ""
+	if request.EffectiveType() == secretmodel.SecretTransient {
+		work, commandID = messages.WorkContext{OperationID: request.OperationID, TaskID: request.TaskID}, request.CommandID
+	}
+	if message.Work != work || message.CorrelationID != commandID {
+		return SecretSyncRequest{}, errors.New("secret synchronization context must match its request")
+	}
 	if message.ID != request.ID || message.AgentID != request.AgentID || !message.CreatedAt.Equal(request.RequestedAt) || !message.ExpiresAt.Equal(request.ExpiresAt) {
 		return SecretSyncRequest{}, errors.New("secret synchronization envelope must match its request")
 	}

@@ -26,16 +26,18 @@ type SecretConfig struct {
 }
 
 type secretRuntime struct {
-	mu       sync.Mutex
-	config   SecretConfig
-	agentID  string
-	typeName string
-	entries  map[string]*secretEntry
-	dirty    uint64
-	updated  uint64
-	wake     chan struct{}
-	changed  chan struct{}
-	service  context.Context
+	mu        sync.Mutex
+	config    SecretConfig
+	agentID   string
+	typeName  string
+	entries   map[string]*secretEntry
+	transient map[string]*transientSecretWait
+	receipts  map[string]transientSecretReceipt
+	dirty     uint64
+	updated   uint64
+	wake      chan struct{}
+	changed   chan struct{}
+	service   context.Context
 }
 
 type secretEntry struct {
@@ -69,7 +71,8 @@ func newSecretRuntime(config *SecretConfig, agentID, typeName string, actions []
 		return nil, errors.New("secret synchronization intervals must be positive and refresh must precede request expiry")
 	}
 	runtime := &secretRuntime{config: settings, agentID: agentID, typeName: typeName,
-		entries: make(map[string]*secretEntry), wake: make(chan struct{}, 1), changed: make(chan struct{})}
+		entries: make(map[string]*secretEntry), transient: make(map[string]*transientSecretWait),
+		receipts: make(map[string]transientSecretReceipt), wake: make(chan struct{}, 1), changed: make(chan struct{})}
 	for _, executor := range actions {
 		for _, name := range executor.Action().RequiredSecrets {
 			runtime.entries[name] = &secretEntry{declared: true}
@@ -97,6 +100,11 @@ func (r *secretRuntime) clear() {
 			delete(r.entries, name)
 		}
 	}
+	for requestID, wait := range r.transient {
+		clear(wait.value)
+		delete(r.transient, requestID)
+	}
+	clear(r.receipts)
 	r.dirty, r.updated = 0, 0
 	r.service = nil
 	r.broadcast()
@@ -244,6 +252,20 @@ func (provider scopedSecrets) RequestSecret(ctx context.Context, name string) ([
 	return provider.runtime.request(ctx, provider.execution, name)
 }
 
+func (provider scopedSecrets) RequestSecretWithOptions(ctx context.Context, name string, options action.SecretRequestOptions) ([]byte, error) {
+	if options.Default != nil {
+		return nil, action.ErrSecretRequestUnsupported
+	}
+	switch options.Type {
+	case "", action.SecretReusable:
+		return provider.RequestSecret(ctx, name)
+	case action.SecretTransient:
+		return provider.runtime.requestTransient(ctx, provider.execution, name)
+	default:
+		return nil, action.ErrSecretRequestUnsupported
+	}
+}
+
 func (a *Agent) secretContext(ctx context.Context, definition actionmodel.Action, waits *workSecretWaits) context.Context {
 	provider := scopedSecrets{runtime: a.secrets, names: slices.Clone(definition.RequiredSecrets), execution: waits}
 	return action.WithSecrets(ctx, provider)
@@ -309,7 +331,7 @@ func (r *secretRuntime) pending(now time.Time) ([]messages.Message, error) {
 			outgoing = append(outgoing, entry.ack)
 		}
 	}
-	return outgoing, nil
+	return append(outgoing, r.pendingTransient(now)...), nil
 }
 
 func (r *secretRuntime) install(message messages.Message, now time.Time) error {

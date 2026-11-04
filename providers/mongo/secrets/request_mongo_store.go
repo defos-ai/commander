@@ -129,6 +129,12 @@ func (s *RequestMongoStore) Acknowledge(ctx context.Context, installation secret
 	})
 }
 
+func (s *RequestMongoStore) FulfillTransient(ctx context.Context, requestID, deliveryID string, now time.Time) error {
+	return s.update(ctx, requestID, func(record secretmodel.RequestRecord) (secretmodel.RequestRecord, error) {
+		return record.FulfillTransient(deliveryID, now)
+	})
+}
+
 func (s *RequestMongoStore) Cancel(ctx context.Context, requestID string, now time.Time) error {
 	return s.update(ctx, requestID, func(record secretmodel.RequestRecord) (secretmodel.RequestRecord, error) {
 		return record.Cancel(now)

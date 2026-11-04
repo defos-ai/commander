@@ -85,7 +85,7 @@ func (b *SecretBus) Publish(ctx context.Context, _ string, message messages.Mess
 	b.mu.Unlock()
 	select {
 	case b.outgoing <- message:
-		if message.Type == controllerevents.SecretInstalled && b.failAcknowledgement.CompareAndSwap(true, false) {
+		if (message.Type == controllerevents.SecretInstalled || message.Type == controllerevents.SecretTransientReceived) && b.failAcknowledgement.CompareAndSwap(true, false) {
 			return errors.New("uncertain acknowledgement publication")
 		}
 		return nil

@@ -11,10 +11,10 @@ var (
 	ErrRequestConflict = errors.New("secret request or delivery conflicts with saved state")
 )
 
-// RequestStore atomically tracks each request with its encrypted delivery and
-// installation evidence. It never publishes, decrypts or authorizes messages.
-// It checks the recorded delivery, not the current secret in a separate store;
-// historical fulfillment is not proof of current agent readiness.
+// RequestStore atomically tracks request metadata and receipt evidence. Reusable
+// requests also retain their reserved encrypted delivery; transient values stay
+// outside this store. It never publishes, decrypts or authorizes messages.
+// Historical fulfillment is not proof of current agent readiness or successful use.
 //
 // Implementations validate inputs, honor contexts, return independent copies,
 // and serialize changes across instances. IDs and terminal records are retained;
@@ -36,6 +36,10 @@ type RequestStore interface {
 	// deadline. now is the trusted receipt time. Exact saved ACK replays preserve
 	// the first settlement, even after expiry; changed ACK content conflicts.
 	Acknowledge(ctx context.Context, installation Installation, now time.Time) error
+	// FulfillTransient records only delivery receipt metadata. The controller
+	// verifies its in-memory delivery and recipient before calling this method.
+	// No transient value, ciphertext or hash is retained by the store.
+	FulfillTransient(ctx context.Context, requestID, deliveryID string, now time.Time) error
 	Cancel(ctx context.Context, requestID string, now time.Time) error
 	Expire(ctx context.Context, requestID string, now time.Time) error
 }

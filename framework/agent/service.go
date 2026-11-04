@@ -177,6 +177,14 @@ func (a *Agent) Serve(ctx context.Context, bus comms.Bus, scope *environment.Dis
 				questions.receive(message)
 				return nil
 			}
+			if message.Type == agentevents.SecretTransientResponded {
+				if a.secrets != nil {
+					if err := a.secrets.receiveTransient(message, time.Now().UTC()); err != nil {
+						a.config.Logger.Warn("transient secret delivery rejected", "message_id", message.ID)
+					}
+				}
+				return nil
+			}
 			if message.Type == agentevents.SecretDelivered {
 				if a.secrets != nil {
 					if err := a.secrets.install(message, time.Now().UTC()); err != nil {

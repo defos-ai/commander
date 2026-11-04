@@ -60,7 +60,7 @@ func (c EventConsumer) Consume(ctx context.Context, message messages.Message) er
 		return (QuestionConsumer{Executions: c.Executions, Operations: c.Operations, Bus: c.Bus}).Consume(ctx, message)
 	case controllerevents.ExecutionLogged:
 		return (LogConsumer{Executions: c.Executions}).Consume(ctx, message)
-	case controllerevents.SecretSyncRequested, controllerevents.SecretInstalled:
+	case controllerevents.SecretSyncRequested, controllerevents.SecretInstalled, controllerevents.SecretTransientReceived, controllerevents.SecretRequestCanceled:
 		if c.Secrets == nil {
 			return InvalidMessage(errors.New("secret distribution is not configured"))
 		}

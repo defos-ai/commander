@@ -157,6 +157,7 @@ func TestRequestFsStoreRetainsTransientScopeWithoutManagedDelivery(t *testing.T)
 	store := fixtures.OpenRequestStore(t, root)
 	request, managedDelivery := fixtures.TransientSecretRequest(t)
 	expiring, _ := fixtures.TransientSecretRequest(t)
+	received, _ := fixtures.TransientSecretRequest(t)
 	for _, edit := range []func(*secrets.Request){
 		func(r *secrets.Request) { r.Type = "unknown" },
 		func(r *secrets.Request) { r.OperationID, r.TaskID, r.CommandID = "", "", "" },
@@ -173,7 +174,7 @@ func TestRequestFsStoreRetainsTransientScopeWithoutManagedDelivery(t *testing.T)
 	if _, err := store.Get(t.Context(), request.ID); !errors.Is(err, secrets.ErrUnknownRequest) {
 		t.Fatalf("rejected transient request reserved its identity: %v", err)
 	}
-	for _, initial := range []secrets.Request{request, expiring} {
+	for _, initial := range []secrets.Request{request, expiring, received} {
 		if err := store.Create(t.Context(), initial); err != nil {
 			t.Fatal(err)
 		}
@@ -181,10 +182,10 @@ func TestRequestFsStoreRetainsTransientScopeWithoutManagedDelivery(t *testing.T)
 
 	store = fixtures.OpenRequestStore(t, root)
 	pending, err := store.ListPending(t.Context())
-	if err != nil || len(pending) != 2 {
+	if err != nil || len(pending) != 3 {
 		t.Fatalf("reopened store lost pending transient requests: %v", err)
 	}
-	want := map[string]secrets.Request{request.ID: request, expiring.ID: expiring}
+	want := map[string]secrets.Request{request.ID: request, expiring.ID: expiring, received.ID: received}
 	for _, record := range pending {
 		if !reflect.DeepEqual(record, secrets.RequestRecord{Request: want[record.Request.ID]}) {
 			t.Fatal("pending inventory changed transient identity or retained a managed delivery")
@@ -209,6 +210,22 @@ func TestRequestFsStoreRetainsTransientScopeWithoutManagedDelivery(t *testing.T)
 	if err != nil || !reflect.DeepEqual(saved, secrets.RequestRecord{Request: request}) {
 		t.Fatalf("rejected delivery or request replay changed the saved transient: %v", err)
 	}
+	deliveryID, receivedAt := id.New(), received.RequestedAt.Add(time.Second)
+	if err := store.FulfillTransient(t.Context(), received.ID, deliveryID, receivedAt); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.FulfillTransient(t.Context(), received.ID, deliveryID, received.ExpiresAt.Add(time.Hour)); err != nil {
+		t.Fatalf("exact receipt replay after expiry failed: %v", err)
+	}
+	if err := store.FulfillTransient(t.Context(), received.ID, id.New(), receivedAt); !errors.Is(err, secrets.ErrRequestConflict) {
+		t.Fatalf("changed delivery receipt was accepted: %v", err)
+	}
+	if err := store.FulfillTransient(t.Context(), request.ID, deliveryID, receivedAt); !errors.Is(err, secrets.ErrRequestConflict) {
+		t.Fatalf("delivery receipt was reused for another request: %v", err)
+	}
+	if err := store.FulfillTransient(t.Context(), expiring.ID, id.New(), expiring.ExpiresAt); !errors.Is(err, secrets.ErrRequestExpired) {
+		t.Fatalf("transient receipt after deadline was accepted: %v", err)
+	}
 
 	cancelledAt := request.RequestedAt.Add(time.Second)
 	if err := store.Cancel(t.Context(), request.ID, cancelledAt); err != nil {
@@ -217,15 +234,17 @@ func TestRequestFsStoreRetainsTransientScopeWithoutManagedDelivery(t *testing.T)
 	if err := store.Expire(t.Context(), expiring.ID, expiring.ExpiresAt); err != nil {
 		t.Fatal(err)
 	}
-	for _, initial := range []secrets.Request{request, expiring} {
+	for _, initial := range []secrets.Request{request, expiring, received} {
 		if err := store.Create(t.Context(), initial); err != nil {
 			t.Fatalf("original request retry after settlement failed: %v", err)
 		}
 	}
 	request.Status, request.ResolvedAt = secrets.Cancelled, cancelledAt
 	expiring.Status, expiring.ResolvedAt = secrets.RequestExpired, expiring.ExpiresAt
+	received.Status, received.ResolvedAt = secrets.Fulfilled, receivedAt
+	received.Fulfillment = &secrets.Fulfillment{DeliveryID: deliveryID}
 	store = fixtures.OpenRequestStore(t, root)
-	for _, expected := range []secrets.Request{request, expiring} {
+	for _, expected := range []secrets.Request{request, expiring, received} {
 		saved, err := store.Get(t.Context(), expected.ID)
 		if err != nil || !reflect.DeepEqual(saved, secrets.RequestRecord{Request: expected}) {
 			t.Fatalf("restart or retry changed transient scope or settlement: %v", err)
@@ -234,6 +253,15 @@ func TestRequestFsStoreRetainsTransientScopeWithoutManagedDelivery(t *testing.T)
 	pending, err = store.ListPending(t.Context())
 	if err != nil || len(pending) != 0 {
 		t.Fatalf("settled transient requests remained pending: %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(root, "secret-requests.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, forbidden := range []string{`"secret_id"`, `"secret_version"`, `"delivery"`, `"installation"`, `"ciphertext"`, `"value"`} {
+		if bytes.Contains(data, []byte(forbidden)) {
+			t.Fatalf("transient history retained reusable/value field %s", forbidden)
+		}
 	}
 }
 
