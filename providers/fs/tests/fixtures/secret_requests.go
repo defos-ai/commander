@@ -32,6 +32,14 @@ func SecretRequest(t *testing.T) (secrets.Request, secrets.Delivery, secrets.Ins
 	return request, delivery, Installation(delivery)
 }
 
+func TransientSecretRequest(t *testing.T) (secrets.Request, secrets.Delivery) {
+	t.Helper()
+	request, delivery, _ := SecretRequest(t)
+	request.Type = secrets.SecretTransient
+	request.OperationID, request.TaskID, request.CommandID = id.New(), id.New(), id.New()
+	return request, delivery
+}
+
 func Installation(delivery secrets.Delivery) secrets.Installation {
 	return secrets.Installation{
 		ID: id.New(), RequestID: delivery.RequestID, DeliveryID: delivery.ID, AgentID: delivery.AgentID,

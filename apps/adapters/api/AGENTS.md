@@ -182,8 +182,10 @@
   Saving secrets makes them available to controller reconciliation; API success
   does not confirm agent installation. Keep distribution outside HTTP handlers.
 - `/api/v1/secret-requests` shares the secret feature gate and database. It projects
-  pending, unexpired requests into explicit metadata DTOs, sorted by request ID;
-  optional recipient `agent_type` and `agent_id` filters intersect. Secret metadata
+  pending, unexpired reusable requests into explicit metadata DTOs, sorted by request
+  ID. Skip transient metadata until request-specific submission is supported, so
+  the managed-secret form cannot save a verification code as a reusable value.
+  Optional recipient `agent_type` and `agent_id` filters intersect. Secret metadata
   has no agent type; requests retain their registered recipient type. Reject empty, repeated,
   unknown or malformed filters. Capture one time per response and never settle or
   expire requests while reading. Missing/expired values need input; available

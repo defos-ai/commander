@@ -76,8 +76,11 @@ func TestRequestMongoStoreEncryptedDeliveryAndRestart(t *testing.T) {
 	}
 	requests = fixtures.OpenRequestStore(t, database)
 	assertMongoRequest(t, requests, want)
+	explicitReusable := request
+	explicitReusable.Type = secrets.SecretReusable
 	for _, replay := range []func() error{
 		func() error { return requests.Create(t.Context(), request) },
+		func() error { return requests.Create(t.Context(), explicitReusable) },
 		func() error { return requests.SaveDelivery(t.Context(), *want.Delivery) },
 		func() error { return requests.Acknowledge(t.Context(), installation, request.ExpiresAt.Add(time.Hour)) },
 	} {
@@ -149,6 +152,85 @@ func TestRequestMongoStorePermanentIdentities(t *testing.T) {
 	saved, err = fixtures.OpenRequestStore(t, database).Get(t.Context(), request.ID)
 	if err != nil || saved.Request.Status != secrets.Cancelled || saved.Delivery == nil || saved.Delivery.ID != delivery.ID {
 		t.Fatalf("replay revived a cancelled request or removed delivery identity: %v", err)
+	}
+}
+
+func TestRequestMongoStoreRetainsTransientScopeWithoutManagedDelivery(t *testing.T) {
+	database := fixtures.OpenStore(t, "secret_requests")
+	requests := fixtures.OpenRequestStore(t, database)
+	request, managedDelivery := fixtures.TransientSecretRequest(t)
+	expiring, _ := fixtures.TransientSecretRequest(t)
+	for _, edit := range []func(*secrets.Request){
+		func(r *secrets.Request) { r.Type = "unknown" },
+		func(r *secrets.Request) { r.OperationID, r.TaskID, r.CommandID = "", "", "" },
+		func(r *secrets.Request) { r.OperationID = "" },
+		func(r *secrets.Request) { r.TaskID = "invalid" },
+		func(r *secrets.Request) { r.CommandID = "invalid" },
+	} {
+		invalid := request.Clone()
+		edit(&invalid)
+		if err := requests.Create(t.Context(), invalid); err == nil {
+			t.Fatal("invalid secret type or execution scope was persisted")
+		}
+	}
+	if _, err := requests.Get(t.Context(), request.ID); !errors.Is(err, secrets.ErrUnknownRequest) {
+		t.Fatalf("rejected transient request reserved its identity: %v", err)
+	}
+	for _, initial := range []secrets.Request{request, expiring} {
+		if err := requests.Create(t.Context(), initial); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	requests = fixtures.OpenRequestStore(t, database)
+	pending, err := requests.ListPending(t.Context())
+	if err != nil || len(pending) != 2 {
+		t.Fatalf("reopened store lost pending transient requests: %v", err)
+	}
+	want := map[string]secrets.Request{request.ID: request, expiring.ID: expiring}
+	for _, record := range pending {
+		if !reflect.DeepEqual(record, secrets.RequestRecord{Request: want[record.Request.ID]}) {
+			t.Fatal("pending inventory changed transient identity or retained a managed delivery")
+		}
+	}
+	for _, edit := range []func(*secrets.Request){
+		func(r *secrets.Request) { r.Type = secrets.SecretReusable },
+		func(r *secrets.Request) { r.OperationID = id.New() },
+		func(r *secrets.Request) { r.TaskID = id.New() },
+		func(r *secrets.Request) { r.CommandID = id.New() },
+	} {
+		changed := request.Clone()
+		edit(&changed)
+		if err := requests.Create(t.Context(), changed); !errors.Is(err, secrets.ErrRequestConflict) {
+			t.Fatalf("same request ID accepted a different secret type or execution: %v", err)
+		}
+	}
+	if err := requests.SaveDelivery(t.Context(), managedDelivery); !errors.Is(err, secrets.ErrRequestConflict) {
+		t.Fatalf("transient request accepted a managed secret delivery: %v", err)
+	}
+	assertMongoRequest(t, requests, secrets.RequestRecord{Request: request})
+
+	cancelledAt := request.RequestedAt.Add(time.Second)
+	if err := requests.Cancel(t.Context(), request.ID, cancelledAt); err != nil {
+		t.Fatal(err)
+	}
+	if err := requests.Expire(t.Context(), expiring.ID, expiring.ExpiresAt); err != nil {
+		t.Fatal(err)
+	}
+	for _, initial := range []secrets.Request{request, expiring} {
+		if err := requests.Create(t.Context(), initial); err != nil {
+			t.Fatalf("original request retry after settlement failed: %v", err)
+		}
+	}
+	request.Status, request.ResolvedAt = secrets.Cancelled, cancelledAt
+	expiring.Status, expiring.ResolvedAt = secrets.RequestExpired, expiring.ExpiresAt
+	requests = fixtures.OpenRequestStore(t, database)
+	for _, expected := range []secrets.Request{request, expiring} {
+		assertMongoRequest(t, requests, secrets.RequestRecord{Request: expected})
+	}
+	pending, err = requests.ListPending(t.Context())
+	if err != nil || len(pending) != 0 {
+		t.Fatalf("settled transient requests remained pending: %v", err)
 	}
 }
 

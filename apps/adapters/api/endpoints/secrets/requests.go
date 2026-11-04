@@ -57,7 +57,7 @@ func listSecretRequests(ctx context.Context, service *secretservice.Service, req
 			return nil, err
 		}
 		request := record.Request
-		if request.Status != secretmodel.Pending || !now.Before(request.ExpiresAt) ||
+		if request.EffectiveType() != secretmodel.SecretReusable || request.Status != secretmodel.Pending || !now.Before(request.ExpiresAt) ||
 			(agentType != "" && request.AgentType != agentType) ||
 			(agentID != "" && request.AgentID != agentID) {
 			continue

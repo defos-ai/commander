@@ -66,6 +66,13 @@ func SecretSyncRequest() secrets.Request {
 	}
 }
 
+func TransientSecretRequest() secrets.Request {
+	request := SecretSyncRequest()
+	request.Type = secrets.SecretTransient
+	request.OperationID, request.TaskID, request.CommandID = id.New(), id.New(), id.New()
+	return request
+}
+
 func SecretRequestMessage(t *testing.T, request secrets.Request) messages.Message {
 	t.Helper()
 	message, err := controllerevents.NewSecretSyncRequested(request)

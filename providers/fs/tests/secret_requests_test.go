@@ -52,12 +52,15 @@ func TestRequestFsStorePersistsDeliveryAndExactAcknowledgement(t *testing.T) {
 	if err := store.Create(t.Context(), request); err != nil {
 		t.Fatal("initial request replay must preserve its delivery")
 	}
+	explicitReusable := request
+	explicitReusable.Type = secrets.SecretReusable
 	now := installation.InstalledAt.Add(time.Second)
 	if err := store.Acknowledge(t.Context(), installation, now); err != nil {
 		t.Fatal(err)
 	}
 	for _, replay := range []func() error{
 		func() error { return store.Create(t.Context(), request) },
+		func() error { return store.Create(t.Context(), explicitReusable) },
 		func() error { return store.SaveDelivery(t.Context(), expected) },
 		func() error { return store.Acknowledge(t.Context(), installation, request.ExpiresAt.Add(time.Hour)) },
 	} {
@@ -146,6 +149,91 @@ func TestRequestFsStoreListsPendingAndSettlesExplicitly(t *testing.T) {
 	record, err := store.Get(t.Context(), requests[1].ID)
 	if err != nil || !record.Request.ResolvedAt.Equal(cancelledAt) {
 		t.Fatal("cancellation replay changed the resolution time")
+	}
+}
+
+func TestRequestFsStoreRetainsTransientScopeWithoutManagedDelivery(t *testing.T) {
+	root := t.TempDir()
+	store := fixtures.OpenRequestStore(t, root)
+	request, managedDelivery := fixtures.TransientSecretRequest(t)
+	expiring, _ := fixtures.TransientSecretRequest(t)
+	for _, edit := range []func(*secrets.Request){
+		func(r *secrets.Request) { r.Type = "unknown" },
+		func(r *secrets.Request) { r.OperationID, r.TaskID, r.CommandID = "", "", "" },
+		func(r *secrets.Request) { r.OperationID = "" },
+		func(r *secrets.Request) { r.TaskID = "invalid" },
+		func(r *secrets.Request) { r.CommandID = "invalid" },
+	} {
+		invalid := request.Clone()
+		edit(&invalid)
+		if err := store.Create(t.Context(), invalid); err == nil {
+			t.Fatal("invalid secret type or execution scope was persisted")
+		}
+	}
+	if _, err := store.Get(t.Context(), request.ID); !errors.Is(err, secrets.ErrUnknownRequest) {
+		t.Fatalf("rejected transient request reserved its identity: %v", err)
+	}
+	for _, initial := range []secrets.Request{request, expiring} {
+		if err := store.Create(t.Context(), initial); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	store = fixtures.OpenRequestStore(t, root)
+	pending, err := store.ListPending(t.Context())
+	if err != nil || len(pending) != 2 {
+		t.Fatalf("reopened store lost pending transient requests: %v", err)
+	}
+	want := map[string]secrets.Request{request.ID: request, expiring.ID: expiring}
+	for _, record := range pending {
+		if !reflect.DeepEqual(record, secrets.RequestRecord{Request: want[record.Request.ID]}) {
+			t.Fatal("pending inventory changed transient identity or retained a managed delivery")
+		}
+	}
+	for _, edit := range []func(*secrets.Request){
+		func(r *secrets.Request) { r.Type = secrets.SecretReusable },
+		func(r *secrets.Request) { r.OperationID = id.New() },
+		func(r *secrets.Request) { r.TaskID = id.New() },
+		func(r *secrets.Request) { r.CommandID = id.New() },
+	} {
+		changed := request.Clone()
+		edit(&changed)
+		if err := store.Create(t.Context(), changed); !errors.Is(err, secrets.ErrRequestConflict) {
+			t.Fatalf("same request ID accepted a different secret type or execution: %v", err)
+		}
+	}
+	if err := store.SaveDelivery(t.Context(), managedDelivery); !errors.Is(err, secrets.ErrRequestConflict) {
+		t.Fatalf("transient request accepted a managed secret delivery: %v", err)
+	}
+	saved, err := store.Get(t.Context(), request.ID)
+	if err != nil || !reflect.DeepEqual(saved, secrets.RequestRecord{Request: request}) {
+		t.Fatalf("rejected delivery or request replay changed the saved transient: %v", err)
+	}
+
+	cancelledAt := request.RequestedAt.Add(time.Second)
+	if err := store.Cancel(t.Context(), request.ID, cancelledAt); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Expire(t.Context(), expiring.ID, expiring.ExpiresAt); err != nil {
+		t.Fatal(err)
+	}
+	for _, initial := range []secrets.Request{request, expiring} {
+		if err := store.Create(t.Context(), initial); err != nil {
+			t.Fatalf("original request retry after settlement failed: %v", err)
+		}
+	}
+	request.Status, request.ResolvedAt = secrets.Cancelled, cancelledAt
+	expiring.Status, expiring.ResolvedAt = secrets.RequestExpired, expiring.ExpiresAt
+	store = fixtures.OpenRequestStore(t, root)
+	for _, expected := range []secrets.Request{request, expiring} {
+		saved, err := store.Get(t.Context(), expected.ID)
+		if err != nil || !reflect.DeepEqual(saved, secrets.RequestRecord{Request: expected}) {
+			t.Fatalf("restart or retry changed transient scope or settlement: %v", err)
+		}
+	}
+	pending, err = store.ListPending(t.Context())
+	if err != nil || len(pending) != 0 {
+		t.Fatalf("settled transient requests remained pending: %v", err)
 	}
 }
 

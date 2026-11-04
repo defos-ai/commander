@@ -96,6 +96,10 @@ applies to all domain packages below this directory.
   [RequestRecord](secrets/request_record.go) commits request, reservation and
   acknowledgement together. Installation history does not prove current
   readiness. Never reuse questions/logs to transport or retain secret values.
+  Request type defaults to reusable; transient requests retain exact execution
+  IDs and a fixed deadline, without values. Replay identity includes effective
+  type and execution scope. Reusable delivery/fulfillment cannot satisfy transient
+  requests; only pending, cancellation and expiration are supported for them yet.
 - Session [Scope and Record](sessions/lifecycle.go) own reservation and lifecycle;
   [Session](sessions/session.go) is an observed/query view. Preserve exact owner
   and original creation identity. Completing an operation does not close a

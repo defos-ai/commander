@@ -86,6 +86,9 @@ func ValidateSecretDeliveryRequest(message messages.Message, request secretmodel
 	if request.Status != secretmodel.Pending {
 		return errors.New("secret delivery requires a pending request")
 	}
+	if request.EffectiveType() != secretmodel.SecretReusable || request.OperationID != "" {
+		return errors.New("secret delivery supports only agent-wide reusable requests")
+	}
 	delivery, err := DecodeSecretDelivery(message)
 	if err != nil {
 		return err

@@ -85,9 +85,11 @@ func (bus *SecretPublishBus) Publish(_ context.Context, topic string, message me
 type SecretValues struct {
 	secrets.SecretStore
 	record atomic.Pointer[secrets.Secret]
+	reads  atomic.Uint64
 }
 
 func (store *SecretValues) Get(ctx context.Context, key secrets.Key) (secrets.Secret, error) {
+	store.reads.Add(1)
 	if err := ctx.Err(); err != nil {
 		return secrets.Secret{}, err
 	}
@@ -96,6 +98,8 @@ func (store *SecretValues) Get(ctx context.Context, key secrets.Key) (secrets.Se
 	}
 	return secrets.Secret{}, secrets.ErrUnknownSecret
 }
+
+func (store *SecretValues) ReadCount() uint64 { return store.reads.Load() }
 
 type SecretRequests struct {
 	records   map[string]secrets.RequestRecord

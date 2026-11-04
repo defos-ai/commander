@@ -1,12 +1,16 @@
 package action
 
-import "errors"
+import (
+	"errors"
 
-type SecretType string
+	"github.com/defos-ai/commander/framework/domain/secrets"
+)
+
+type SecretType = secrets.SecretType
 
 const (
-	SecretReusable  SecretType = "reusable"
-	SecretTransient SecretType = "transient"
+	SecretReusable  = secrets.SecretReusable
+	SecretTransient = secrets.SecretTransient
 )
 
 type SecretRequestOptions struct {

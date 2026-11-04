@@ -35,3 +35,11 @@ func SecretRequest(t *testing.T) (secrets.Request, secrets.Delivery, secrets.Ins
 		SecretID: secret.Metadata.ID, SecretVersion: secret.Metadata.Version, InstalledAt: stamp.Add(time.Second)}
 	return request, delivery, installation
 }
+
+func TransientSecretRequest(t *testing.T) (secrets.Request, secrets.Delivery) {
+	t.Helper()
+	request, delivery, _ := SecretRequest(t)
+	request.Type = secrets.SecretTransient
+	request.OperationID, request.TaskID, request.CommandID = id.New(), id.New(), id.New()
+	return request, delivery
+}

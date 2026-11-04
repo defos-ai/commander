@@ -29,19 +29,27 @@ type Fulfillment struct {
 	DeliveryID    string `json:"delivery_id"`
 }
 
-// Request tracks an agent's need for a secret independently of operations and
-// secret storage.
-// AgentID and AgentType identify the recipient; neither scopes the shared value.
 type Request struct {
 	ID          string        `json:"id"`
 	Key         Key           `json:"key"`
+	Type        SecretType    `json:"type,omitempty"`
 	AgentID     string        `json:"agent_id"`
 	AgentType   string        `json:"agent_type"`
+	OperationID string        `json:"operation_id,omitempty"`
+	TaskID      string        `json:"task_id,omitempty"`
+	CommandID   string        `json:"command_id,omitempty"`
 	Status      RequestStatus `json:"status"`
 	RequestedAt time.Time     `json:"requested_at"`
 	ExpiresAt   time.Time     `json:"expires_at"`
 	ResolvedAt  time.Time     `json:"resolved_at,omitzero"`
 	Fulfillment *Fulfillment  `json:"fulfillment,omitempty"`
+}
+
+func (request Request) EffectiveType() SecretType {
+	if request.Type == "" {
+		return SecretReusable
+	}
+	return request.Type
 }
 
 func (request Request) Validate() error {
@@ -50,6 +58,15 @@ func (request Request) Validate() error {
 	}
 	if err := request.Key.Validate(); err != nil {
 		return err
+	}
+	kind := request.EffectiveType()
+	if kind != SecretReusable && kind != SecretTransient {
+		return errors.New("invalid secret request type")
+	}
+	if kind == SecretTransient || request.OperationID != "" || request.TaskID != "" || request.CommandID != "" {
+		if !id.Valid(request.OperationID) || !id.Valid(request.TaskID) || !id.Valid(request.CommandID) {
+			return errors.New("execution-scoped secret request requires canonical operation, task and command IDs")
+		}
 	}
 	if !validTime(request.RequestedAt) || !validTime(request.ExpiresAt) || !request.ExpiresAt.After(request.RequestedAt) {
 		return errors.New("secret request requires valid timestamps and a deadline after creation")
@@ -76,6 +93,9 @@ func (request Request) Validate() error {
 		return errors.New("invalid secret request status")
 	}
 	if request.Status == Fulfilled {
+		if kind != SecretReusable {
+			return errors.New("transient requests cannot use reusable secret fulfillment")
+		}
 		value := request.Fulfillment
 		if value == nil || !id.Valid(value.SecretID) || value.SecretVersion == 0 || !id.Valid(value.DeliveryID) {
 			return errors.New("fulfilled secret request requires secret identity, version and delivery ID")
@@ -93,6 +113,9 @@ func (request Request) Validate() error {
 func (request Request) Fulfill(secret Metadata, deliveryID string, now time.Time) (Request, error) {
 	if err := request.Validate(); err != nil {
 		return Request{}, err
+	}
+	if request.EffectiveType() != SecretReusable {
+		return Request{}, errors.New("transient requests cannot use reusable secret fulfillment")
 	}
 	if err := secret.Validate(); err != nil {
 		return Request{}, err

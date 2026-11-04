@@ -78,6 +78,60 @@ func TestSecretDeliveryPersistsBeforePublishingAndReplaysExactEvidence(t *testin
 	}
 }
 
+func TestTransientRequestsCannotReceiveReusableSecrets(t *testing.T) {
+	consumer, requests, values, bus := fixtures.SecretConsumer(t)
+	request := fixtures.TransientSecretRequest()
+	legacy := request
+	legacy.Type, legacy.OperationID, legacy.TaskID, legacy.CommandID = "", "", "", ""
+	message := fixtures.SecretRequestMessage(t, legacy)
+	var err error
+	message.Payload, err = json.Marshal(controllerevents.SecretSyncRequest{Request: request})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := controllerevents.NewSecretSyncRequested(request); err == nil {
+		t.Fatal("transient request entered the reusable synchronization protocol")
+	}
+	if err := consumer.Consume(t.Context(), message); !errors.Is(err, consumers.ErrInvalidMessage) {
+		t.Fatalf("reusable consumer accepted transient request: %v", err)
+	}
+	if _, err := requests.Get(t.Context(), request.ID); !errors.Is(err, secrets.ErrUnknownRequest) {
+		t.Fatal("rejected transient message persisted a request")
+	}
+	delivery, err := agentevents.NewSecretDelivery(legacy, values.Snapshot().Metadata, []byte("plaintext-secret"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := agentevents.ValidateSecretDeliveryRequest(delivery, request); err == nil {
+		t.Fatal("transient request accepted a reusable delivery")
+	}
+	if err := requests.Create(t.Context(), request); err != nil {
+		t.Fatal(err)
+	}
+	expired := fixtures.TransientSecretRequest()
+	expired.RequestedAt, expired.ExpiresAt = request.RequestedAt.Add(-2*time.Minute), request.RequestedAt.Add(-time.Minute)
+	if err := requests.Create(t.Context(), expired); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := consumer.Reconcile(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+
+	if values.ReadCount() != 0 || len(bus.Messages()) != 0 {
+		t.Fatal("transient reconciliation accessed or published a reusable value")
+	}
+	pending, err := requests.Get(t.Context(), request.ID)
+	if err != nil || pending.Request.Status != secrets.Pending || pending.Delivery != nil {
+		t.Fatalf("transient metadata acquired a reusable reservation: %v", err)
+	}
+	settled, err := requests.Get(t.Context(), expired.ID)
+	if err != nil || settled.Request.Status != secrets.RequestExpired {
+		t.Fatalf("overdue transient request was not expired: %v", err)
+	}
+}
+
 func TestSharedSecretReachesWaitingAndLaterAgentTypes(t *testing.T) {
 	consumer, store, values, bus, requests := fixtures.SharedSecretConsumer(t)
 	shared := values.Snapshot()

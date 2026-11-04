@@ -102,16 +102,21 @@ func TestSecretsWithMongo(t *testing.T) {
 		ID: id.New(), Key: stored.Metadata.Key, AgentID: agentID, AgentType: "builder-agent",
 		Status: secretmodel.Pending, RequestedAt: now, ExpiresAt: now.Add(time.Minute),
 	}
-	if err := requests.Create(ctx, request); err != nil {
-		t.Fatal("could not save MongoDB secret request")
-	}
-	defer func() {
-		cleanup, stop := context.WithTimeout(context.Background(), 5*time.Second)
-		defer stop()
-		if err := requests.Cancel(cleanup, request.ID, time.Now()); err != nil {
-			t.Error("could not cancel this test's MongoDB request")
+	transient := request
+	transient.ID, transient.Type = id.New(), secretmodel.SecretTransient
+	transient.OperationID, transient.TaskID, transient.CommandID = id.New(), id.New(), id.New()
+	for _, pending := range []secretmodel.Request{request, transient} {
+		if err := requests.Create(ctx, pending); err != nil {
+			t.Fatal("could not save MongoDB secret request")
 		}
-	}()
+		defer func() {
+			cleanup, stop := context.WithTimeout(context.Background(), 5*time.Second)
+			defer stop()
+			if err := requests.Cancel(cleanup, pending.ID, time.Now()); err != nil {
+				t.Error("could not cancel this test's MongoDB request")
+			}
+		}()
+	}
 	pending := decodeResponse[struct {
 		Items []struct {
 			ID     string `json:"id"`
@@ -119,7 +124,7 @@ func TestSecretsWithMongo(t *testing.T) {
 		} `json:"items"`
 	}](t, secretRequest(t, server, http.MethodGet, "/api/v1/secret-requests?agent_id="+agentID, ""))
 	if len(pending.Items) != 1 || pending.Items[0].ID != request.ID || pending.Items[0].Status != "awaiting_delivery" {
-		t.Fatal("API did not read pending requests and metadata from MongoDB")
+		t.Fatal("API must project only reusable requests through the managed-secret form")
 	}
 	if _, err := os.Stat(filepath.Join(fixture.Root, "database", "secrets.json")); !os.IsNotExist(err) {
 		t.Fatal("MongoDB configuration also wrote an FS secret store")

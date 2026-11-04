@@ -27,6 +27,9 @@ func (sync SecretSyncRequest) Validate() error {
 	if sync.Request.Status != secretmodel.Pending {
 		return errors.New("secret synchronization requires a pending request")
 	}
+	if sync.Request.EffectiveType() != secretmodel.SecretReusable || sync.Request.OperationID != "" {
+		return errors.New("secret synchronization supports only agent-wide reusable requests")
+	}
 	return nil
 }
 

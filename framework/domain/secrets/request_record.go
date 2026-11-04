@@ -74,13 +74,15 @@ func (record RequestRecord) Clone() RequestRecord {
 }
 
 // MatchesRequest compares the original pending request, ignoring saved progress.
-// A retry cannot change its identity, key, recipient, creation time or deadline.
+// A retry cannot change its type, execution, recipient, key or lifetime.
 func (record RequestRecord) MatchesRequest(request Request) bool {
 	if request.Validate() != nil || request.Status != Pending {
 		return false
 	}
 	saved := record.Request
 	return saved.ID == request.ID && saved.Key == request.Key && saved.AgentID == request.AgentID && saved.AgentType == request.AgentType &&
+		saved.EffectiveType() == request.EffectiveType() && saved.OperationID == request.OperationID &&
+		saved.TaskID == request.TaskID && saved.CommandID == request.CommandID &&
 		saved.RequestedAt.Equal(request.RequestedAt) &&
 		saved.ExpiresAt.Equal(request.ExpiresAt)
 }

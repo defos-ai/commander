@@ -44,6 +44,9 @@ func (delivery Delivery) Clone() Delivery {
 }
 
 func (delivery Delivery) matchesRequest(request Request) bool {
+	if request.EffectiveType() != SecretReusable {
+		return false
+	}
 	deadline := request.ExpiresAt
 	if expires := delivery.Secret.Metadata.ExpiresAt; !expires.IsZero() && expires.Before(deadline) {
 		deadline = expires

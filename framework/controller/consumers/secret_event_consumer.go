@@ -96,6 +96,9 @@ func (c SecretEventConsumer) deliver(ctx context.Context, record secrets.Request
 	if !now.Before(request.ExpiresAt) {
 		return c.Requests.Expire(ctx, request.ID, now)
 	}
+	if request.EffectiveType() != secrets.SecretReusable || request.OperationID != "" {
+		return nil
+	}
 	if now.Before(request.RequestedAt) {
 		return nil
 	}

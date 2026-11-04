@@ -19,8 +19,12 @@
   records. Keys identify one shared value by name within a deployment.
   Secret versions identify value/validity changes, not provider revisions;
   recreated keys get fresh IDs.
-  Requests identify the recipient agent and secret key; operation/task waits use
-  `MissingRequirements` separately. Request fulfillment
+  Requests identify the recipient agent and secret key. Omitted `type` means
+  reusable; transient metadata requires canonical operation, task and command IDs.
+  Type and execution IDs are immutable replay identity. Transient records currently
+  support pending, cancelled and expired states only; reusable deliveries and
+  fulfillment cannot be attached. Values remain outside transient records.
+  Operation/task waits use `MissingRequirements` separately. Request fulfillment
   records a specific delivery acknowledged by its recipient, never mere availability.
   Historical fulfillment does not establish current readiness. Domain validation
   proves neither encryption nor authorization; both belong above the stores.
@@ -437,6 +441,10 @@
   return `ErrSecretRequestUnsupported` when they cannot honor the options. The
   built-in runtime currently supports reusable requests without defaults; typed
   transient delivery and default seeding require their coordinated follow-up.
+  The current synchronization wire and reconciliation deliver only agent-wide
+  reusable requests. Expire overdue transient metadata but never resolve it from
+  the managed secret store. Transient delivery will use execution-scoped memory,
+  without persisting values or renewing a code request automatically.
 - Controller secret synchronization has its own worker with paired
   `SecretStore`/`SecretRequestStore`. Persist before publishing and check the live
   recipient's registered type and current stored version. Agents may request any
