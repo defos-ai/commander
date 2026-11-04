@@ -136,6 +136,7 @@ func (f *SecretAgent) Request(t *testing.T, previous string) secrets.Request {
 		if err != nil {
 			t.Fatal(err)
 		}
+		clear(payload.Default)
 		if payload.Request.ID != previous {
 			return payload.Request
 		}

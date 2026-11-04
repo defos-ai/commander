@@ -441,8 +441,13 @@
   is cleared when the call returns; never clear caller-owned buffers. Preserve
   existing `SecretRequester` providers for reusable calls without defaults, and
   return `ErrSecretRequestUnsupported` when they cannot honor the options. The
-  built-in runtime supports reusable and transient requests without defaults;
-  default seeding remains unsupported. Transient requests bind to the accepted
+  built-in runtime sends reusable defaults through secret synchronization.
+  Defaults belong to live calls: preserve the same message and deadline on
+  retries, clear owned bytes on installation/cancellation/expiry/shutdown, and
+  omit defaults from later periodic refreshes. Copy pending publication payloads
+  under the runtime mutex before releasing it; the publisher clears its copies.
+  Only controller-confirmed managed deliveries enter the shared agent cache.
+  Transient requests bind to the accepted
   execution, use the original request TTL bounded by caller/command lifetimes,
   and never renew automatically. Each call has its own request and memory wait,
   even for the same name. Keep transient values out of the reusable agent cache.
@@ -459,6 +464,13 @@
   mailbox so inventory observations and deliveries retain one owner.
   Only the controller decrypts for delivery. Keep trusted-bus and finite-lease revocation limits
   explicit; historical fulfillment does not authorize dispatch by itself.
+  A reusable request may carry a default supplied by trusted agent code. Accept
+  its request identity first, then encrypt/create the shared value only if absent;
+  concurrent creators resolve through atomic store conflicts and metadata reads.
+  Existing values, including expired ones, remain unchanged. Replays of an
+  accepted request never reapply its default after deletion or uncertainty.
+  Request records contain metadata only. Default storage uses the configured
+  controller cipher's encryption capability; agents never receive that key.
   Transient exchange additionally verifies the durable execution claim and active
   operation/task/deadline. `secret.Worker.ProvideTransient` receives values through
   the controller's narrow `SecretRequests` command capability; the authenticated

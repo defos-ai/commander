@@ -1,6 +1,7 @@
 package events
 
 import (
+	"bytes"
 	"errors"
 
 	agentevents "github.com/defos-ai/commander/framework/comms/clients/agent/events"
@@ -11,12 +12,19 @@ import (
 )
 
 const (
-	SecretSyncRequested = messages.SecretSyncRequested
-	SecretInstalled     = messages.SecretInstalled
+	SecretSyncRequested   = messages.SecretSyncRequested
+	SecretInstalled       = messages.SecretInstalled
+	MaxSecretDefaultBytes = 64 * 1024
 )
 
 type SecretSyncRequest struct {
 	Request secretmodel.Request `json:"request"`
+	Default []byte              `json:"default"`
+}
+
+func (SecretSyncRequest) String() string { return "secret synchronization request (default redacted)" }
+func (SecretSyncRequest) GoString() string {
+	return "secret synchronization request (default redacted)"
 }
 
 func (sync SecretSyncRequest) Validate() error {
@@ -28,6 +36,12 @@ func (sync SecretSyncRequest) Validate() error {
 	}
 	if sync.Request.EffectiveType() == secretmodel.SecretReusable && sync.Request.OperationID != "" {
 		return errors.New("reusable secret synchronization requires an agent-wide request")
+	}
+	if sync.Default != nil && sync.Request.EffectiveType() != secretmodel.SecretReusable {
+		return errors.New("only reusable secret requests accept a default")
+	}
+	if len(sync.Default) > MaxSecretDefaultBytes {
+		return errors.New("secret default exceeds its size limit")
 	}
 	return nil
 }
@@ -47,8 +61,19 @@ func (installation SecretInstallation) Validate() error {
 	return nil
 }
 
-func NewSecretSyncRequested(request secretmodel.Request) (messages.Message, error) {
-	message, err := messages.NewMessage(SecretSyncRequested, request.AgentID, SecretSyncRequest{Request: request})
+func NewSecretSyncRequested(request secretmodel.Request, defaults ...[]byte) (messages.Message, error) {
+	if len(defaults) > 1 {
+		return messages.Message{}, errors.New("secret request accepts at most one default")
+	}
+	payload := SecretSyncRequest{Request: request}
+	if len(defaults) == 1 {
+		payload.Default = bytes.Clone(defaults[0])
+	}
+	defer clear(payload.Default)
+	if err := payload.Validate(); err != nil {
+		return messages.Message{}, err
+	}
+	message, err := messages.NewMessage(SecretSyncRequested, request.AgentID, payload)
 	if err != nil {
 		return messages.Message{}, err
 	}
@@ -57,7 +82,10 @@ func NewSecretSyncRequested(request secretmodel.Request) (messages.Message, erro
 		message.CorrelationID = request.CommandID
 		message.Work = messages.WorkContext{OperationID: request.OperationID, TaskID: request.TaskID}
 	}
-	if _, err := DecodeSecretSyncRequested(message); err != nil {
+	decoded, err := DecodeSecretSyncRequested(message)
+	clear(decoded.Default)
+	if err != nil {
+		clear(message.Payload)
 		return messages.Message{}, err
 	}
 	return message, nil
@@ -65,15 +93,17 @@ func NewSecretSyncRequested(request secretmodel.Request) (messages.Message, erro
 
 // DecodeSecretSyncRequested validates a request's shape and source fields.
 // It does not prove sender identity or establish recipient authorization.
+// The caller owns and clears the decoded default bytes.
 func DecodeSecretSyncRequested(message messages.Message) (SecretSyncRequest, error) {
 	if err := message.Validate(); err != nil {
 		return SecretSyncRequest{}, err
 	}
-	if message.Type != SecretSyncRequested || len(message.Payload) > 16*1024 {
+	if message.Type != SecretSyncRequested || len(message.Payload) > 128*1024 {
 		return SecretSyncRequest{}, errors.New("invalid secret synchronization envelope")
 	}
 	var sync SecretSyncRequest
 	if err := domain.Decode(message.Payload, &sync); err != nil {
+		clear(sync.Default)
 		return SecretSyncRequest{}, errors.New("invalid secret synchronization request")
 	}
 	request := sync.Request
@@ -82,9 +112,11 @@ func DecodeSecretSyncRequested(message messages.Message) (SecretSyncRequest, err
 		work, commandID = messages.WorkContext{OperationID: request.OperationID, TaskID: request.TaskID}, request.CommandID
 	}
 	if message.Work != work || message.CorrelationID != commandID {
+		clear(sync.Default)
 		return SecretSyncRequest{}, errors.New("secret synchronization context must match its request")
 	}
 	if message.ID != request.ID || message.AgentID != request.AgentID || !message.CreatedAt.Equal(request.RequestedAt) || !message.ExpiresAt.Equal(request.ExpiresAt) {
+		clear(sync.Default)
 		return SecretSyncRequest{}, errors.New("secret synchronization envelope must match its request")
 	}
 	return sync, nil

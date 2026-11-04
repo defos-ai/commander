@@ -16,3 +16,10 @@ func TransientSecretRequest() secrets.Request {
 		Status: secrets.Pending, RequestedAt: now, ExpiresAt: now.Add(time.Minute),
 	}
 }
+
+func ReusableSecretRequest() secrets.Request {
+	request := TransientSecretRequest()
+	request.Type = secrets.SecretReusable
+	request.OperationID, request.TaskID, request.CommandID = "", "", ""
+	return request
+}

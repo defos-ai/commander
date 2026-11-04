@@ -37,6 +37,12 @@
   Broker/filesystem access is the trusted publisher boundary; envelope fields do
   not authenticate an untrusted publisher.
   An installation acknowledgement never proves ongoing readiness or revocation.
+  Reusable synchronization can carry a default of at most 64 KiB, with nil
+  meaning absent and nonnil empty bytes meaning an empty default. The typed
+  payload redacts formatting; decoders and validation callers clear owned
+  defaults. Persist only request metadata and encrypted shared values, and keep
+  default bytes out of schemas, questions, logs and model context. Transport
+  retries retain the original request identity, payload and expiry.
   Transient requests reuse synchronization with exact command/work binding and
   their original fixed deadline. Values use separate transient responses; never
   decode them as reusable metadata or install them in the shared cache. A receipt

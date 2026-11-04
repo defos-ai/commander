@@ -25,7 +25,9 @@ func (c Client) Publish(ctx context.Context, message messages.Message) error {
 	switch message.Type {
 	case AgentStarted, AgentHeartbeat, AgentUpdated, AgentStopped, ActionSucceeded, CommandFailed:
 	case SecretSyncRequested:
-		if _, err := DecodeSecretSyncRequested(message); err != nil {
+		payload, err := DecodeSecretSyncRequested(message)
+		clear(payload.Default)
+		if err != nil {
 			return err
 		}
 	case SecretInstalled:

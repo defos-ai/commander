@@ -84,9 +84,40 @@ func (bus *SecretPublishBus) Publish(_ context.Context, topic string, message me
 
 type SecretValues struct {
 	secrets.SecretStore
-	record atomic.Pointer[secrets.Secret]
-	reads  atomic.Uint64
+	record      atomic.Pointer[secrets.Secret]
+	reads       atomic.Uint64
+	writes      atomic.Uint64
+	createError error
 }
+
+func (store *SecretValues) Create(ctx context.Context, record secrets.Secret) error {
+	store.writes.Add(1)
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if store.createError != nil {
+		return store.createError
+	}
+	if err := record.Validate(); err != nil {
+		return err
+	}
+	if record.Metadata.Version != 1 || !record.Metadata.CreatedAt.Equal(record.Metadata.UpdatedAt) {
+		return secrets.ErrSecretConflict
+	}
+	snapshot := record.Clone()
+	if !store.record.CompareAndSwap(nil, &snapshot) {
+		return secrets.ErrSecretConflict
+	}
+	return nil
+}
+
+func (store *SecretValues) GetMetadata(ctx context.Context, key secrets.Key) (secrets.Metadata, error) {
+	record, err := store.Get(ctx, key)
+	return record.Metadata, err
+}
+
+func (store *SecretValues) WriteCount() uint64   { return store.writes.Load() }
+func (store *SecretValues) FailCreate(err error) { store.createError = err }
 
 func (store *SecretValues) Get(ctx context.Context, key secrets.Key) (secrets.Secret, error) {
 	store.reads.Add(1)
@@ -103,6 +134,7 @@ func (store *SecretValues) ReadCount() uint64 { return store.reads.Load() }
 
 type SecretRequests struct {
 	records      map[string]secrets.RequestRecord
+	createError  error
 	saveError    error
 	fulfillError error
 	listError    error
@@ -122,9 +154,12 @@ func (store *SecretRequests) Create(ctx context.Context, request secrets.Request
 	record, err := secrets.NewRequestRecord(request)
 	if err == nil {
 		store.records[request.ID] = record
+		return store.createError
 	}
 	return err
 }
+
+func (store *SecretRequests) SetCreateError(err error) { store.createError = err }
 
 func (store *SecretRequests) Get(ctx context.Context, requestID string) (secrets.RequestRecord, error) {
 	if err := ctx.Err(); err != nil {

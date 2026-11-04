@@ -41,16 +41,19 @@ type secretRuntime struct {
 }
 
 type secretEntry struct {
-	declared  bool
-	waiters   int
-	request   secretmodel.Request
-	message   messages.Message
-	delivery  messages.Message
-	ack       messages.Message
-	value     []byte
-	metadata  secretmodel.Metadata
-	installed bool
-	lease     time.Time
+	declared       bool
+	waiters        int
+	request        secretmodel.Request
+	message        messages.Message
+	delivery       messages.Message
+	ack            messages.Message
+	value          []byte
+	metadata       secretmodel.Metadata
+	installed      bool
+	lease          time.Time
+	defaults       []*reusableSecretDefault
+	defaultOwner   *reusableSecretDefault
+	defaultRequest bool
 }
 
 func newSecretRuntime(config *SecretConfig, agentID, typeName string, actions []action.Executor) (*secretRuntime, error) {
@@ -94,6 +97,7 @@ func (r *secretRuntime) clear() {
 	for name, entry := range r.entries {
 		clear(entry.value)
 		clear(entry.delivery.Payload)
+		clearReusableDefaults(entry)
 		if entry.declared {
 			r.entries[name] = &secretEntry{declared: true}
 		} else {
@@ -116,7 +120,7 @@ func (r *secretRuntime) start(ctx context.Context) {
 	r.service = ctx
 }
 
-func (r *secretRuntime) request(ctx context.Context, waits *workSecretWaits, name string) ([]byte, error) {
+func (r *secretRuntime) request(ctx context.Context, waits *workSecretWaits, name string, defaultValue []byte) ([]byte, error) {
 	if r == nil || waits == nil {
 		return nil, action.ErrSecretUnavailable
 	}
@@ -147,12 +151,26 @@ func (r *secretRuntime) request(ctx context.Context, waits *workSecretWaits, nam
 		}
 		return value, nil
 	}
+	var offered *reusableSecretDefault
+	if defaultValue != nil {
+		var err error
+		offered, err = r.newReusableDefault(ctx, waits, name, defaultValue)
+		if err != nil {
+			r.mu.Unlock()
+			return nil, err
+		}
+		entry.defaults = append(entry.defaults, offered)
+	}
 	entry.waiters++
 	r.mu.Unlock()
 	defer func() {
 		r.mu.Lock()
 		entry.waiters--
+		if offered != nil {
+			discardReusableDefault(entry, offered)
+		}
 		r.mu.Unlock()
+		r.notify()
 	}()
 	// Publishing a snapshot reads the secret cache; release its mutex first.
 	done, err := waits.begin(ctx, name)
@@ -161,11 +179,21 @@ func (r *secretRuntime) request(ctx context.Context, waits *workSecretWaits, nam
 	}
 	defer done()
 	r.notify()
+	var expiry <-chan time.Time
+	if offered != nil {
+		timer := time.NewTimer(time.Until(offered.request.ExpiresAt))
+		defer timer.Stop()
+		expiry = timer.C
+	}
 	for {
 		r.mu.Lock()
 		if err := requestCanceled(ctx, execution, service); err != nil {
 			r.mu.Unlock()
 			return nil, err
+		}
+		if offered != nil && !time.Now().Before(offered.request.ExpiresAt) {
+			r.mu.Unlock()
+			return nil, context.DeadlineExceeded
 		}
 		if entry.installed && time.Now().Before(entry.lease) {
 			value := bytes.Clone(entry.value)
@@ -182,6 +210,7 @@ func (r *secretRuntime) request(ctx context.Context, waits *workSecretWaits, nam
 		case <-ctx.Done():
 		case <-execution.Done():
 		case <-service.Done():
+		case <-expiry:
 		case <-changed:
 		}
 	}
@@ -249,17 +278,17 @@ func (provider scopedSecrets) Secret(name string) ([]byte, error) {
 }
 
 func (provider scopedSecrets) RequestSecret(ctx context.Context, name string) ([]byte, error) {
-	return provider.runtime.request(ctx, provider.execution, name)
+	return provider.runtime.request(ctx, provider.execution, name, nil)
 }
 
 func (provider scopedSecrets) RequestSecretWithOptions(ctx context.Context, name string, options action.SecretRequestOptions) ([]byte, error) {
-	if options.Default != nil {
-		return nil, action.ErrSecretRequestUnsupported
-	}
 	switch options.Type {
 	case "", action.SecretReusable:
-		return provider.RequestSecret(ctx, name)
+		return provider.runtime.request(ctx, provider.execution, name, options.Default)
 	case action.SecretTransient:
+		if options.Default != nil {
+			return nil, action.ErrSecretRequestUnsupported
+		}
 		return provider.runtime.requestTransient(ctx, provider.execution, name)
 	default:
 		return nil, action.ErrSecretRequestUnsupported
@@ -289,14 +318,15 @@ func (a *Agent) describeAction(definition actionmodel.Action) actionmodel.Action
 	return definition
 }
 
-// pending returns immutable retries. A fresh request periodically checks rotation;
-// an earlier installed value remains usable only until its original lease ends.
+// Uninstalled requests retain their identity until expiry. Installed values
+// refresh periodically and remain usable only until their original lease ends.
 func (r *secretRuntime) pending(now time.Time) ([]messages.Message, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	var outgoing []messages.Message
 	for name, entry := range r.entries {
-		if entry.installed && !now.Before(entry.lease) {
+		leaseExpired := entry.installed && !now.Before(entry.lease)
+		if leaseExpired {
 			clear(entry.value)
 			clear(entry.delivery.Payload)
 			entry.value, entry.installed = nil, false
@@ -304,6 +334,7 @@ func (r *secretRuntime) pending(now time.Time) ([]messages.Message, error) {
 				r.dirty++
 			}
 		}
+		prepareReusableDefault(entry, now)
 		if !entry.declared && (entry.waiters == 0 || entry.installed) {
 			// Delivery acknowledgements outlive the caller that received a value.
 			// Keep the installed request while its waiters wake; refreshing it here
@@ -317,7 +348,14 @@ func (r *secretRuntime) pending(now time.Time) ([]messages.Message, error) {
 			}
 			continue
 		}
-		if entry.request.ID == "" || !now.Before(entry.request.ExpiresAt) || !now.Before(entry.request.RequestedAt.Add(r.config.RefreshInterval)) {
+		refresh := !now.Before(entry.request.RequestedAt.Add(r.config.RefreshInterval))
+		if entry.defaultRequest && entry.installed && !refresh && now.Before(entry.request.ExpiresAt) {
+			if entry.ack.ID != "" {
+				outgoing = append(outgoing, entry.ack)
+			}
+			continue
+		}
+		if entry.defaultOwner == nil && (entry.request.ID == "" || !now.Before(entry.request.ExpiresAt) || leaseExpired || entry.installed && refresh) {
 			request := secretmodel.Request{ID: id.New(), AgentID: r.agentID, AgentType: r.typeName, Key: secretmodel.Key{Name: name}, Status: secretmodel.Pending, RequestedAt: now, ExpiresAt: now.Add(r.config.RequestTTL)}
 			message, err := controllerevents.NewSecretSyncRequested(request)
 			if err != nil {
@@ -325,13 +363,18 @@ func (r *secretRuntime) pending(now time.Time) ([]messages.Message, error) {
 			}
 			clear(entry.delivery.Payload)
 			entry.request, entry.message, entry.delivery, entry.ack = request, message, messages.Message{}, messages.Message{}
+			entry.defaultRequest = false
 		}
 		outgoing = append(outgoing, entry.message)
 		if entry.ack.ID != "" {
 			outgoing = append(outgoing, entry.ack)
 		}
 	}
-	return append(outgoing, r.pendingTransient(now)...), nil
+	outgoing = append(outgoing, r.pendingTransient(now)...)
+	for index := range outgoing {
+		outgoing[index].Payload = bytes.Clone(outgoing[index].Payload)
+	}
+	return outgoing, nil
 }
 
 func (r *secretRuntime) install(message messages.Message, now time.Time) error {
@@ -368,6 +411,7 @@ func (r *secretRuntime) install(message messages.Message, now time.Time) error {
 	entry.value, entry.metadata, entry.installed, entry.lease = bytes.Clone(payload.Value), payload.Metadata, true, message.ExpiresAt
 	message.Payload = bytes.Clone(message.Payload)
 	entry.delivery, entry.ack = message, ack
+	clearReusableDefaults(entry)
 	if changed && entry.declared {
 		r.dirty++
 	}
@@ -395,6 +439,7 @@ func (a *Agent) synchronizeSecrets(ctx context.Context, events controllerevents.
 			publication, cancel := context.WithTimeout(ctx, 5*time.Second)
 			err := events.Publish(publication, message)
 			cancel()
+			clear(message.Payload)
 			if err != nil && ctx.Err() == nil {
 				a.config.Logger.Warn("secret synchronization publication failed")
 			}

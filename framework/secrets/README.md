@@ -63,6 +63,24 @@ Use this inside `Agent.Serve` with `AgentConfig.Secrets` configured. Set a conte
 deadline: the request waits for installation and does not pause the task timeout.
 Omit the name from `RequiredSecrets` if the action can start without it.
 
+For a reusable value, the agent can supply a default from its code, environment
+or memory:
+
+```go
+value, err := action.RequestReusableSecret(ctx, "LOGIN_FOR_CRM",
+    action.SecretRequestOptions{Default: []byte("admin")},
+)
+if err != nil {
+    return result, err
+}
+defer clear(value)
+```
+
+An existing saved value takes precedence. If missing, the controller encrypts and
+saves the default as a shared secret, so other agents can request it without a
+default. Defaults never replace or renew existing values, including expired ones.
+Keep the name out of `RequiredSecrets` so the action can reach this call.
+
 ## Request and delivery tracking
 
 Use [`RequestStore`](../domain/secrets/request_store.go) for durable delivery

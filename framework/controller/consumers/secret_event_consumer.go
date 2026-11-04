@@ -57,6 +57,7 @@ func (c *SecretEventConsumer) request(ctx context.Context, message messages.Mess
 	if err != nil {
 		return InvalidMessage(err)
 	}
+	defer clear(payload.Default)
 	request, now := payload.Request, time.Now().UTC()
 	if request.RequestedAt.After(now.Add(maxAgentClockSkew)) {
 		return InvalidMessage(errors.New("secret synchronization requires an agent request with a current timestamp"))
@@ -71,8 +72,28 @@ func (c *SecretEventConsumer) request(ctx context.Context, message messages.Mess
 	if request.EffectiveType() == secrets.SecretTransient {
 		return c.transientRequested(ctx, request)
 	}
+	if payload.Default != nil {
+		if !now.Before(request.ExpiresAt) {
+			return InvalidMessage(secrets.ErrRequestExpired)
+		}
+		previous, err := c.Requests.Get(ctx, request.ID)
+		if err == nil {
+			if !previous.MatchesRequest(request) {
+				return InvalidMessage(secrets.ErrRequestConflict)
+			}
+			return c.deliver(ctx, previous, time.Now().UTC())
+		}
+		if !errors.Is(err, secrets.ErrUnknownRequest) {
+			return err
+		}
+	}
 	if err := c.Requests.Create(ctx, request); err != nil {
 		return secretTransitionError(err)
+	}
+	if payload.Default != nil {
+		if err := c.storeDefault(ctx, request, payload.Default); err != nil {
+			return err
+		}
 	}
 	record, err := c.Requests.Get(ctx, request.ID)
 	if err != nil {

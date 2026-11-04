@@ -83,6 +83,7 @@ func (b *SecretBus) Publish(ctx context.Context, _ string, message messages.Mess
 	observed.Payload = bytes.Clone(message.Payload)
 	b.published = append(b.published, observed)
 	b.mu.Unlock()
+	message.Payload = bytes.Clone(message.Payload)
 	select {
 	case b.outgoing <- message:
 		if (message.Type == controllerevents.SecretInstalled || message.Type == controllerevents.SecretTransientReceived) && b.failAcknowledgement.CompareAndSwap(true, false) {

@@ -102,6 +102,11 @@ sends its value and metadata only to the requesting agent. Agents acknowledge
 installation without receiving the encryption key. Saved delivery history stays
 encrypted.
 
+An action can supply `SecretRequestOptions.Default` with a reusable request.
+The controller saves it encrypted only when the shared name is missing; saved
+values take precedence. The default travels through the trusted secret exchange,
+outside action inputs and model context. Use AMQPS across networks.
+
 Transient requests bind a value to one execution and deadline. Retries retain
 their request and delivery identities; values remain in memory. A receipt means
 the agent received the value, not that an external service accepted it.
