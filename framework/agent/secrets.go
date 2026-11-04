@@ -51,8 +51,6 @@ type secretEntry struct {
 	metadata       secretmodel.Metadata
 	installed      bool
 	lease          time.Time
-	defaults       []*reusableSecretDefault
-	defaultOwner   *reusableSecretDefault
 	defaultRequest bool
 }
 
@@ -97,7 +95,7 @@ func (r *secretRuntime) clear() {
 	for name, entry := range r.entries {
 		clear(entry.value)
 		clear(entry.delivery.Payload)
-		clearReusableDefaults(entry)
+		clear(entry.message.Payload)
 		if entry.declared {
 			r.entries[name] = &secretEntry{declared: true}
 		} else {
@@ -151,23 +149,30 @@ func (r *secretRuntime) request(ctx context.Context, waits *workSecretWaits, nam
 		}
 		return value, nil
 	}
-	var offered *reusableSecretDefault
-	if defaultValue != nil {
-		var err error
-		offered, err = r.newReusableDefault(ctx, waits, name, defaultValue)
-		if err != nil {
+	now := time.Now().UTC()
+	leaseExpired := entry.installed && !now.Before(entry.lease)
+	if leaseExpired || defaultValue != nil && (!entry.defaultRequest || entry.message.ID == "" || !now.Before(entry.request.ExpiresAt)) {
+		if err := r.prepareSecretRequest(entry, name, defaultValue, now); err != nil {
 			r.mu.Unlock()
-			return nil, err
+			return nil, action.ErrSecretRequestUnsupported
 		}
-		entry.defaults = append(entry.defaults, offered)
+		if leaseExpired {
+			clear(entry.value)
+			entry.value, entry.installed = nil, false
+			if entry.declared {
+				r.dirty++
+			}
+		}
 	}
 	entry.waiters++
 	r.mu.Unlock()
 	defer func() {
 		r.mu.Lock()
 		entry.waiters--
-		if offered != nil {
-			discardReusableDefault(entry, offered)
+		if entry.waiters == 0 && entry.defaultRequest && !entry.installed {
+			clear(entry.message.Payload)
+			entry.request, entry.message = secretmodel.Request{}, messages.Message{}
+			entry.defaultRequest = false
 		}
 		r.mu.Unlock()
 		r.notify()
@@ -179,21 +184,11 @@ func (r *secretRuntime) request(ctx context.Context, waits *workSecretWaits, nam
 	}
 	defer done()
 	r.notify()
-	var expiry <-chan time.Time
-	if offered != nil {
-		timer := time.NewTimer(time.Until(offered.request.ExpiresAt))
-		defer timer.Stop()
-		expiry = timer.C
-	}
 	for {
 		r.mu.Lock()
 		if err := requestCanceled(ctx, execution, service); err != nil {
 			r.mu.Unlock()
 			return nil, err
-		}
-		if offered != nil && !time.Now().Before(offered.request.ExpiresAt) {
-			r.mu.Unlock()
-			return nil, context.DeadlineExceeded
 		}
 		if entry.installed && time.Now().Before(entry.lease) {
 			value := bytes.Clone(entry.value)
@@ -210,7 +205,6 @@ func (r *secretRuntime) request(ctx context.Context, waits *workSecretWaits, nam
 		case <-ctx.Done():
 		case <-execution.Done():
 		case <-service.Done():
-		case <-expiry:
 		case <-changed:
 		}
 	}
@@ -334,7 +328,6 @@ func (r *secretRuntime) pending(now time.Time) ([]messages.Message, error) {
 				r.dirty++
 			}
 		}
-		prepareReusableDefault(entry, now)
 		if !entry.declared && (entry.waiters == 0 || entry.installed) {
 			// Delivery acknowledgements outlive the caller that received a value.
 			// Keep the installed request while its waiters wake; refreshing it here
@@ -355,15 +348,10 @@ func (r *secretRuntime) pending(now time.Time) ([]messages.Message, error) {
 			}
 			continue
 		}
-		if entry.defaultOwner == nil && (entry.request.ID == "" || !now.Before(entry.request.ExpiresAt) || leaseExpired || entry.installed && refresh) {
-			request := secretmodel.Request{ID: id.New(), AgentID: r.agentID, AgentType: r.typeName, Key: secretmodel.Key{Name: name}, Status: secretmodel.Pending, RequestedAt: now, ExpiresAt: now.Add(r.config.RequestTTL)}
-			message, err := controllerevents.NewSecretSyncRequested(request)
-			if err != nil {
+		if entry.request.ID == "" || !now.Before(entry.request.ExpiresAt) || leaseExpired || entry.installed && refresh {
+			if err := r.prepareSecretRequest(entry, name, nil, now); err != nil {
 				return nil, err
 			}
-			clear(entry.delivery.Payload)
-			entry.request, entry.message, entry.delivery, entry.ack = request, message, messages.Message{}, messages.Message{}
-			entry.defaultRequest = false
 		}
 		outgoing = append(outgoing, entry.message)
 		if entry.ack.ID != "" {
@@ -375,6 +363,20 @@ func (r *secretRuntime) pending(now time.Time) ([]messages.Message, error) {
 		outgoing[index].Payload = bytes.Clone(outgoing[index].Payload)
 	}
 	return outgoing, nil
+}
+
+func (r *secretRuntime) prepareSecretRequest(entry *secretEntry, name string, defaultValue []byte, now time.Time) error {
+	request := secretmodel.Request{ID: id.New(), AgentID: r.agentID, AgentType: r.typeName,
+		Key: secretmodel.Key{Name: name}, Status: secretmodel.Pending, RequestedAt: now, ExpiresAt: now.Add(r.config.RequestTTL)}
+	message, err := controllerevents.NewSecretSyncRequested(request, defaultValue)
+	if err != nil {
+		return err
+	}
+	clear(entry.message.Payload)
+	clear(entry.delivery.Payload)
+	entry.request, entry.message, entry.delivery, entry.ack = request, message, messages.Message{}, messages.Message{}
+	entry.defaultRequest = defaultValue != nil
+	return nil
 }
 
 func (r *secretRuntime) install(message messages.Message, now time.Time) error {
@@ -411,7 +413,10 @@ func (r *secretRuntime) install(message messages.Message, now time.Time) error {
 	entry.value, entry.metadata, entry.installed, entry.lease = bytes.Clone(payload.Value), payload.Metadata, true, message.ExpiresAt
 	message.Payload = bytes.Clone(message.Payload)
 	entry.delivery, entry.ack = message, ack
-	clearReusableDefaults(entry)
+	if entry.defaultRequest {
+		clear(entry.message.Payload)
+		entry.message = messages.Message{}
+	}
 	if changed && entry.declared {
 		r.dirty++
 	}

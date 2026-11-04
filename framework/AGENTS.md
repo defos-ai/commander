@@ -442,9 +442,13 @@
   existing `SecretRequester` providers for reusable calls without defaults, and
   return `ErrSecretRequestUnsupported` when they cannot honor the options. The
   built-in runtime sends reusable defaults through secret synchronization.
-  Defaults belong to live calls: preserve the same message and deadline on
-  retries, clear owned bytes on installation/cancellation/expiry/shutdown, and
-  omit defaults from later periodic refreshes. Copy pending publication payloads
+  One pending reusable request per shared name carries its first supplied default;
+  later callers join that request without replacing the default. Requests use
+  `RequestTTL`, while each caller retains its own cancellation/deadline. Preserve
+  the same message and deadline on retries. Clear default bytes on installation,
+  when the last waiter leaves, on request expiry, or at shutdown. Expiry starts
+  ordinary managed lookup for remaining callers; periodic refreshes omit defaults.
+  Copy pending publication payloads
   under the runtime mutex before releasing it; the publisher clears its copies.
   Only controller-confirmed managed deliveries enter the shared agent cache.
   Transient requests bind to the accepted
