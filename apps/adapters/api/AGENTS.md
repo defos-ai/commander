@@ -205,8 +205,9 @@
   expired or reusable targets are 409. Preserve delivery/write uncertainty before
   timeout errors; replies and diagnostics must not echo values or backend errors.
   Do not retry automatically. Refresh the detail route after uncertain responses.
-  Existing managed-secret clients request `type=reusable` until their transient
-  forms are implemented, so codes cannot be entered into the managed-value form.
+  Managed-secret clients request `type=reusable`; Admin's one-time form queries
+  `type=transient` and submits by exact request ID, keeping codes out of the
+  managed-value form. Playground support remains separate.
 - `credentials` automatically reads the running container's startup environment
   only when PID 1 uses the same executable; otherwise it reads the current
   environment. Keep this lookup exclusive to explicit retrieval, never server

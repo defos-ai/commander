@@ -462,8 +462,8 @@
   Transient exchange additionally verifies the durable execution claim and active
   operation/task/deadline. `secret.Worker.ProvideTransient` receives values through
   the controller's narrow `SecretRequests` command capability; the authenticated
-  API exposes request-specific submission. Admin/Playground forms remain separate.
-  Retain one exact
+  API exposes request-specific submission. Admin supports one-time input forms;
+  Playground support follows separately. Retain one exact
   delivery in controller memory until receipt, cancellation or expiry; changed
   submissions conflict. After a receipt, clear bytes before saving its metadata,
   retaining receipt time for uncertain-write reconciliation without resending bytes.

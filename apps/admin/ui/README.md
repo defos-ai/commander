@@ -85,6 +85,11 @@ Open **Secrets** in the sidebar to provide, replace or delete shared secrets.
 You can also set an expiration. Values are write-only; follow the
 [secret workflow](../../../docs/features/secrets.md) for sharing and delivery limits.
 
+Use **One-time requests → Provide value** for verification codes and other
+temporary values. Check the agent, operation and expiry before sending. Wait for
+**Received by agent**, then inspect the operation for the outcome. After an
+uncertain submission, use **View status**; closing the form does not resend it.
+
 Compose and all-in-one configure encryption automatically. Standalone hosts need
 an [encryption key](../../adapters/api/README.md#secrets). After saving, wait for
 the agent's missing requirement to clear; after an uncertain write, refresh

@@ -25,6 +25,19 @@ export interface PendingSecretRequest extends SecretKey {
   status: 'needs_value' | 'awaiting_delivery' | 'awaiting_installation';
 }
 
+export interface TransientSecretRequest extends SecretKey {
+  type: 'transient';
+  id: string;
+  agent_type: string;
+  agent_id: string;
+  operation_id: string;
+  task_id: string;
+  command_id: string;
+  requested_at: string;
+  expires_at: string;
+  status: 'pending' | 'fulfilled' | 'cancelled' | 'expired';
+}
+
 export interface CreateSecretInput extends SecretKey {
   value: string;
   expires_at?: string;
@@ -109,6 +122,41 @@ function readPendingRequest(value: unknown): PendingSecretRequest {
   };
 }
 
+function readTransientRequest(value: unknown): TransientSecretRequest {
+  if (!isObject(value) || !isKey(value) || value.type !== 'transient' || !isUUID(value.id) || !isAgentType(value.agent_type) ||
+    typeof value.agent_id !== 'string' || value.agent_id.length > 63 || !agentIDPattern.test(value.agent_id) ||
+    !isUUID(value.operation_id) || !isUUID(value.task_id) || !isUUID(value.command_id) ||
+    !isTimestamp(value.requested_at) || !isTimestamp(value.expires_at) || Date.parse(value.expires_at) <= Date.parse(value.requested_at) ||
+    (value.status !== 'pending' && value.status !== 'fulfilled' && value.status !== 'cancelled' && value.status !== 'expired')) {
+    throw new SecretError('invalid_response');
+  }
+  return {
+    type: 'transient', id: value.id, name: value.name, agent_type: value.agent_type, agent_id: value.agent_id,
+    operation_id: value.operation_id, task_id: value.task_id, command_id: value.command_id,
+    requested_at: value.requested_at, expires_at: value.expires_at, status: value.status,
+  };
+}
+
+function transientRequestPath(requestID: string): string {
+  if (!isUUID(requestID)) throw new SecretError('invalid_input');
+  return `/api/v1/secret-requests/${requestID}`;
+}
+
+function isTransientValue(value: string): boolean {
+  if (value.length > 64 * 1024) return false;
+  for (let index = 0; index < value.length; index++) {
+    const unit = value.charCodeAt(index);
+    if (unit >= 0xd800 && unit <= 0xdbff) {
+      const low = value.charCodeAt(++index);
+      if (!(low >= 0xdc00 && low <= 0xdfff)) return false;
+    } else if (unit >= 0xdc00 && unit <= 0xdfff) return false;
+  }
+  const bytes = new TextEncoder().encode(value);
+  const valid = bytes.length <= 64 * 1024;
+  bytes.fill(0);
+  return valid;
+}
+
 function readList<T extends { id: string }>(body: unknown, read: (value: unknown) => T): T[] {
   if (!isObject(body) || !Array.isArray(body.items)) throw new SecretError('invalid_response');
   const items = body.items.map(read);
@@ -150,6 +198,7 @@ async function request<T>(
   try {
     endpoint = proxyURL(url, path, credentials);
     encodedBody = body === undefined ? undefined : JSON.stringify(body);
+    body = undefined;
   } catch { throw new SecretError('invalid_input'); }
 
   const mutation = method !== 'GET';
@@ -200,6 +249,7 @@ async function request<T>(
     }
     throw new SecretError(mutation ? 'unknown' : 'unavailable');
   } finally {
+    encodedBody = undefined;
     clearTimeout(timeout);
     signal?.removeEventListener('abort', abort);
     controller.signal.removeEventListener('abort', rejectAborted);
@@ -216,6 +266,36 @@ export async function listSecrets(url: string, credentials: Session, signal?: Ab
 
 export async function listSecretRequests(url: string, credentials: Session, signal?: AbortSignal): Promise<PendingSecretRequest[]> {
   return request(url, credentials, '/api/v1/secret-requests?type=reusable', 'GET', 200, body => readList(body, readPendingRequest), undefined, signal);
+}
+
+export async function listTransientSecretRequests(url: string, credentials: Session, signal?: AbortSignal): Promise<TransientSecretRequest[]> {
+  return request(url, credentials, '/api/v1/secret-requests?type=transient', 'GET', 200, body => {
+    const items = readList(body, readTransientRequest);
+    if (items.some(item => item.status !== 'pending')) throw new SecretError('invalid_response');
+    return items;
+  }, undefined, signal);
+}
+
+export async function getTransientSecretRequest(url: string, credentials: Session, requestID: string, signal?: AbortSignal): Promise<TransientSecretRequest> {
+  return request(url, credentials, transientRequestPath(requestID), 'GET', 200, body => {
+    const item = readTransientRequest(body);
+    if (item.id !== requestID) throw new SecretError('invalid_response');
+    return item;
+  }, undefined, signal);
+}
+
+export async function provideTransientSecret(url: string, credentials: Session, requestID: string, value: string, signal?: AbortSignal): Promise<void> {
+  const path = `${transientRequestPath(requestID)}/values`;
+  if (typeof value !== 'string' || !isTransientValue(value)) throw new SecretError('invalid_input');
+  const body = { value };
+  value = '';
+  try {
+    await request(url, credentials, path, 'POST', 202, response => {
+      if (!isObject(response) || response.status !== 'awaiting_receipt' || Object.keys(response).length !== 1) {
+        throw new SecretError('invalid_response');
+      }
+    }, body, signal);
+  } finally { body.value = ''; }
 }
 
 export async function getSecret(url: string, credentials: Session, key: SecretKey, signal?: AbortSignal): Promise<SecretMetadata> {

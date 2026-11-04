@@ -1,15 +1,16 @@
-import { useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { LoaderCircle, Plus, RefreshCw } from 'lucide-react';
-import { SecretError, type PendingSecretRequest } from '../api/secrets';
+import { SecretError, type PendingSecretRequest, type TransientSecretRequest } from '../api/secrets';
 import { Button } from '../components/Button';
 import { SecretDialog, type SecretDialogTarget } from '../components/SecretDialog';
+import { TransientSecretDialog } from '../components/TransientSecretDialog';
 import type { Connection, Session } from '../connections/types';
 import { useSecrets } from '../hooks/useSecrets';
 import { useTranslation } from '../i18n';
 import '../styles/catalog.css';
 import '../styles/secrets.css';
 
-type Props = { connection: Connection; credentials?: Session; onSignIn: () => void };
+type Props = { connection: Connection; credentials?: Session; onSignIn: () => void; onOpenOperation?: (id: string) => void };
 type RequestGroup = {
   name: string;
   agents: Set<string>;
@@ -35,21 +36,63 @@ export function SecretsPage(props: Props) {
   return <SecretsContent key={`${props.connection.id}\0${props.connection.url}`} {...props} />;
 }
 
-function SecretsContent({ connection, credentials, onSignIn }: Props) {
+function SecretsContent({ connection, credentials, onSignIn, onOpenOperation }: Props) {
   const { t } = useTranslation();
   const identity = useId();
   const [dialog, setDialog] = useState<{ credentials: Session; target: SecretDialogTarget }>();
+  const [transientDialog, setTransientDialog] = useState<{ credentials: Session; request: TransientSecretRequest }>();
+  const [submissions, setSubmissions] = useState<{ credentials: Session; requests: ReadonlyMap<string, number> }>();
+  const [now, setNow] = useState(Date.now());
   const [notice, setNotice] = useState<'saved' | 'deleted'>();
+  const currentCredentials = useRef(credentials);
+  currentCredentials.current = credentials;
   const query = useSecrets({ url: connection.url, credentials });
   const groups = groupRequests(query.requests ?? []);
   const error = !credentials ? new SecretError('authentication') : query.error;
-  const fatal = [error, query.listError].find(value => value && ['authentication', 'forbidden', 'disabled'].includes(value.kind));
-  const canManage = Boolean(credentials && !query.loading && !error && !query.listError);
+  const fatal = [error, query.listError, query.transientError].find(value => value && ['authentication', 'forbidden', 'disabled'].includes(value.kind));
+  const canManage = Boolean(credentials && !query.loading && !error && !query.listError && !fatal);
+  const transientLoading = Boolean(credentials && !query.transientRequests && !query.transientError);
+  const canProvideTransient = Boolean(credentials && !transientLoading && !query.transientError && !fatal);
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    setSubmissions(previous => {
+      if (!previous || previous.credentials !== credentials) return undefined;
+      const requests = new Map([...previous.requests].filter(([, expiry]) => now < expiry));
+      return requests.size === previous.requests.size ? previous : { ...previous, requests };
+    });
+  }, [credentials, now]);
+
+  function wasSubmitted(requestID: string) {
+    return submissions !== undefined && submissions.credentials === credentials && submissions.requests.has(requestID);
+  }
+
+  function markSubmitted(request: TransientSecretRequest, submitted: boolean) {
+    if (!credentials || credentials !== currentCredentials.current) return;
+    setSubmissions(previous => {
+      const requests = new Map(previous?.credentials === credentials ? previous.requests : []);
+      if (submitted) requests.set(request.id, Date.parse(request.expires_at));
+      else requests.delete(request.id);
+      return { credentials, requests };
+    });
+  }
 
   function open(target: SecretDialogTarget) {
     if (!credentials || !canManage) return;
+    setTransientDialog(undefined);
     setNotice(undefined);
     setDialog({ credentials, target });
+  }
+
+  function openTransient(request: TransientSecretRequest) {
+    if (!credentials || !canProvideTransient) return;
+    setDialog(undefined);
+    setNotice(undefined);
+    setTransientDialog({ credentials, request });
   }
 
   function errorNotice(value: SecretError) {
@@ -70,6 +113,33 @@ function SecretsContent({ connection, credentials, onSignIn }: Props) {
     </div>
     {notice && <p className="notice" role="status">{t($ => $.secrets[notice])}</p>}
     {fatal ? errorNotice(fatal) : <>
+      <section className="secret-section" aria-labelledby={`${identity}-one-time`}>
+        <div className="secret-section-heading"><h2 id={`${identity}-one-time`}>{t($ => $.secrets.oneTime.title)}</h2><p>{t($ => $.secrets.oneTime.description)}</p></div>
+        {query.transientError ? errorNotice(query.transientError) : transientLoading ? <p className="catalog-loading" role="status">
+          <LoaderCircle size={17} className="connection-form-spinner" aria-hidden="true" />{t($ => $.secrets.loading)}</p>
+          : !query.transientRequests?.length ? <p className="secret-empty">{t($ => $.secrets.oneTime.empty)}</p>
+            : <ul className="secret-list" aria-label={t($ => $.secrets.oneTime.title)}>{query.transientRequests.map(request => {
+              const expired = now >= Date.parse(request.expires_at);
+              const submitted = wasSubmitted(request.id);
+              return <li className="secret-row" key={request.id}>
+                <div className="secret-row-main"><p className="secret-key"><strong>{request.name}</strong>
+                  <span>{t($ => $.secrets.oneTime.request)} <code>{request.id}</code></span></p>
+                  <p className="catalog-row-meta"><span className="catalog-status" data-tone={expired ? 'warning' : undefined}>
+                    {expired ? t($ => $.secrets.oneTime.status.expired) : submitted ? t($ => $.secrets.oneTime.submitted) : t($ => $.secrets.oneTime.status.pending)}
+                  </span><span>{t($ => $.secrets.expires, { time: new Date(request.expires_at).toLocaleString() })}</span></p>
+                  <div className="transient-secret-row-meta"><p>{t($ => $.secrets.oneTime.agent)}: <code>{request.agent_id}</code></p>
+                    <p>{t($ => $.secrets.oneTime.operation)}: <code>{request.operation_id}</code></p>
+                    <p>{t($ => $.secrets.oneTime.task)}: <code>{request.task_id}</code></p></div>
+                </div>
+                <div className="secret-actions">
+                  {onOpenOperation && <Button variant="secondary" onClick={() => onOpenOperation(request.operation_id)}>{t($ => $.secrets.oneTime.viewOperation)}</Button>}
+                  <Button variant="secondary" disabled={!canProvideTransient} onClick={() => openTransient(request)}>
+                    {submitted || expired ? t($ => $.secrets.oneTime.viewStatus) : t($ => $.secrets.provide)}
+                  </Button>
+                </div>
+              </li>;
+            })}</ul>}
+      </section>
       <section className="secret-section" aria-labelledby={`${identity}-pending`}>
         <div className="secret-section-heading"><h2 id={`${identity}-pending`}>{t($ => $.secrets.pendingTitle)}</h2><p>{t($ => $.secrets.pendingDescription)}</p></div>
         {error ? errorNotice(error) : query.loading ? <p className="catalog-loading" role="status">
@@ -107,5 +177,9 @@ function SecretsContent({ connection, credentials, onSignIn }: Props) {
       onClose={() => setDialog(undefined)} onRefresh={query.refresh} onCompleted={deleted => {
         setDialog(undefined); setNotice(deleted ? 'deleted' : 'saved'); query.refresh();
       }} />}
+    {credentials && transientDialog?.credentials === credentials && <TransientSecretDialog connection={connection} credentials={credentials}
+      request={transientDialog.request} submitted={Boolean(wasSubmitted(transientDialog.request.id))}
+      onSubmitted={() => markSubmitted(transientDialog.request, true)} onRejected={() => markSubmitted(transientDialog.request, false)}
+      onClose={() => setTransientDialog(undefined)} onRefresh={query.refresh} onOpenOperation={onOpenOperation} />}
   </section>;
 }

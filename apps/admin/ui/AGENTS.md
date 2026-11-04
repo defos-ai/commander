@@ -230,7 +230,7 @@
 - **Secrets** is a deployment-wide sidebar page with its own active state.
   Preserve operation and Agent shortcuts without an Agents-only parent/back link.
   The Secrets page uses authenticated `/api/v1/secrets` metadata and
-  `/api/v1/secret-requests?type=reusable` until transient forms are available.
+  `/api/v1/secret-requests?type=reusable` for managed-value requests.
   Group these reusable requests by shared name; their progress is not agent
   readiness or proof of installation. Inventory lists all
   saved names without an agent-type selector. Provide-value actions
@@ -244,6 +244,21 @@
   when their connection/session changes and ignore stale responses. The proxy
   supports PUT and DELETE with the same session/origin checks as POST; public
   probes and `/aboutz` remain read-only.
+- **One-time requests** queries `type=transient` independently and keeps each
+  request separate by ID, including repeated names across agents/executions.
+  Validate type, exact request/execution identity and timestamps; never infer a
+  transient value from the reusable inventory. Refresh detail metadata before
+  enabling the masked form, and bind drafts/guards to the exact connection,
+  credentials and request. Expiry clears drafts and disables sending.
+  Mark submission before POST and clear the field immediately. `202` means
+  awaiting receipt; only a fulfilled detail read means received by the agent,
+  never successful website submission. Poll detail every two seconds while pending
+  with a separate controller, so reads and page refresh cannot cancel an in-flight
+  write. Metadata-only attempt guards survive dialog dismissal in page memory
+  until the original expiry; pending readback does not re-enable submission.
+  Known input rejection may permit explicit correction after a fresh detail read.
+  Conflicts, unknown responses, timeouts and aborted writes require status
+  inspection, never automatic resubmission or replacement-code requests.
 - Operation secret notices use preflight's explicit `agent_type` and
   `missing_requirements` with `kind: secret` on blocked actions, only while the
   operation is active. The `sensitive` boolean marks sensitive local configuration;

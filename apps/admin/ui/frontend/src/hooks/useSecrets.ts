@@ -1,15 +1,17 @@
 import { useEffect, useState } from 'react';
 import { ApiError } from '../api/client';
-import { listSecretRequests, listSecrets, SecretError, type PendingSecretRequest, type SecretMetadata } from '../api/secrets';
+import { listSecretRequests, listSecrets, listTransientSecretRequests, SecretError, type PendingSecretRequest, type SecretMetadata, type TransientSecretRequest } from '../api/secrets';
 import type { Session } from '../connections/types';
 
 type Source = { url: string; credentials?: Session };
 type Snapshot = Source & {
   revision: number;
   requests?: PendingSecretRequest[];
+  transientRequests?: TransientSecretRequest[];
   items?: SecretMetadata[];
   error?: SecretError;
   listError?: SecretError;
+  transientError?: SecretError;
   refreshing: boolean;
   checkedAt?: number;
 };
@@ -30,17 +32,20 @@ export function useSecrets({ url, credentials }: Source) {
     async function load() {
       setResult(previous => previous?.url === url && previous.credentials === credentials && previous.revision === revision
         ? { ...previous, refreshing: true } : { ...source, refreshing: true });
-      const [requests, items] = await Promise.allSettled([
+      const [requests, items, transient] = await Promise.allSettled([
         listSecretRequests(url, source.credentials, controller.signal),
         listSecrets(url, source.credentials, controller.signal),
+        listTransientSecretRequests(url, source.credentials, controller.signal),
       ]);
       if (controller.signal.aborted) return;
       const pending = requests.status === 'fulfilled' ? requests.value : undefined;
       const error = requests.status === 'rejected' ? asError(requests.reason) : undefined;
       const listError = items.status === 'rejected' ? asError(items.reason) : undefined;
+      const transientError = transient.status === 'rejected' ? asError(transient.reason) : undefined;
       setResult({ ...source, requests: pending, items: items.status === 'fulfilled' ? items.value : undefined,
-        error, listError, refreshing: false, checkedAt: Date.now() });
-      if (![error, listError].some(value => value && ['authentication', 'forbidden', 'disabled', 'not_found'].includes(value.kind))) {
+        transientRequests: transient.status === 'fulfilled' ? transient.value : undefined,
+        error, listError, transientError, refreshing: false, checkedAt: Date.now() });
+      if (![error, listError, transientError].some(value => value && ['authentication', 'forbidden', 'disabled', 'not_found'].includes(value.kind))) {
         timer = setTimeout(() => { void load(); }, 10_000);
       }
     }
@@ -51,9 +56,11 @@ export function useSecrets({ url, credentials }: Source) {
   const current = credentials && result?.url === url && result.credentials === credentials && result.revision === revision ? result : undefined;
   return {
     requests: current?.requests,
+    transientRequests: current?.transientRequests,
     items: current?.items,
     error: current?.error,
     listError: current?.listError,
+    transientError: current?.transientError,
     loading: Boolean(credentials && (!current || current.refreshing && !current.requests)),
     refreshing: Boolean(credentials && (!current || current.refreshing)),
     checkedAt: current?.checkedAt,

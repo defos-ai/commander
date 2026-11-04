@@ -92,7 +92,8 @@ export function App() {
       {state.restoreFailed && <p className="notice" role="alert">{t($ => $.connections.restoreError)}</p>}
       {state.restoring ? <p role="status">{t($ => $.connections.restoring)}</p> : section === 'settings' ? <ConnectionSettingsPage connection={active} signedIn={Boolean(state.credentials[active.id])}
         onEdit={() => edit(active.id)} onForget={() => state.forgetSession(active.id)} onRemove={() => remove(active.id)} />
-        : section === 'secrets' ? <SecretsPage key={`${active.id}:${active.url}`} connection={active} credentials={state.credentials[active.id]} onSignIn={() => edit(active.id)} />
+        : section === 'secrets' ? <SecretsPage key={`${active.id}:${active.url}`} connection={active} credentials={state.credentials[active.id]} onSignIn={() => edit(active.id)}
+          onOpenOperation={id => navigate({ connectionID: active.id, section: 'operations', itemID: id })} />
         : section === 'sessions' ? <SessionsPage key={`${active.id}:${active.url}`} connection={active} credentials={state.credentials[active.id]} onSignIn={() => edit(active.id)}
           selectedID={selectedID} onSelect={select} filters={route.connectionID ? route.sessionFilters : undefined}
           onFiltersChange={sessionFilters => navigate({ connectionID: active.id, section: 'sessions', sessionFilters })}

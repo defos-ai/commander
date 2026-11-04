@@ -123,7 +123,8 @@ For verification codes, list `/api/v1/secret-requests?type=transient`, then POST
 `{"value":"..."}` to `/api/v1/secret-requests/{request_id}/values` before expiry.
 A `202` starts delivery; GET the request's detail route to check its receipt.
 These values stay out of managed storage. A receipt confirms arrival at the agent,
-not successful use on a website. Admin and Playground forms are coming separately.
+not successful use on a website. Admin provides the form under **Secrets →
+One-time requests**; Playground support follows separately.
 
 Without a key, secret routes return `503 secrets_unavailable`; other API features
 remain available. After saving, wait for the agent's requirement to clear.

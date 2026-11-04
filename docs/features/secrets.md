@@ -1,4 +1,4 @@
-# Shared secrets
+# Secrets
 
 Open **Admin → Secrets** to save a credential under the name requested by an
 action, such as `OPENAI_API_KEY`. Save it once: agents requesting that name share
@@ -33,6 +33,22 @@ write-only: API reads and Admin inventories return metadata, not stored values.
 - **While running:** an action can request a name only when its input needs it.
   Provide it through the same form and let the existing execution resume. Its
   task deadline keeps running; do not start replacement work just to supply a key.
+
+## One-time values
+
+Open **Admin → Secrets → One-time requests** for verification codes and other
+temporary values. Choose the request for the correct agent and operation, enter
+the value before its expiry, then choose **Send value**. These values are not
+saved for reuse.
+
+**Awaiting receipt** means delivery is in progress. **Received by agent** confirms
+arrival, not that a website accepted it; inspect the operation for the outcome.
+After an uncertain submission, use **View status** and **Check status**.
+Closing or reopening the form does not resend the value. Expired requests stay
+closed; let the agent decide whether another code is needed.
+
+Playground's existing secret form handles reusable values. Use Admin for
+one-time requests until Playground supports them.
 
 ## Replace, expire or delete
 
