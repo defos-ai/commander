@@ -60,6 +60,7 @@ type Model struct {
 	setupState
 	questions            questionPanel
 	secrets              secretPanel
+	transient            transientSecrets
 	admin                adminCommandState
 	ctx                  context.Context
 	config               Config
@@ -118,6 +119,8 @@ func nextTick() tea.Cmd {
 }
 
 func (m *Model) Close() error {
+	m.clearSecretInputs()
+	m.closeSecretWork()
 	for _, done := range m.providerKey.done {
 		<-done
 	}
@@ -136,7 +139,6 @@ func (m *Model) Close() error {
 		m.admin.cancel()
 		<-m.admin.done
 	}
-	m.clearSecretInputs()
 	if m.secrets.cancel != nil {
 		m.secrets.cancel()
 	}
@@ -166,6 +168,9 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	if cmd, handled := m.secretResult(message); handled {
 		return m, cmd
+	}
+	if result, ok := message.(transientResult); ok {
+		return m, m.transientResult(result)
 	}
 	if cmd, handled := m.setupResult(message); handled {
 		return m, cmd

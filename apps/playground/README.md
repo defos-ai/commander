@@ -153,7 +153,10 @@ For agent secrets, enter values in the masked form that opens when needed.
 **Tab** moves between fields, **Enter** advances or saves, and **Esc** postpones.
 Use `/secrets` to reopen it, or **Secrets** in Admin's sidebar.
 Values go directly to the API, outside the model. Running tasks keep their
-deadline while waiting. See [shared secrets](../../docs/features/secrets.md).
+deadline while waiting. One-time requests show their operation, agent and expiry;
+their values are never saved for reuse. After sending, wait for **Received by agent**.
+Use **R** to check an uncertain submission's status; reopening never resends it.
+See [secrets](../../docs/features/secrets.md).
 
 After connecting, Playground saves the selected provider's key through the API
 under its environment-variable name, such as `OPENAI_API_KEY` or `ANTHROPIC_API_KEY`.

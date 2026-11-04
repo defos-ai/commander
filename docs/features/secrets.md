@@ -47,8 +47,10 @@ After an uncertain submission, use **View status** and **Check status**.
 Closing or reopening the form does not resend the value. Expired requests stay
 closed; let the agent decide whether another code is needed.
 
-Playground's existing secret form handles reusable values. Use Admin for
-one-time requests until Playground supports them.
+Playground opens a separate **One-time secret** form for a watched execution.
+Check its operation, agent and expiry before entering the value. Use `/secrets`
+to reopen it and **R** to check status. Dismissing or reopening never resends a
+submitted value. Closing Playground discards any unsent draft.
 
 ## Replace, expire or delete
 

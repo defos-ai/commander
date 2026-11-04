@@ -203,6 +203,8 @@ type AgentReadiness struct {
 
 type Task struct {
 	ID                  string                `json:"id"`
+	AgentID             string                `json:"agent_id"`
+	CommandID           string                `json:"command_id,omitempty"`
 	Status              string                `json:"status"`
 	ActionName          string                `json:"action_name"`
 	DeadlineAt          *time.Time            `json:"deadline_at"`
@@ -244,8 +246,8 @@ func (o Operation) Terminal() bool {
 	return o.Status == "completed" || o.Status == "failed" || o.Status == "cancelled"
 }
 
-// MissingSecrets uses current managed-secret evidence, never generic sensitive
-// requirements or pending sync requests, which may describe unrelated work.
+// MissingSecrets uses current secret requirements. Running requirements may be
+// reusable or transient; request metadata determines which input flow to use.
 func (o Operation) MissingSecrets() []secrets.Key {
 	if o.Status != "planning" && o.Status != "running" && o.Status != "waiting" {
 		return nil
@@ -289,6 +291,12 @@ func (o Operation) MissingSecrets() []secrets.Key {
 		return strings.Compare(a.Name, b.Name)
 	})
 	return missing
+}
+
+// PreflightSecrets contains declared reusable requirements, before execution.
+func (o Operation) PreflightSecrets() []secrets.Key {
+	o.Tasks = nil
+	return o.MissingSecrets()
 }
 
 func (o Operation) NeedsSecrets() bool {

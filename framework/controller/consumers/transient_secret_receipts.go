@@ -35,12 +35,15 @@ func (c *SecretEventConsumer) transientReceived(ctx context.Context, message mes
 	}
 	delivery := c.transient[request.ID]
 	if request.Status != secrets.Pending || delivery == nil || delivery.message.ID != message.CorrelationID ||
-		delivery.message.Work != message.Work || delivery.message.AgentID != message.AgentID || message.CreatedAt.Before(delivery.message.CreatedAt) {
+		delivery.message.Work != message.Work || delivery.message.AgentID != message.AgentID || message.CreatedAt.Before(delivery.message.CreatedAt) ||
+		delivery.message.CorrelationID != request.ID || !delivery.message.ExpiresAt.Equal(request.ExpiresAt) {
 		return InvalidMessage(errors.New("transient receipt requires its exact held delivery"))
 	}
 	if delivery.receivedAt.IsZero() {
-		if err := controllerevents.ValidateTransientSecretReceivedDelivery(message, delivery.message); err != nil {
-			return InvalidMessage(err)
+		if !delivery.executionEnded {
+			if err := controllerevents.ValidateTransientSecretReceivedDelivery(message, delivery.message); err != nil {
+				return InvalidMessage(err)
+			}
 		}
 		if !now.Before(request.ExpiresAt) {
 			if err := c.endTransient(ctx, request, now); err != nil {

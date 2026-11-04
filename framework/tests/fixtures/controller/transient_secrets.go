@@ -2,8 +2,11 @@ package fixtures
 
 import (
 	"testing"
+	"time"
 
 	"github.com/defos-ai/commander/framework/controller/consumers"
+	"github.com/defos-ai/commander/framework/domain/executions"
+	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/domain/secrets"
 	controllerfakes "github.com/defos-ai/commander/framework/tests/fakes/controller"
 	operationfakes "github.com/defos-ai/commander/framework/tests/fakes/operation"
@@ -17,6 +20,29 @@ type TransientSecrets struct {
 	Executions *controllerfakes.CheckpointExecutions
 	Operations *operationfakes.OperationStore
 	Request    secrets.Request
+}
+
+func (fixture TransientSecrets) CompleteExecution(t *testing.T) {
+	t.Helper()
+	command := fixture.Executions.Snapshot().Command
+	_, result, output := ArtifactResult(t)
+	result.AgentID, result.CorrelationID, result.Work = command.AgentID, command.ID, command.Work
+	now := time.Now().UTC()
+	fixture.Executions.Change(func(record *executions.Execution) {
+		record.Result, record.CompletedAt = &result, &now
+	})
+	_, err := fixture.Operations.Update(t.Context(), command.Work.OperationID, func(operation *operations.Operation) error {
+		for index := range operation.Tasks {
+			task := &operation.Tasks[index]
+			if task.ID == command.Work.TaskID {
+				task.Status, task.Result, task.FinishedAt = operations.TaskSucceeded, &output, &now
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TransientSecretConsumer(t *testing.T) TransientSecrets {

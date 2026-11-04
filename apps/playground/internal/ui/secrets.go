@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -88,19 +89,39 @@ type secretResult struct {
 func (m *Model) pendingSecrets() map[secretRequirement]bool {
 	pending := make(map[secretRequirement]bool)
 	for id, operation := range m.operations {
-		for _, key := range operation.MissingSecrets() {
+		for _, key := range operation.PreflightSecrets() {
 			pending[secretRequirement{id, key}] = true
+		}
+		if m.transient.source != m.config.API {
+			continue
+		}
+		for _, task := range operation.Tasks {
+			if !liveSecretTask(operation, task) {
+				continue
+			}
+			for _, request := range m.transient.reusable {
+				if request.AgentID == task.AgentID && request.AgentType == task.AgentType && time.Now().Before(request.ExpiresAt) && taskNeedsSecret(task, request.Name) {
+					pending[secretRequirement{id, secrets.Key{Name: request.Name}}] = true
+				}
+			}
 		}
 	}
 	return pending
 }
 
 func (m *Model) syncSecrets() tea.Cmd {
+	m.reapSecretWork()
 	if m.admin.running && !m.secrets.open {
 		return nil
 	}
 	if m.stage != stageChat {
 		return nil
+	}
+	if !m.hasRuntimeSecrets() {
+		m.transient.loginDismissed = false
+	}
+	if m.secrets.open && m.transient.current != nil {
+		return m.syncTransientSecret()
 	}
 	pending := m.pendingSecrets()
 	for requirement := range m.secrets.dismissed {
@@ -131,6 +152,9 @@ func (m *Model) syncSecrets() tea.Cmd {
 }
 
 func (m *Model) openSecrets(manual bool) tea.Cmd {
+	if command, handled := m.openTransientSecret(manual); handled {
+		return command
+	}
 	pending := m.pendingSecrets()
 	keys := make(map[secrets.Key]bool)
 	for requirement := range pending {
@@ -139,6 +163,9 @@ func (m *Model) openSecrets(manual bool) tea.Cmd {
 		}
 	}
 	if len(keys) == 0 {
+		if m.hasRuntimeSecrets() {
+			return m.discoverSecrets(manual)
+		}
 		if manual {
 			m.add("notice", "No secrets are needed by the watched operations.")
 		}
@@ -193,6 +220,7 @@ func (m *Model) connectAdminAPI(message string, resume func() tea.Cmd) tea.Cmd {
 }
 
 func (m *Model) beginSecretPanel(keys []secrets.Key, manual bool) {
+	m.resetTransientPanel()
 	m.finishSecrets("")
 	panel := &m.secrets
 	panel.open, panel.manual, panel.keys = true, manual, keys
@@ -416,12 +444,16 @@ func (m *Model) finishSecrets(message string) {
 func (m *Model) dismissSecrets() {
 	if m.secrets.stage == secretSaving {
 		message := "Save interrupted. Use /secrets to check before trying again."
+		if m.transient.current != nil {
+			message = "Submission interrupted. Use /secrets to check status. The value will not be resent."
+		}
 		if m.secrets.manual {
 			message = "Save interrupted. Check saved state before trying again."
 		}
 		m.add("notice", message)
 	}
 	m.finishSecrets("")
+	m.resetTransientPanel()
 	m.secrets.open = false
 	m.secrets.connection = Connection[host.BasicCredentials]{}
 	m.focusQuestion(m.questions.focused)
@@ -470,7 +502,14 @@ func (m *Model) secretKey(key tea.KeyMsg) tea.Cmd {
 			}
 			return m.loadSecrets()
 		}
+		if m.transient.current != nil {
+			return m.sendTransientSecret()
+		}
 		return m.saveSecrets()
+	case "r":
+		if m.transient.current != nil && panel.stage == secretFinished {
+			return m.readTransientSecret()
+		}
 	case "tab", "shift+tab":
 		if count := len(panel.fields); count > 0 {
 			direction := 1
@@ -493,6 +532,10 @@ func (m *Model) secretKey(key tea.KeyMsg) tea.Cmd {
 func (m *Model) secretView() string {
 	panel := &m.secrets
 	title, description := "Shared secrets", "Sent directly to the API, never to the model."
+	if request := m.transient.current; request != nil {
+		title = "One-time secret"
+		description = fmt.Sprintf("Request: %s\nOperation: %s\nAgent: %s\nExpires: %s\nSent only to this execution; never saved for reuse.", request.ID, request.OperationID, request.AgentID, request.ExpiresAt.Format(time.RFC3339))
+	}
 	if panel.stage == secretConnect {
 		title, description = "Connect to API", "API login · Kept in memory for this session."
 	}
@@ -524,6 +567,9 @@ func (m *Model) secretView() string {
 	footer := "Tab next · Enter continue/save · Esc dismiss"
 	if panel.stage == secretFinished {
 		footer = "Enter back to chat · Esc dismiss"
+		if m.transient.current != nil {
+			footer = "R check status · Enter back to chat · Esc dismiss"
+		}
 	} else if len(panel.fields) == 0 {
 		footer = "Esc dismiss"
 	}

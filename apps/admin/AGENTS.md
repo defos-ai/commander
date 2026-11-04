@@ -72,8 +72,11 @@ the [UI guide](ui/AGENTS.md) for UI changes.
   then runs in a separate `install-agent` operation. Preserve successful build evidence
   if publication, release or installation is declined or fails.
 - `secrets/` owns the shared secret API operations used by CLI and Playground.
-  CLI/Playground managed-value forms list only `type=reusable` requests. Admin UI
-  uses its separate request-specific one-time form for transient values.
+  Managed-value forms list only `type=reusable` requests. Playground and Admin UI
+  use separate request-specific one-time forms for transient values. Shared Go
+  helpers in `secrets/transient.go` validate request identity and execution scope,
+  return metadata only and send one value POST without retry. HTTP 202 confirms
+  submission; a fulfilled metadata read confirms agent receipt, not site acceptance.
   Secret identity is deployment-wide by name; recipient types belong only to
   request metadata. Project validated metadata instead of returning raw responses. Only a typed
   `404 secret_not_found` permits creation; updates/deletes carry the observed ID

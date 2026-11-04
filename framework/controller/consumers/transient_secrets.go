@@ -15,8 +15,9 @@ import (
 )
 
 type transientDelivery struct {
-	message    messages.Message
-	receivedAt time.Time
+	message        messages.Message
+	receivedAt     time.Time
+	executionEnded bool
 }
 
 func (*SecretEventConsumer) String() string   { return "controller secrets (values redacted)" }
@@ -111,6 +112,11 @@ func (c *SecretEventConsumer) ProvideTransient(ctx context.Context, requestID st
 		}
 		return secrets.ErrRequestExpired
 	}
+	if awaiting, err := c.awaitTransientReceipt(ctx, request); err != nil {
+		return err
+	} else if awaiting {
+		return secrets.ErrRequestClosed
+	}
 	active, err := c.transientActive(ctx, request, now)
 	if err != nil {
 		return err
@@ -183,6 +189,9 @@ func (c *SecretEventConsumer) deliverTransient(ctx context.Context, record secre
 	if now.Before(request.RequestedAt) {
 		return nil
 	}
+	if awaiting, err := c.awaitTransientReceipt(ctx, request); awaiting || err != nil {
+		return err
+	}
 	active, err := c.transientActive(ctx, request, now)
 	if err != nil {
 		return err
@@ -201,6 +210,29 @@ func (c *SecretEventConsumer) deliverTransient(ctx context.Context, record secre
 		return nil
 	}
 	return (agentevents.Client{Bus: c.Bus}).Publish(ctx, delivery.message)
+}
+
+func (c *SecretEventConsumer) awaitTransientReceipt(ctx context.Context, request secrets.Request) (bool, error) {
+	delivery := c.transient[request.ID]
+	if delivery == nil || !delivery.receivedAt.IsZero() {
+		return false, nil
+	}
+	if delivery.executionEnded {
+		return true, nil
+	}
+	execution, err := c.transientClaim(ctx, request)
+	if errors.Is(err, executions.ErrUnknownExecution) {
+		return false, nil
+	}
+	if err != nil || execution.Result == nil {
+		return false, err
+	}
+	// Results and receipts can arrive independently. End value retention while
+	// keeping the exact envelope for a receipt within the original lifetime.
+	clear(delivery.message.Payload)
+	delivery.message.Payload = nil
+	delivery.executionEnded = true
+	return true, nil
 }
 
 func (c *SecretEventConsumer) endTransient(ctx context.Context, request secrets.Request, now time.Time) error {

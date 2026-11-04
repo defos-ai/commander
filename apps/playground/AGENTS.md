@@ -94,16 +94,21 @@
   using a displayed review link or `/admin`. Keep `missions://` URIs for MCP
   resource access; never present them as browser/download links. Playground has
   no image preview. Do not assume Admin is running or invent its address.
-- Active blocked preflight and running tasks may identify managed secrets with
+- Active blocked preflight and running tasks may identify missing secrets with
   `agent_type` and `missing_requirements` of kind `secret`. Show `secrets needed`
   for preflight actions without a ready candidate or running tasks with valid
   shared secret names in a nonterminal operation. MCP projects task requirements from
   matching live agent work and hides expired observation deadlines. Check task
-  deadlines locally too, including while the form is open. Never infer managed
-  secrets from sensitive environment requirements or pending delivery requests.
+  deadlines locally too, including while the form is open. Preflight declarations
+  are reusable; runtime names need authenticated request metadata before selecting
+  a reusable or transient form. Absence of a transient request is not reusable
+  evidence: agent observations can precede request persistence. Match reusable
+  runtime requests to the live agent/name, and transient requests to the exact
+  operation, task, command, agent and name. Never infer secrets from sensitive
+  environment requirements or unrelated pending delivery requests.
   Reuse that operation's Admin review link, or show `/admin` setup guidance without
   a configured URL.
-  Automatically open one local masked field per shared name, deduplicating across
+  Automatically open one local masked field per reusable name, deduplicating across
   requesting agents and watched operations; `/secrets`
   reopens dismissed requirements. Never infer the API connection from MCP or
   model/operation content. All-in-one reuses its API connection; remote mode uses
@@ -123,6 +128,19 @@
   Model guidance may point to `/secrets` or Admin Secrets but must not solicit
   values in chat, tool inputs or
   `ask_question`. Preserve existing preflight review scheduling.
+- `internal/ui/transient_secrets.go` owns metadata discovery and one-time forms.
+  Re-read exact immutable scope before enabling masked input. Keep same-name
+  requests distinct and clear drafts on expiry, execution loss, dismissal or close.
+  Retain attempted-request guards per API connection through original expiry,
+  including after errors, cancellation and reopening. Never retry value writes;
+  only metadata reads may repeat. HTTP 202 is awaiting receipt, fulfilled is
+  received by agent, and neither means a website accepted a code. Do not reset a
+  pending attempted request into editable input after readback. These guards live
+  only in this Playground process; no transient bytes or attempt state enter saved
+  history, settings or provider-key storage. Returning to chat requires Enter/Esc.
+  Track, cancel and join discovery/submission jobs on shutdown; results contain
+  metadata only. After a live task clears requirements it may omit `agent_type`;
+  keep polling receipt using its unchanged task/command/agent IDs.
 - Native release binaries build Admin assets into `apps/admin/ui/backend/static/dist`
   and compile with `-tags embed_ui`. Untagged Go builds still work without Node;
   use `UI_STATIC_DIR` for an existing frontend when starting Admin. A terminal-only

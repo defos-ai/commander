@@ -133,7 +133,7 @@ func TestTransientSecretValueResumesItsExecutionThroughAuthenticatedAPI(t *testi
 	stack.Await(t, func() bool {
 		response := transientRequest(t, stack.API, http.MethodGet, "/api/v1/operations/"+operation.ID+"/tasks/"+task.ID, "")
 		current := decodeSecretResponse[models.TaskResponse](t, response, http.StatusOK)
-		if current.Status == "failed" || current.Status == "interrupted" {
+		if current.Status == "failed" || current.Status == "interrupted" || current.Status == "cancelled" {
 			t.Fatal("transient submission failed its original execution")
 		}
 		if current.Status != "succeeded" {
@@ -147,6 +147,9 @@ func TestTransientSecretValueResumesItsExecutionThroughAuthenticatedAPI(t *testi
 	stack.Await(t, func() bool {
 		response := transientRequest(t, stack.API, http.MethodGet, "/api/v1/secret-requests/"+request.ID, "")
 		saved := decodeSecretResponse[models.SecretRequestResponse](t, response, http.StatusOK)
+		if saved.Status == "cancelled" || saved.Status == "expired" {
+			t.Fatalf("transient request %s before its delivery receipt was saved", saved.Status)
+		}
 		if saved.Status != "fulfilled" {
 			return false
 		}
