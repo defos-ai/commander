@@ -72,6 +72,8 @@ the [UI guide](ui/AGENTS.md) for UI changes.
   then runs in a separate `install-agent` operation. Preserve successful build evidence
   if publication, release or installation is declined or fails.
 - `secrets/` owns the shared secret API operations used by CLI and Playground.
+  Its existing managed-value forms list only `type=reusable` requests; transient
+  requests require a separate request-specific input flow.
   Secret identity is deployment-wide by name; recipient types belong only to
   request metadata. Project validated metadata instead of returning raw responses. Only a typed
   `404 secret_not_found` permits creation; updates/deletes carry the observed ID

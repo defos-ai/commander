@@ -122,9 +122,21 @@ func TestSecretsWithMongo(t *testing.T) {
 			ID     string `json:"id"`
 			Status string `json:"status"`
 		} `json:"items"`
-	}](t, secretRequest(t, server, http.MethodGet, "/api/v1/secret-requests?agent_id="+agentID, ""))
+	}](t, secretRequest(t, server, http.MethodGet, "/api/v1/secret-requests?type=reusable&agent_id="+agentID, ""))
 	if len(pending.Items) != 1 || pending.Items[0].ID != request.ID || pending.Items[0].Status != "awaiting_delivery" {
 		t.Fatal("API must project only reusable requests through the managed-secret form")
+	}
+	transientPending := decodeResponse[struct {
+		Items []struct {
+			ID, Type, Status string
+			OperationID      string `json:"operation_id"`
+			TaskID           string `json:"task_id"`
+			CommandID        string `json:"command_id"`
+		} `json:"items"`
+	}](t, secretRequest(t, server, http.MethodGet, "/api/v1/secret-requests?type=transient&agent_id="+agentID, ""))
+	if len(transientPending.Items) != 1 || transientPending.Items[0].ID != transient.ID || transientPending.Items[0].Type != "transient" || transientPending.Items[0].Status != "pending" ||
+		transientPending.Items[0].OperationID != transient.OperationID || transientPending.Items[0].TaskID != transient.TaskID || transientPending.Items[0].CommandID != transient.CommandID {
+		t.Fatal("API did not preserve transient request metadata from MongoDB")
 	}
 	if _, err := os.Stat(filepath.Join(fixture.Root, "database", "secrets.json")); !os.IsNotExist(err) {
 		t.Fatal("MongoDB configuration also wrote an FS secret store")

@@ -69,12 +69,12 @@ func List(ctx context.Context, api *client.Client) ([]Metadata, error) {
 }
 
 func Requests(ctx context.Context, api *client.Client, agentType string) ([]Request, error) {
-	path := "/api/v1/secret-requests"
+	path := "/api/v1/secret-requests?type=reusable"
 	if agentType != "" {
 		if !id.ValidType(agentType) {
 			return nil, errors.New("invalid agent type")
 		}
-		path += "?agent_type=" + url.QueryEscape(agentType)
+		path += "&agent_type=" + url.QueryEscape(agentType)
 	}
 	response, err := api.Do(ctx, http.MethodGet, path, nil, maxListBytes)
 	if err != nil {

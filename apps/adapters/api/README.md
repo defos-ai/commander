@@ -119,6 +119,12 @@ Manage secrets through [Admin](../../admin/ui/README.md#secrets) or the authenti
 agents. Detail routes use `/api/v1/secrets/{name}`; `/api/v1/secret-requests` shows
 waiting recipients. Values are write-only; responses contain metadata.
 
+For verification codes, list `/api/v1/secret-requests?type=transient`, then POST
+`{"value":"..."}` to `/api/v1/secret-requests/{request_id}/values` before expiry.
+A `202` starts delivery; GET the request's detail route to check its receipt.
+These values stay out of managed storage. A receipt confirms arrival at the agent,
+not successful use on a website. Admin and Playground forms are coming separately.
+
 Without a key, secret routes return `503 secrets_unavailable`; other API features
 remain available. After saving, wait for the agent's requirement to clear.
 For conflicts or uncertain writes, refresh metadata before retrying.

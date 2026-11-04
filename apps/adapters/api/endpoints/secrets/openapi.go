@@ -7,6 +7,7 @@ import (
 
 	"github.com/defos-ai/commander/apps/adapters/api/endpoints"
 	"github.com/defos-ai/commander/apps/adapters/api/models"
+	secretmodel "github.com/defos-ai/commander/framework/domain/secrets"
 	"github.com/google/jsonschema-go/jsonschema"
 )
 
@@ -155,7 +156,7 @@ func registerRequestsOpenAPI(paths, components map[string]any, options *jsonsche
 	if err != nil {
 		return fmt.Errorf("describe API SecretRequest: %w", err)
 	}
-	schema.Description = "Pending request metadata only; never includes secret values, encrypted envelopes or encryption keys."
+	schema.Description = "Secret request metadata only; never includes secret values, encrypted envelopes or encryption keys."
 	schema.Properties["id"].Pattern, schema.Properties["id"].Format = secretIDPattern, "uuid"
 	schema.Properties["agent_type"].Pattern = secretAgentTypePattern
 	maximum := 63
@@ -163,16 +164,23 @@ func registerRequestsOpenAPI(paths, components map[string]any, options *jsonsche
 	schema.Properties["agent_id"].Pattern = secretRequestAgentIDPattern
 	schema.Properties["agent_id"].MaxLength = &maximum
 	schema.Properties["name"].Pattern = secretNamePattern
-	schema.Properties["status"].Enum = []any{"needs_value", "awaiting_delivery", "awaiting_installation"}
-	schema.Properties["status"].Description = "needs_value: the current secret is absent or unavailable. awaiting_delivery: a current value exists without a matching valid reserved delivery. awaiting_installation: a matching delivery is reserved, but installation has not been acknowledged; publication is not guaranteed."
+	schema.Properties["type"].Enum = []any{"reusable", "transient"}
+	for _, name := range []string{"operation_id", "task_id", "command_id"} {
+		property := schema.Properties[name]
+		property.Pattern, property.Format = secretIDPattern, "uuid"
+		property.Description = "Execution identity for a transient request."
+	}
+	schema.Properties["status"].Enum = []any{"pending", "needs_value", "awaiting_delivery", "awaiting_installation", "fulfilled", "cancelled", "expired"}
+	schema.Properties["status"].Description = "Transient requests use pending: saved request metadata does not reveal whether a value is awaiting input or an in-memory delivery receipt. Reusable requests use needs_value when the managed secret is absent or unavailable, awaiting_delivery without a matching valid reservation, and awaiting_installation when a matching reservation exists without acknowledgement; a reservation does not guarantee publication. Detail reads also expose fulfilled, cancelled and expired. Fulfilled means receipt only, never successful use. An overdue saved pending request projects expired without changing saved state."
 	components["SecretRequest"] = schema
 	options.TypeSchemas[typeOf] = schema
 	operation := endpoints.OpenAPIQueryOperation("listSecretRequests", "List pending secret requests", "Secrets", map[string]any{
 		"type": "object", "required": []string{"items"},
 		"properties": map[string]any{"items": map[string]any{"type": "array", "items": endpoints.OpenAPIRef("SecretRequest")}},
 	})
-	operation["description"] = "Returns pending, unexpired requests sorted by request ID, without pagination or changing saved state. Optional filters intersect. Unknown, repeated, empty or malformed query parameters are rejected. This is an eventually consistent snapshot across request and secret stores, not agent readiness: lease refreshes can overlap for one agent and key. Responses use Cache-Control: no-store."
+	operation["description"] = "Returns pending, unexpired reusable and transient requests sorted by request ID, without pagination or changing saved state. Optional filters intersect. Transient requests retain their operation, task and command IDs; their names are never resolved from managed secret storage. Unknown, repeated, empty or malformed query parameters are rejected. This eventually consistent metadata snapshot is not agent readiness or proof that input is still needed. Responses use Cache-Control: no-store."
 	operation["parameters"] = []any{
+		secretParameter("type", "query", false, map[string]any{"type": "string", "enum": []string{"reusable", "transient"}}),
 		secretParameter("agent_type", "query", false, map[string]any{"type": "string", "pattern": secretAgentTypePattern, "maxLength": 63}),
 		secretParameter("agent_id", "query", false, map[string]any{"type": "string", "pattern": secretRequestAgentIDPattern, "maxLength": 63}),
 	}
@@ -181,7 +189,62 @@ func registerRequestsOpenAPI(paths, components map[string]any, options *jsonsche
 	responses["503"] = endpoints.OpenAPIResponse("secrets_unavailable or request_canceled. Secret management requires configured encryption and a request store.", endpoints.OpenAPIRef("Error"))
 	responses["504"] = endpoints.OpenAPIResponse("request_timeout after at most 10 seconds. Reads do not change saved state.", endpoints.OpenAPIRef("Error"))
 	paths[secretRequestsPath] = map[string]any{"get": operation}
-	return nil
+	detail := endpoints.OpenAPIQueryOperation("getSecretRequest", "Get secret request metadata", "Secrets", endpoints.OpenAPIRef("SecretRequest"))
+	detail["description"] = "Returns metadata for one pending or terminal request without exposing values, encrypted envelopes or delivery payloads. Use this read after an uncertain submission. Fulfilled records delivery receipt, not successful use. Overdue pending requests project expired without mutation. Transient names are never resolved from managed secret storage. Reads remain available without a live controller. Query parameters are not accepted. Responses use Cache-Control: no-store."
+	detail["parameters"] = []any{
+		secretParameter("request_id", "path", true, map[string]any{"type": "string", "format": "uuid", "pattern": secretIDPattern}),
+	}
+	detailResponses := detail["responses"].(map[string]any)
+	detailResponses["400"] = endpoints.OpenAPIResponse("invalid_request or invalid_request_origin", endpoints.OpenAPIRef("Error"))
+	detailResponses["404"] = endpoints.OpenAPIResponse("secret_request_not_found", endpoints.OpenAPIRef("Error"))
+	detailResponses["503"] = responses["503"]
+	detailResponses["504"] = responses["504"]
+	paths[secretRequestPath] = map[string]any{"get": detail}
+	return registerRequestValueOpenAPI(paths, components, options)
 }
 
 const secretRequestAgentIDPattern = `^[a-z0-9]+(-[a-z0-9]+)*-agent-[0-9a-f]{8}$`
+
+func registerRequestValueOpenAPI(paths, components map[string]any, options *jsonschema.ForOptions) error {
+	for _, model := range []struct {
+		name   string
+		typeOf reflect.Type
+	}{
+		{"ProvideSecretValueRequest", reflect.TypeFor[models.ProvideSecretValueRequest]()},
+		{"SecretValueSubmissionResponse", reflect.TypeFor[models.SecretValueSubmissionResponse]()},
+	} {
+		schema, err := jsonschema.ForType(model.typeOf, options)
+		if err != nil {
+			return fmt.Errorf("describe API %s: %w", model.name, err)
+		}
+		schema.AdditionalProperties = &jsonschema.Schema{Not: &jsonschema.Schema{}}
+		if value := schema.Properties["value"]; value != nil {
+			value.Type, value.Types, value.AnyOf = "string", nil, nil
+			value.WriteOnly = true
+			maximum := secretmodel.MaxTransientSecretBytes
+			value.MaxLength = &maximum
+			value.Description = "Required write-only transient value, at most 64 KiB of UTF-8 bytes. Empty strings are valid; omission and null are invalid. The controller holds it in memory for this request only; it never enters managed secret storage."
+			schema.Required = []string{"value"}
+		}
+		if status := schema.Properties["status"]; status != nil {
+			status.Enum = []any{"awaiting_receipt"}
+		}
+		components[model.name] = schema
+		options.TypeSchemas[model.typeOf] = schema
+	}
+	operation := secretOperation("provideSecretRequestValue", "Provide a transient secret value", endpoints.OpenAPIRef("SecretValueSubmissionResponse"))
+	operation["description"] = "Sends a write-only value through the controller for one pending transient request. Requires authentication and enabled secret management. Reusable requests use /api/v1/secrets instead. An identical pending submission retains its delivery identity; changed, closed or expired requests are rejected. Acceptance confirms controller delivery submission, not agent receipt or successful use. No values are returned or stored as managed secrets. Query parameters are not accepted. After an uncertain response, inspect request and operation state before deciding whether to submit again; never request or submit a replacement verification code automatically. Responses use Cache-Control: no-store."
+	operation["parameters"] = []any{
+		secretParameter("request_id", "path", true, map[string]any{"type": "string", "format": "uuid", "pattern": secretIDPattern}),
+	}
+	setSecretBody(operation, "ProvideSecretValueRequest")
+	responses := operation["responses"].(map[string]any)
+	delete(responses, "200")
+	responses["202"] = endpoints.OpenAPIResponse("Submitted to the controller; delivery receipt is still pending.", endpoints.OpenAPIRef("SecretValueSubmissionResponse"))
+	responses["404"] = endpoints.OpenAPIResponse("secret_request_not_found", endpoints.OpenAPIRef("Error"))
+	responses["409"] = endpoints.OpenAPIResponse("secret_request_conflict, secret_request_closed or secret_request_expired", endpoints.OpenAPIRef("Error"))
+	responses["503"] = endpoints.OpenAPIResponse("secrets_unavailable, controller_unavailable, secret_delivery_uncertain, secret_write_uncertain or request_canceled. Submission may have succeeded; inspect saved state without automatically resubmitting. No values are returned.", endpoints.OpenAPIRef("Error"))
+	responses["504"] = endpoints.OpenAPIResponse("request_timeout after at most 10 seconds. Submission may have succeeded; inspect saved state without automatically resubmitting.", endpoints.OpenAPIRef("Error"))
+	paths[secretRequestValuesPath] = map[string]any{"post": operation}
+	return nil
+}

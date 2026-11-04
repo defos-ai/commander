@@ -7,8 +7,10 @@ import (
 )
 
 var (
-	ErrUnknownRequest  = errors.New("secret request does not exist")
-	ErrRequestConflict = errors.New("secret request or delivery conflicts with saved state")
+	ErrUnknownRequest    = errors.New("secret request does not exist")
+	ErrRequestConflict   = errors.New("secret request or delivery conflicts with saved state")
+	ErrUnavailable       = errors.New("secret distribution is unavailable")
+	ErrDeliveryUncertain = errors.New("transient secret delivery outcome is unknown")
 )
 
 // RequestStore atomically tracks request metadata and receipt evidence. Reusable

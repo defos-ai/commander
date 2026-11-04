@@ -27,15 +27,16 @@ func (r CommandEnvelope) Validate() error {
 }
 
 const (
-	MethodDiscoverActions     = "agents.discover"
-	MethodRunAction           = "agents.run_action"
-	MethodStopAgent           = "agents.stop"
-	MethodStartOperation      = "operations.start"
-	MethodResolveContinuation = "operations.resolve_continuation"
-	MethodAssignTask          = "operations.assign"
-	MethodAskQuestion         = "operations.ask"
-	MethodAnswerQuestion      = "operations.answer"
-	MethodCompleteOperation   = "operations.complete"
-	MethodFailOperation       = "operations.fail"
-	MethodCancelOperation     = "operations.cancel"
+	MethodDiscoverActions        = "agents.discover"
+	MethodRunAction              = "agents.run_action"
+	MethodStopAgent              = "agents.stop"
+	MethodStartOperation         = "operations.start"
+	MethodResolveContinuation    = "operations.resolve_continuation"
+	MethodAssignTask             = "operations.assign"
+	MethodAskQuestion            = "operations.ask"
+	MethodAnswerQuestion         = "operations.answer"
+	MethodCompleteOperation      = "operations.complete"
+	MethodFailOperation          = "operations.fail"
+	MethodCancelOperation        = "operations.cancel"
+	MethodProvideTransientSecret = "secrets.provide_transient"
 )

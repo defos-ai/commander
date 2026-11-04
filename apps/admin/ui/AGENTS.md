@@ -230,8 +230,9 @@
 - **Secrets** is a deployment-wide sidebar page with its own active state.
   Preserve operation and Agent shortcuts without an Agents-only parent/back link.
   The Secrets page uses authenticated `/api/v1/secrets` metadata and
-  `/api/v1/secret-requests`. Group refresh requests by shared secret name; their
-  progress is not agent readiness or proof of installation. Inventory lists all
+  `/api/v1/secret-requests?type=reusable` until transient forms are available.
+  Group these reusable requests by shared name; their progress is not agent
+  readiness or proof of installation. Inventory lists all
   saved names without an agent-type selector. Provide-value actions
   read current metadata before choosing create or replace; only a confirmed 404
   permits create. Replacement/deletion use the saved ID and version.

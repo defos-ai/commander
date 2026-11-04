@@ -58,6 +58,7 @@ func assemble(c *Controller, bus comms.Bus, config ControllerConfig) (result []w
 			return nil, err
 		}
 		secretEvents = secrets
+		c.secrets = secrets
 		list = append(list, secrets)
 	}
 	c.sharing = sharing.New(c.coreLifetime, sharing.Dependencies{

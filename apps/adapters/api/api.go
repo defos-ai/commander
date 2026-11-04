@@ -44,6 +44,7 @@ type Config struct {
 	ArtifactFileStore  artifacts.ArtifactFileStore
 	SecretService      *secretservice.Service
 	SecretRequestStore secrets.RequestStore
+	SecretRequests     controllercommands.SecretRequests
 	TestCleaner        frameworktesting.TestCleaner
 }
 
@@ -74,7 +75,7 @@ func NewHandler(config Config) (http.Handler, error) {
 	endpoints.RegisterArtifacts(mux, config.ArtifactStore, config.ArtifactFileStore)
 	operationendpoints.Register(mux, config.OperationStore, config.ReportStore, config.AgentStore, config.ExecutionStore, config.Operations)
 	secretendpoints.Register(mux, config.SecretService)
-	secretendpoints.RegisterRequests(mux, config.SecretService, config.SecretRequestStore)
+	secretendpoints.RegisterRequests(mux, config.SecretService, config.SecretRequestStore, config.SecretRequests)
 	if os.Getenv("ENV") == "tests" && config.TestCleaner != nil {
 		endpoints.RegisterTestCleanup(mux, config.TestCleaner)
 	}

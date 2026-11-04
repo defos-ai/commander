@@ -12,6 +12,7 @@ import (
 	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/domain/reports"
+	"github.com/defos-ai/commander/framework/domain/secrets"
 	"github.com/defos-ai/commander/framework/domain/sessions"
 )
 
@@ -44,9 +45,16 @@ var errorCodes = []struct {
 	{"indeterminate", executions.ErrIndeterminate},
 	{"operation_write_uncertain", operations.ErrWriteUncertain},
 	{"session_write_uncertain", sessions.ErrWriteUncertain},
+	{"secret_write_uncertain", secrets.ErrWriteUncertain},
+	{"secret_delivery_uncertain", secrets.ErrDeliveryUncertain},
 	{"canceled", context.Canceled},
 	{"deadline_exceeded", context.DeadlineExceeded},
 	{"controller_closed", domain.ErrControllerClosed},
+	{"secrets_unavailable", secrets.ErrUnavailable},
+	{"secret_request_not_found", secrets.ErrUnknownRequest},
+	{"secret_request_conflict", secrets.ErrRequestConflict},
+	{"secret_request_closed", secrets.ErrRequestClosed},
+	{"secret_request_expired", secrets.ErrRequestExpired},
 	{"unknown_agent", agentmodel.ErrUnknownAgent},
 	{"agent_not_running", agentmodel.ErrAgentNotRunning},
 	{"unknown_artifact", artifacts.ErrUnknownArtifact},

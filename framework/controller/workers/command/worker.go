@@ -166,6 +166,9 @@ func (c *Worker) consumeRequest(ctx context.Context, coordinator requestCoordina
 	if err := envelope.Validate(); err != nil {
 		return controllerconsumers.InvalidMessage(err)
 	}
+	if envelope.Method == controllercommands.MethodProvideTransientSecret {
+		return c.consumeTransient(ctx, m, envelope)
+	}
 	claimed := coordinator.claim(ctx, m, envelope.Deadline)
 	if claimed.err != nil {
 		return claimed.err
@@ -213,6 +216,8 @@ func (c *Worker) consumeCancellation(ctx context.Context, coordinator requestCoo
 
 func (c *Worker) dispatch(ctx context.Context, method string, params json.RawMessage) (any, error) {
 	switch method {
+	case controllercommands.MethodProvideTransientSecret:
+		return struct{}{}, c.provideTransient(ctx, params)
 	case controllercommands.MethodControlSession:
 		var p sessions.Control
 		if err := domain.Decode(params, &p); err != nil {

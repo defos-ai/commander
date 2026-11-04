@@ -37,6 +37,11 @@
 - Preserve the adapter client's subscribe-before-publish behavior. A lost reply
   does not authorize retrying a mutation. Controller request replay is bounded
   and in memory; it does not survive controller restart.
+  Transient value submissions bypass that payload ledger so it cannot retain
+  values after delivery. Their business request ID governs pending delivery
+  replay; terminal requests reject later submissions rather than replaying a
+  cached success. Bound the command by its original deadline, clear owned value
+  buffers and sanitize transport errors. No client automatically retries it.
 - Execution checkpoint requests are explicitly retryable: reads and identical
   immutable saves reuse their request identity while the action is active.
   Controller replies follow saved-claim validation and durable persistence.

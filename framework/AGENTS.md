@@ -460,14 +460,22 @@
   Only the controller decrypts for delivery. Keep trusted-bus and finite-lease revocation limits
   explicit; historical fulfillment does not authorize dispatch by itself.
   Transient exchange additionally verifies the durable execution claim and active
-  operation/task/deadline. `secret.Worker.ProvideTransient` is the internal value
-  entry point; authenticated API/UI submission is not wired yet. Retain one exact
+  operation/task/deadline. `secret.Worker.ProvideTransient` receives values through
+  the controller's narrow `SecretRequests` command capability; the authenticated
+  API exposes request-specific submission. Admin/Playground forms remain separate.
+  Retain one exact
   delivery in controller memory until receipt, cancellation or expiry; changed
   submissions conflict. After a receipt, clear bytes before saving its metadata,
   retaining receipt time for uncertain-write reconciliation without resending bytes.
   Startup cancels saved pending transient requests because memory does not survive
   controller restart. Retries of terminal requests report that state without
   reopening it. Never resolve a transient name from reusable storage.
+  Value-bearing adapter commands bypass the ordinary payload replay ledger.
+  Clear command buffers on both sides; keep values out of cached replies and
+  model-facing commands. The secret request itself provides pending delivery
+  identity: same-value submissions reuse it, changed values conflict, and closed
+  requests stay closed. A lost reply needs metadata readback, never an automatic
+  retry or a new code request.
 - Preserve schema validation of action input, output and proposed next actions.
   Public snapshots must remain independent.
 - `action.ExecutionFromContext` exposes the current command/work identity for

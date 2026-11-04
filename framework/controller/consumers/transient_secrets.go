@@ -97,7 +97,7 @@ func (c *SecretEventConsumer) ProvideTransient(ctx context.Context, requestID st
 		return err
 	}
 	if request.EffectiveType() != secrets.SecretTransient {
-		return errors.New("transient submission requires an execution-scoped request")
+		return secrets.ErrRequestConflict
 	}
 	if request.Status != secrets.Pending {
 		c.discardTransient(request.ID)

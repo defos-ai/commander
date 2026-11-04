@@ -215,7 +215,7 @@ export async function listSecrets(url: string, credentials: Session, signal?: Ab
 }
 
 export async function listSecretRequests(url: string, credentials: Session, signal?: AbortSignal): Promise<PendingSecretRequest[]> {
-  return request(url, credentials, '/api/v1/secret-requests', 'GET', 200, body => readList(body, readPendingRequest), undefined, signal);
+  return request(url, credentials, '/api/v1/secret-requests?type=reusable', 'GET', 200, body => readList(body, readPendingRequest), undefined, signal);
 }
 
 export async function getSecret(url: string, credentials: Session, key: SecretKey, signal?: AbortSignal): Promise<SecretMetadata> {

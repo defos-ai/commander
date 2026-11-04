@@ -93,9 +93,15 @@ func (c *Client) call(ctx context.Context, method string, params interface{ Vali
 	if err != nil {
 		return err
 	}
+	if method == MethodProvideTransientSecret {
+		defer clear(data)
+	}
 	m, err := messages.NewAdapterMessage(messages.AdapterRequest, c.adapterID, CommandEnvelope{Method: method, Parameters: data, Deadline: deadline})
 	if err != nil {
 		return err
+	}
+	if method == MethodProvideTransientSecret {
+		defer clear(m.Payload)
 	}
 	waiting := make(chan adapterevents.ControllerReply, 1)
 	select {

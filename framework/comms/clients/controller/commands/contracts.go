@@ -14,6 +14,10 @@ type Controller interface {
 	StopAgent(context.Context, string) (agentmodel.Agent, error)
 }
 
+type SecretRequests interface {
+	ProvideTransient(context.Context, string, []byte) error
+}
+
 type Operations interface {
 	Start(context.Context, StartOperationCommand) (operations.Operation, error)
 	Resolve(context.Context, ResolveContinuationCommand) (operations.Operation, error)

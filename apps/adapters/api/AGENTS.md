@@ -182,10 +182,10 @@
   Saving secrets makes them available to controller reconciliation; API success
   does not confirm agent installation. Keep distribution outside HTTP handlers.
 - `/api/v1/secret-requests` shares the secret feature gate and database. It projects
-  pending, unexpired reusable requests into explicit metadata DTOs, sorted by request
-  ID. Skip transient metadata until request-specific submission is supported, so
-  the managed-secret form cannot save a verification code as a reusable value.
-  Optional recipient `agent_type` and `agent_id` filters intersect. Secret metadata
+  pending, unexpired requests into explicit metadata DTOs, sorted by request ID.
+  Include effective `type` and optional execution IDs. Transient status is `pending`,
+  without reading reusable secret metadata or inferring whether a value is held.
+  Optional `type`, `agent_type` and `agent_id` filters intersect. Secret metadata
   has no agent type; requests retain their registered recipient type. Reject empty, repeated,
   unknown or malformed filters. Capture one time per response and never settle or
   expire requests while reading. Missing/expired values need input; available
@@ -193,6 +193,20 @@
   Reservation does not prove publication. This unpaginated view is eventually
   consistent across stores, not readiness or authorization evidence; refreshes may
   overlap. Never return ciphertext, installations, plaintext or key material.
+  `GET /api/v1/secret-requests/{request_id}` supplies metadata-only readback of
+  pending or terminal state; project overdue pending records as expired without
+  changing storage. Keep terminal receipt metadata distinct from successful use.
+- `POST /api/v1/secret-requests/{request_id}/values` accepts only a write-only
+  UTF-8 `value`, at most 64 KiB, through the existing authenticated feature gate.
+  Inject the separate `controllercommands.SecretRequests` capability; send one
+  request-specific command instead of storing or delivering values in HTTP code.
+  Clear owned body/value buffers. Return `202 awaiting_receipt` after publication,
+  never receipt or website acceptance. Unknown IDs are 404; conflicting, closed,
+  expired or reusable targets are 409. Preserve delivery/write uncertainty before
+  timeout errors; replies and diagnostics must not echo values or backend errors.
+  Do not retry automatically. Refresh the detail route after uncertain responses.
+  Existing managed-secret clients request `type=reusable` until their transient
+  forms are implemented, so codes cannot be entered into the managed-value form.
 - `credentials` automatically reads the running container's startup environment
   only when PID 1 uses the same executable; otherwise it reads the current
   environment. Keep this lookup exclusive to explicit retrieval, never server

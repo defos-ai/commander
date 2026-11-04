@@ -21,6 +21,10 @@ including workers whose `Run` has not started. No runtime loop starts in assembl
   once-only subscription cleanup within the caller's deadline. Intake failures
   stop admission through the ordered shutdown path; they do not cancel core
   routing before the operation worker joins.
+  Transient value submissions bypass the ordinary request ledger and retain no
+  payload/hash for replay. Dispatch through the secret capability under the
+  submitted deadline, return metadata only, and clear owned decoding buffers.
+  Secret-request identity handles pending retries; closed requests remain closed.
 - [Coordination](coordination/worker.go) owns the command mailbox, pending replies,
   inventory observation state, lease expiry and durable dispatch/recovery. Remote
   waits stay outside its owner loop. `submit` retains a buffered reply so caller

@@ -18,6 +18,7 @@ import (
 	"github.com/defos-ai/commander/framework/controller/workers/coordination"
 	"github.com/defos-ai/commander/framework/controller/workers/event"
 	"github.com/defos-ai/commander/framework/controller/workers/operation"
+	"github.com/defos-ai/commander/framework/controller/workers/secret"
 	"github.com/defos-ai/commander/framework/controller/workers/session"
 	"github.com/defos-ai/commander/framework/controller/workers/sharing"
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
@@ -71,6 +72,7 @@ type Controller struct {
 	controllerType string
 	coordination   *coordination.Worker
 	sessions       *session.Worker
+	secrets        *secret.Worker
 	sharing        *sharing.Worker
 	events         *event.Worker
 	operations     *operation.Worker
