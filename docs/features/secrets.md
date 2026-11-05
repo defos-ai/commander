@@ -34,6 +34,52 @@ write-only: API reads and Admin inventories return metadata, not stored values.
   Provide it through the same form and let the existing execution resume. Its
   task deadline keeps running; do not start replacement work just to supply a key.
 
+## Reusable flow
+
+Reusable values, such as API keys and CRM logins, are shared by name. An agent can
+supply a `Default` from its code, environment or memory. Existing values take
+precedence; an expired value needs operator replacement.
+
+```mermaid
+sequenceDiagram
+    participant A as Agent
+    participant C as Controller
+    participant D as Database
+    participant API as API
+    actor O as Operator via Admin or Playground
+
+    A->>C: Request name with optional Default (broker)
+    C->>D: Read shared secret
+    alt Saved value is available
+        D-->>C: Encrypted value
+    else Name is missing and Default is supplied
+        C->>D: Encrypt and create only if missing
+        D-->>C: Saved value or concurrent winner
+    else No Default, or saved value is expired
+        O->>API: Read missing-secret metadata
+        API->>D: Read request and secret metadata
+        API-->>O: Name needs a value
+        O->>API: Provide value in masked form
+        API->>D: Encrypt and save shared value
+        C->>D: Read on reconciliation
+        D-->>C: Encrypted value
+    end
+    C->>C: Decrypt for this delivery
+    C->>A: Deliver value (broker)
+    A->>A: Install value in local cache
+    par Action execution
+        A->>A: Resume action
+    and Installation acknowledgement
+        A-->>C: Confirm installation
+        C->>D: Save installation receipt
+    end
+    Note over C,D: Saved values are reusable by later agents
+```
+
+A valid local copy can be reused until its lease expires. Saving a default never
+overwrites an existing value; callers waiting for the same name share one pending
+request within an agent.
+
 ## One-time values
 
 Open **Admin → Secrets → One-time requests** for verification codes and other
@@ -51,6 +97,52 @@ Playground opens a separate **One-time secret** form for a watched execution.
 Check its operation, agent and expiry before entering the value. Use `/secrets`
 to reopen it and **R** to check status. Dismissing or reopening never resends a
 submitted value. Closing Playground discards any unsent draft.
+
+### Transient flow
+
+Transient values, such as verification codes, belong to one request and execution.
+The database retains request and receipt metadata; the value stays out of reusable
+storage and the agent-wide cache.
+
+```mermaid
+sequenceDiagram
+    participant A as Agent
+    participant C as Controller
+    participant D as Database
+    participant API as API
+    actor O as Operator via Admin or Playground
+
+    A->>C: Request transient value for this execution (broker)
+    C->>D: Save request ID, execution scope and expiry
+    O->>API: Read one-time requests
+    API->>D: Read pending request metadata
+    API-->>O: Name, agent, operation and expiry
+    alt Value is supplied and received before the request closes
+        O->>API: Provide value for this request ID
+        API->>C: Forward value to the controller
+        C->>C: Hold value in memory
+        C->>A: Deliver with fixed request and delivery IDs (broker)
+        par Submission response
+            C-->>API: Accepted for delivery
+            API-->>O: Awaiting receipt
+        and Action execution
+            A->>A: Receive value and resume original execution
+        and Delivery receipt
+            A-->>C: Confirm receipt
+            C->>C: Clear held value
+            C->>D: Save fulfilled request metadata
+        end
+    else Expiry, cancellation or controller restart before receipt
+        C->>C: Discard any held value
+        C->>D: Close pending request
+        Note over A,C: Another code requires a new request
+    end
+```
+
+Receipt confirms arrival, not acceptance by a website. Action completion may
+precede the receipt; the controller keeps only delivery metadata for a matching
+late receipt until the original expiry. Transport retries keep the same IDs and
+value, while an uncertain submission calls for a status check.
 
 ## Replace, expire or delete
 
