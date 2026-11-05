@@ -344,7 +344,7 @@
   Cancel and join it during shutdown. Recovery reads do not replay sharing, and
   saved source IDs let receivers deduplicate accepted event redeliveries.
 - After a successful answer save, the operation worker notifies its explicitly
-  injected sharing capability with only operation/question IDs. The sharing worker
+  injected sharing capability with the saved question-answer event. The sharing worker
   [rereads the saved decision](controller/workers/sharing/decisions.go)
   and matches its task to the original execution claim before routing. Preserve
   question IDs, content, timestamps and answer origin; multiple decisions can

@@ -63,6 +63,9 @@ add their service prerequisites and checks.
   `analyze-text` and its proposed `write-summary` artifact; action behavior belongs
   in the standalone agent repositories. Do not add web/browser-agent hosts or Go
   imports to Commander tests. Chromium in integration CI serves Admin UI tests only.
+  Build that pinned source against the current Commander workspace through
+  [the test Dockerfile](../../.github/composes/example-agent.Dockerfile), not its
+  published SDK dependencies. Keep workspace edits inside the build image.
 - The API/MCP stacks include a spawner and local HTTPS package fixture. FS uses
   native child processes; full-provider tests use a loopback registry and Docker
   sibling containers. Keep the fixture under `apps/agents/spawner/tests/e2e/`;

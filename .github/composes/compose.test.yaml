@@ -183,8 +183,10 @@ services:
     <<: *agent
     image: commander-example-agent:test
     build:
-      context: https://github.com/defos-ai/commander-example-agent.git#71823ec22f91905e3e0de40a8ea77dcf0aa5354f
-      dockerfile: docker/Dockerfile
+      context: ../..
+      dockerfile: .github/composes/example-agent.Dockerfile
+      additional_contexts:
+        example-agent-source: https://github.com/defos-ai/commander-example-agent.git#71823ec22f91905e3e0de40a8ea77dcf0aa5354f
 
   example-agent-2:
     <<: *agent
