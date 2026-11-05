@@ -71,7 +71,7 @@ func createChildren(op *Operation, parentIndex int, actions []actionmodel.NextAc
 	c.Status = ContinuationResolved
 	if collect && len(actions) > 0 {
 		c.DecisionBy, c.Status = DecisionCode, ContinuationWaiting
-		op.appendBatchEvent(BatchStarted, batchID, parent.ID, "Aggregation batch accepted; producer tasks may still be queued")
+		op.appendBatchEvent(TaskBatchStarted, batchID, parent.ID, "Aggregation batch accepted; producer tasks may still be queued")
 	}
 }
 

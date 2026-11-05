@@ -140,7 +140,7 @@ func TestAggregationBatchRecoveryRejectsInvalidBoundariesWithoutMutation(t *test
 			op.Tasks[1].BatchID = id.New()
 		}},
 		{name: "missing start", mutate: func(_ *testing.T, op *operations.Operation) {
-			op.Events = slices.DeleteFunc(op.Events, func(event operations.Event) bool { return event.Type == operations.BatchStarted })
+			op.Events = slices.DeleteFunc(op.Events, func(event operations.Event) bool { return event.Type == operations.TaskBatchStarted })
 		}},
 		{name: "unrelated parent", mutate: func(_ *testing.T, op *operations.Operation) {
 			op.Tasks[1].ParentTaskID = id.TaskID()
@@ -149,11 +149,11 @@ func TestAggregationBatchRecoveryRejectsInvalidBoundariesWithoutMutation(t *test
 			op.Tasks[0].BatchID = op.Tasks[1].BatchID
 		}},
 		{name: "duplicate start", mutate: func(_ *testing.T, op *operations.Operation) {
-			op.AppendEvent(operations.BatchStarted, op.Tasks[0].ID, "", "Duplicate start")
+			op.AppendEvent(operations.TaskBatchStarted, op.Tasks[0].ID, "", "Duplicate start")
 			op.Events[len(op.Events)-1].BatchID = op.Tasks[1].BatchID
 		}},
 		{name: "queued member marked finished", mutate: func(_ *testing.T, op *operations.Operation) {
-			op.AppendEvent(operations.BatchFinished, op.Tasks[0].ID, "", "Premature completion")
+			op.AppendEvent(operations.TaskBatchFinished, op.Tasks[0].ID, "", "Premature completion")
 			op.Events[len(op.Events)-1].BatchID = op.Tasks[1].BatchID
 		}},
 		{name: "interrupted member marked finished", mutate: func(t *testing.T, op *operations.Operation) {
@@ -166,7 +166,7 @@ func TestAggregationBatchRecoveryRejectsInvalidBoundariesWithoutMutation(t *test
 				Status: operations.TaskInterrupted, Error: "Outcome unknown", FinishedAt: time.Now().UTC()}); err != nil {
 				t.Fatal(err)
 			}
-			op.AppendEvent(operations.BatchFinished, op.Tasks[0].ID, "", "Premature completion")
+			op.AppendEvent(operations.TaskBatchFinished, op.Tasks[0].ID, "", "Premature completion")
 			op.Events[len(op.Events)-1].BatchID = op.Tasks[1].BatchID
 		}},
 	} {
@@ -210,10 +210,10 @@ func assertBatchEvents(t *testing.T, op operations.Operation, batchID, parentID 
 			t.Fatalf("batch event lost its saved scope or timestamp: %+v", event)
 		}
 		switch event.Type {
-		case operations.BatchStarted:
+		case operations.TaskBatchStarted:
 			started++
 			startSequence = event.Sequence
-		case operations.BatchFinished:
+		case operations.TaskBatchFinished:
 			finished++
 			finishSequence = event.Sequence
 		}

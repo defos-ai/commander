@@ -43,7 +43,7 @@ func TestOperationResultsSettleConcurrentChildrenAtomically(t *testing.T) {
 				t.Fatalf("parent did not publish both children: %+v, %v", op, err)
 			}
 			batchID := op.Tasks[1].BatchID
-			if !id.Valid(batchID) || op.Tasks[0].BatchID != "" || op.Tasks[2].BatchID != batchID || countResultEvents(op, operations.BatchStarted) != 1 || countResultEvents(op, operations.BatchFinished) != 0 {
+			if !id.Valid(batchID) || op.Tasks[0].BatchID != "" || op.Tasks[2].BatchID != batchID || countResultEvents(op, operations.TaskBatchStarted) != 1 || countResultEvents(op, operations.TaskBatchFinished) != 0 {
 				t.Fatalf("queued children did not retain one open aggregation batch: %+v", op)
 			}
 			for _, child := range op.Tasks[1:] {
@@ -93,7 +93,7 @@ func TestOperationResultsSettleConcurrentChildrenAtomically(t *testing.T) {
 				if (finished == 1) != (result.op.Tasks[0].Continuation.Status == operations.ContinuationWaiting) {
 					t.Fatalf("group decision was not committed with the last child: %+v", result.op)
 				}
-				if countResultEvents(result.op, operations.BatchStarted) != 1 || countResultEvents(result.op, operations.BatchFinished) != finished-1 {
+				if countResultEvents(result.op, operations.TaskBatchStarted) != 1 || countResultEvents(result.op, operations.TaskBatchFinished) != finished-1 {
 					t.Fatalf("batch boundary was not committed with the last child outcome: %+v", result.op.Events)
 				}
 			}
@@ -128,13 +128,13 @@ func TestOperationResultsSettleConcurrentChildrenAtomically(t *testing.T) {
 				if event.Type == operations.TaskFinished && (event.TaskID == requests[0].TaskID || event.TaskID == requests[1].TaskID) {
 					lastOutcome = event.Sequence
 				}
-				if event.Type != operations.BatchStarted && event.Type != operations.BatchFinished {
+				if event.Type != operations.TaskBatchStarted && event.Type != operations.TaskBatchFinished {
 					continue
 				}
 				if event.BatchID != batchID || event.TaskID != parentResult.TaskID || event.OperationID != op.ID {
 					t.Fatalf("reopened batch boundary lost its identity: %+v", event)
 				}
-				if event.Type == operations.BatchStarted {
+				if event.Type == operations.TaskBatchStarted {
 					start = event.Sequence
 				} else {
 					finish = event.Sequence
@@ -167,7 +167,7 @@ func TestOperationResultReplayPreservesPublishedChildrenAndBytes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !id.Valid(saved.Tasks[1].BatchID) || saved.Tasks[2].BatchID != saved.Tasks[1].BatchID || countResultEvents(saved, operations.BatchStarted) != 1 || countResultEvents(saved, operations.BatchFinished) != 0 {
+	if !id.Valid(saved.Tasks[1].BatchID) || saved.Tasks[2].BatchID != saved.Tasks[1].BatchID || countResultEvents(saved, operations.TaskBatchStarted) != 1 || countResultEvents(saved, operations.TaskBatchFinished) != 0 {
 		t.Fatalf("reopening lost the published batch: %+v", saved)
 	}
 	path := filepath.Join(dir, "operations", op.ID+".json")
@@ -281,7 +281,7 @@ func TestOperationResultWriteFailuresAreSafeToRetry(t *testing.T) {
 			if err != nil || len(retried.Tasks) != 3 || retried.Tasks[0].Status != operations.TaskSucceeded || countResultEvents(retried, operations.TaskAssigned) != 2 || countResultEvents(retried, operations.TaskFinished) != 1 {
 				t.Fatalf("retry lost or duplicated the completion transaction: %+v, %v", retried, err)
 			}
-			if !id.Valid(retried.Tasks[1].BatchID) || retried.Tasks[2].BatchID != retried.Tasks[1].BatchID || countResultEvents(retried, operations.BatchStarted) != 1 || countResultEvents(retried, operations.BatchFinished) != 0 {
+			if !id.Valid(retried.Tasks[1].BatchID) || retried.Tasks[2].BatchID != retried.Tasks[1].BatchID || countResultEvents(retried, operations.TaskBatchStarted) != 1 || countResultEvents(retried, operations.TaskBatchFinished) != 0 {
 				t.Fatalf("retry lost or duplicated the aggregation batch: %+v", retried)
 			}
 			replayed, err := store.FinishTask(t.Context(), op.ID, request)

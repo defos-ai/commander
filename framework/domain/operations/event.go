@@ -5,23 +5,32 @@ import "time"
 type EventType string
 
 const (
-	OperationStarted          EventType = "operation.started"
-	PreflightUpdated          EventType = "operation.preflight_updated"
-	TaskDispatched            EventType = "task.dispatched"
+	OperationStarted    EventType = "operation.started"
+	PreflightUpdated    EventType = "operation.preflight_updated"
+	OperationRecovered  EventType = "operation.recovered"
+	OperationCompleted  EventType = "operation.completed"
+	CompletionRequested EventType = "operation.completion_requested"
+	OperationFailed     EventType = "operation.failed"
+	OperationCancelled  EventType = "operation.cancelled"
+)
+
+const (
+	TaskAssigned         EventType = "task.assigned"
+	TaskDispatched       EventType = "task.dispatched"
+	TaskFinished         EventType = "task.finished"
+	TaskInterruptedEvent EventType = "task.interrupted"
+	TaskBatchStarted     EventType = "task.batch.started"
+	TaskBatchFinished    EventType = "task.batch.finished"
+)
+
+const (
+	QuestionAsked         EventType = "question.asked"
+	QuestionAnsweredEvent EventType = "question.answered"
+)
+
+const (
 	ContinuationReady         EventType = "continuation.ready"
 	ContinuationResolvedEvent EventType = "continuation.resolved"
-	TaskAssigned              EventType = "task.assigned"
-	TaskFinished              EventType = "task.finished"
-	TaskInterruptedEvent      EventType = "task.interrupted"
-	BatchStarted              EventType = "batch.started"
-	BatchFinished             EventType = "batch.finished"
-	OperationRecovered        EventType = "operation.recovered"
-	QuestionAsked             EventType = "question.asked"
-	QuestionAnsweredEvent     EventType = "question.answered"
-	OperationCompleted        EventType = "operation.completed"
-	CompletionRequested       EventType = "operation.completion_requested"
-	OperationFailed           EventType = "operation.failed"
-	OperationCancelled        EventType = "operation.cancelled"
 )
 
 type Event struct {

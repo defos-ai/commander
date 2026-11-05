@@ -260,7 +260,7 @@ func TestOperationMongoAutomaticChildrenAndDecisionRace(t *testing.T) {
 		t.Fatalf("automatic fan-out: %+v, %v", published, err)
 	}
 	batchID := published.Tasks[1].BatchID
-	if !id.Valid(batchID) || published.Tasks[0].BatchID != "" || published.Tasks[2].BatchID != batchID || countOperationEvents(published, operations.BatchStarted) != 1 || countOperationEvents(published, operations.BatchFinished) != 0 {
+	if !id.Valid(batchID) || published.Tasks[0].BatchID != "" || published.Tasks[2].BatchID != batchID || countOperationEvents(published, operations.TaskBatchStarted) != 1 || countOperationEvents(published, operations.TaskBatchFinished) != 0 {
 		t.Fatalf("automatic fan-out did not save one open aggregation batch: %+v", published)
 	}
 	replay := result
@@ -303,7 +303,7 @@ func TestOperationMongoAutomaticChildrenAndDecisionRace(t *testing.T) {
 	if decision.DecisionBy != operations.DecisionModel || decision.Status != operations.ContinuationPending || countOperationEvents(settled, operations.ContinuationReady) != 1 || countOperationEvents(settled, operations.TaskFinished) != 3 {
 		t.Fatalf("last child did not settle group exactly once: %+v", settled)
 	}
-	if settled.Tasks[1].BatchID != batchID || settled.Tasks[2].BatchID != batchID || countOperationEvents(settled, operations.BatchStarted) != 1 || countOperationEvents(settled, operations.BatchFinished) != 1 {
+	if settled.Tasks[1].BatchID != batchID || settled.Tasks[2].BatchID != batchID || countOperationEvents(settled, operations.TaskBatchStarted) != 1 || countOperationEvents(settled, operations.TaskBatchFinished) != 1 {
 		t.Fatalf("concurrent completions lost or duplicated a batch boundary: %+v", settled)
 	}
 	events, err := second.ListEvents(t.Context(), op.ID, 0, 100)
@@ -315,13 +315,13 @@ func TestOperationMongoAutomaticChildrenAndDecisionRace(t *testing.T) {
 		if event.Type == operations.TaskFinished && (event.TaskID == settled.Tasks[1].ID || event.TaskID == settled.Tasks[2].ID) {
 			lastOutcome = event.Sequence
 		}
-		if event.Type != operations.BatchStarted && event.Type != operations.BatchFinished {
+		if event.Type != operations.TaskBatchStarted && event.Type != operations.TaskBatchFinished {
 			continue
 		}
 		if event.BatchID != batchID || event.TaskID != parent.ID || event.OperationID != op.ID {
 			t.Fatalf("saved batch event lost its identity: %+v", event)
 		}
-		if event.Type == operations.BatchStarted {
+		if event.Type == operations.TaskBatchStarted {
 			start = event.Sequence
 		} else {
 			finish = event.Sequence
@@ -350,7 +350,7 @@ func TestOperationMongoAutomaticChildrenAndDecisionRace(t *testing.T) {
 	if len(final.Tasks) != 4 || final.Tasks[3].ParentTaskID != parent.ID || final.Tasks[0].Continuation.Version != decision.Version+1 || countOperationEvents(final, operations.ContinuationResolvedEvent) != 1 {
 		t.Fatalf("duplicate decision branch: %+v", final)
 	}
-	if !id.Valid(final.Tasks[3].BatchID) || final.Tasks[3].BatchID == batchID || final.Tasks[1].BatchID != batchID || final.Tasks[2].BatchID != batchID || countOperationEvents(final, operations.BatchStarted) != 2 || countOperationEvents(final, operations.BatchFinished) != 1 {
+	if !id.Valid(final.Tasks[3].BatchID) || final.Tasks[3].BatchID == batchID || final.Tasks[1].BatchID != batchID || final.Tasks[2].BatchID != batchID || countOperationEvents(final, operations.TaskBatchStarted) != 2 || countOperationEvents(final, operations.TaskBatchFinished) != 1 {
 		t.Fatalf("new continuation decision changed an earlier batch or reused its identity: %+v", final)
 	}
 	if _, err := first.ResolveContinuation(t.Context(), op.ID, parent.ID, decision.Version, []actions.NextAction{}); err == nil {

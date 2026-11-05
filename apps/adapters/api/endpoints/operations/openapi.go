@@ -80,7 +80,7 @@ func RegisterOpenAPI(paths, components map[string]any, options *jsonschema.ForOp
 			if model.name == "Event" {
 				schema.Properties["batch_id"].ReadOnly = true
 				schema.Properties["batch_id"].Format = "uuid"
-				schema.Properties["batch_id"].Description = "Aggregation batch identity on batch.started and batch.finished events; task_id names its parent task. Start records accepted membership before dispatch; finish records known producer outcomes, including failures or cancellations. Interrupted outcomes do not finish a batch."
+				schema.Properties["batch_id"].Description = "Aggregation batch identity on task.batch.started and task.batch.finished events; task_id names its parent task. Start records accepted membership before dispatch; finish records known producer outcomes, including failures or cancellations. Interrupted outcomes do not finish a batch."
 			}
 			if model.name == "Operation" {
 				schema.Properties["completion_draft"].ReadOnly = true

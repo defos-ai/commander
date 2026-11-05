@@ -58,7 +58,7 @@ applies to all domain packages below this directory.
   saved direct children; failures and empty proposals still require model review.
   Aggregated children retain a stable `Task.BatchID` for each accepted group,
   independent of later continuation versions and child lists. Task membership
-  and `batch.started`/`batch.finished` events persist within the operation;
+  and `task.batch.started`/`task.batch.finished` events persist within the operation;
   no separate batch store exists. Finish requires known outcomes for every
   member, including failed or cancelled tasks. Interrupted outcomes remain
   unknown even when continuation review is ready. Late results can close an

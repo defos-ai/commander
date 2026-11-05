@@ -42,14 +42,14 @@ func (o *Operation) finishBatches() {
 	}
 	finished := make(map[string]bool)
 	for _, event := range o.Events {
-		if event.Type == BatchFinished {
+		if event.Type == TaskBatchFinished {
 			finished[event.BatchID] = true
 		}
 	}
 	// Task membership survives later continuation decisions and their new child lists.
 	for _, event := range o.Events {
-		if event.Type == BatchStarted && !finished[event.BatchID] && batchSettled(members[event.BatchID]) {
-			o.appendBatchEvent(BatchFinished, event.BatchID, event.TaskID, "Aggregation batch finished; all producer outcomes are known")
+		if event.Type == TaskBatchStarted && !finished[event.BatchID] && batchSettled(members[event.BatchID]) {
+			o.appendBatchEvent(TaskBatchFinished, event.BatchID, event.TaskID, "Aggregation batch finished; all producer outcomes are known")
 			finished[event.BatchID] = true
 		}
 	}
@@ -63,14 +63,14 @@ func (o Operation) validateBatches() error {
 	}
 	started, finished := make(map[string]Event), make(map[string]bool)
 	for _, event := range o.Events {
-		if event.Type != BatchStarted && event.Type != BatchFinished {
+		if event.Type != TaskBatchStarted && event.Type != TaskBatchFinished {
 			continue
 		}
 		if !id.Valid(event.BatchID) || event.OperationID != o.ID || event.CreatedAt.IsZero() || !parents[event.TaskID] {
 			return fmt.Errorf("invalid batch event %d", event.Sequence)
 		}
 		previous, exists := started[event.BatchID]
-		if event.Type == BatchStarted {
+		if event.Type == TaskBatchStarted {
 			if exists || len(members[event.BatchID]) == 0 {
 				return fmt.Errorf("duplicate or empty batch %s", event.BatchID)
 			}
