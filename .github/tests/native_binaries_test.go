@@ -70,6 +70,9 @@ func TestCINativeBinaryPublication(t *testing.T) {
 			if got := strings.Contains(log, "release create"); got == draft {
 				t.Errorf("create release = %t, existing draft = %t", got, draft)
 			}
+			if got := f.Read(t, "notes.md"); got != "### Improvements\n\nCommander fixture notes.\n" {
+				t.Errorf("root release notes = %q", got)
+			}
 			assets := append(append([]string{}, fixtures.RootBinaryNames()...), "LICENSE")
 			var checksums strings.Builder
 			for _, name := range assets {
@@ -152,6 +155,69 @@ func TestCINativeBinaryPublicationFailures(t *testing.T) {
 			}
 			if mode != "upload failure" && strings.Contains(log, "release upload") {
 				t.Errorf("publication must not upload after lookup failure: %s", log)
+			}
+		})
+	}
+}
+
+func TestCIReleaseNotesRejectMissingEmptyOrDuplicateSections(t *testing.T) {
+	for _, name := range []string{"root", "builder", "spawner"} {
+		for _, mode := range []string{"missing file", "missing section", "empty", "duplicate"} {
+			t.Run(name+"/"+mode, func(t *testing.T) {
+				var f *fixtures.Native
+				if name == "root" {
+					f = fixtures.NewNative(t)
+				} else {
+					f = fixtures.NewAgentPackage(t, name)
+				}
+				heading := "## " + f.Environment("RELEASE_TITLE")
+				notes := "## Unrelated release\n\nOther notes.\n"
+				switch mode {
+				case "empty":
+					notes = heading + "\n\n \t\n" + notes
+				case "duplicate":
+					notes = heading + "\n\nFirst notes.\n\n" + heading + "\n\nSecond notes.\n"
+				}
+				notesPath := "docs/releases/note-" + f.Environment("VERSION") + ".md"
+				if mode == "missing file" {
+					if err := os.Remove(filepath.Join(f.Dir(), notesPath)); err != nil {
+						t.Fatal(err)
+					}
+				} else {
+					f.Write(t, notesPath, notes)
+				}
+
+				output, err := f.Run(t)
+
+				if err == nil {
+					t.Fatalf("invalid release notes published: %s", output)
+				}
+				if log := f.Read(t, "gh.log"); log != "" {
+					t.Errorf("invalid release notes reached GitHub: %s", log)
+				}
+			})
+		}
+	}
+}
+
+func TestCIDraftNotesUpdateFailureDoesNotPublish(t *testing.T) {
+	for _, name := range []string{"root", "spawner"} {
+		t.Run(name, func(t *testing.T) {
+			f := fixtures.NewNative(t)
+			if name != "root" {
+				f = fixtures.NewAgentPackage(t, name)
+			}
+			f.SetEnvironment("RELEASES", fmt.Sprintf(`{"tag_name":%q,"draft":true}`, f.Environment("RELEASE_TAG")))
+			f.SetEnvironment("FAIL_NOTES", "1")
+
+			output, err := f.Run(t)
+
+			if err == nil {
+				t.Fatalf("draft notes failure ignored: %s", output)
+			}
+			log := f.Read(t, "gh.log")
+			if strings.Contains(log, "release upload") || strings.Contains(log, "--draft=false") {
+				t.Errorf("draft published after its notes update failed: %s", log)
 			}
 		})
 	}

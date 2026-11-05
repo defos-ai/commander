@@ -39,11 +39,12 @@ func TestSharedDataUsesSavedPoliciesAndAcceptedEvidence(t *testing.T) {
 	unsharedAnalysis = stack.AwaitWorking(t, unsharedOperation.ID, unsharedAnalysis.ID)
 	ignored := assignSharingTask(t, stack, unsharedOperation.ID, fakes.FindingAction, json.RawMessage(`{"marker":"unshared"}`))
 	stack.AwaitTask(t, unsharedOperation.ID, ignored.ID, "succeeded")
-	first := assignSharingTask(t, stack, operation.ID, fakes.FindingAction, json.RawMessage(`{"marker":"first"}`))
+	const firstMarker = "first \"quoted\"\\path\nfinding"
+	first := assignSharingTask(t, stack, operation.ID, fakes.FindingAction, json.RawMessage(`{"marker":"first \"quoted\"\\path\nfinding"}`))
 	first = stack.AwaitTask(t, operation.ID, first.ID, "succeeded")
 
-	assertSharedFinding(t, receiveSharedFinding(t, stack, analysis.AgentID), first, analysis, true, true, "first")
-	assertSharedFinding(t, receiveSharedFinding(t, stack, evidence.AgentID), first, evidence, false, true, "first")
+	assertSharedFinding(t, receiveSharedFinding(t, stack, analysis.AgentID), first, analysis, true, true, firstMarker)
+	assertSharedFinding(t, receiveSharedFinding(t, stack, evidence.AgentID), first, evidence, false, true, firstMarker)
 	stack.AwaitTask(t, operation.ID, analysis.ID, "running")
 	stack.AwaitTask(t, operation.ID, evidence.ID, "running")
 	if operation.Mission.Policies == nil || unsharedOperation.Mission.Policies != nil {

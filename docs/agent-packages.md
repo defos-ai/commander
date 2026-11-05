@@ -25,7 +25,7 @@ Yes; approval applies only to that execution.
 | --- | --- |
 | `https://github.com/owner/repository` | Promoted GitHub **Latest** release |
 | `github.com/owner/repository@stable` | Same as an unversioned URL |
-| `github.com/owner/repository@v0.2.0` | Exact version |
+| `github.com/owner/repository@v0.4.0` | Exact version |
 
 Use explicit versions for reproducible installations. `stable` needs a published
 stable version marked Latest; it does not fall back to other tags. Each new
@@ -54,7 +54,7 @@ checksum and pushed image digest:
 ```yaml
 schema_version: 1
 type: example-agent
-version: v0.2.0
+version: v0.4.0
 responsibilities:
   - Analyze text and produce a Markdown summary.
 actions:
@@ -84,7 +84,7 @@ tooling and live registration share their descriptions.
 
 Build, test and generate metadata from the same revision. Keep the release as a
 draft until all assets are uploaded. For Commander's built-in packages, follow
-[the release checklist](releases.md#agent-packages).
+[the release checklist](releases/README.md#agent-packages).
 
 ## Resolving a package
 
@@ -94,7 +94,7 @@ use a module-prefixed tag. Both publish an asset named `agent.yaml`:
 | Package reference | GitHub release tag |
 | --- | --- |
 | `github.com/defos-ai/commander-web-agent@v0.2.0` | `v0.2.0` |
-| `github.com/defos-ai/commander/apps/agents/builder@v0.3.0` | `apps/agents/builder/v0.3.0` |
+| `github.com/defos-ai/commander/apps/agents/builder@v0.4.0` | `apps/agents/builder/v0.4.0` |
 
 Module `@stable` references use the repository's root Latest version to choose the
 corresponding module release. Publication is required; a version in `go.mod` or
@@ -133,10 +133,14 @@ may still need a secret, executable or configuration.
 | Native all-in-one | Child processes on your host |
 | Docker AIO | Child processes inside the AIO container |
 | Compose | Sibling containers on the deployment network |
+| Kubernetes spawner runtime | Pods in its configured namespace |
 
 Only spawner starts by default. Additional agents are installed through
 chat/MCP in a separate `install-agent` operation, before starting work that needs
-their actions. One spawn task creates one instance; use separate tasks for more.
+their actions. `spawn-agent` accepts `count` from 1 to 100, defaulting to one.
+Larger requests propose individual child launch tasks; review their results and
+readiness before starting dependent work. Pin a version when every instance must
+use the same release.
 
 If installation fails with an uncertain outcome, inspect the process or container
 before requesting a new instance. A spawner restart leaves Docker children running;

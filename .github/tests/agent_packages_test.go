@@ -29,6 +29,9 @@ func TestCIAgentPackagePublication(t *testing.T) {
 				if got := strings.Contains(log, "release create"); got == draft {
 					t.Errorf("create release = %t, existing draft = %t", got, draft)
 				}
+				if want, got := strings.ToUpper(agent[:1])+agent[1:]+" fixture notes.\n", f.Read(t, "notes.md"); got != want {
+					t.Errorf("%s release notes = %q, want %q", agent, got, want)
+				}
 				assets := []string{"agent.yaml", "LICENSE"}
 				assets = append(assets, fixtures.AgentNativeBinaryNames(agent)...)
 				var checksums strings.Builder

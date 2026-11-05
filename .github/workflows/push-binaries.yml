@@ -119,16 +119,22 @@ jobs:
           done
           sha256sum "${assets[@]}" > checksums.txt
 
+          notes_file=$(mktemp)
+          trap 'rm -f "$notes_file"' EXIT
+          bash ../.github/scripts/release-notes.sh "../docs/releases/note-$VERSION.md" "Commander $AGENT agent $VERSION" > "$notes_file"
+
           draft=$(gh api --paginate "repos/$GH_REPO/releases?per_page=100" --jq '.[]' |
             jq -sr --arg tag "$TAG" 'map(select(.tag_name == $tag)) | if length == 0 then "missing" else .[0].draft end')
           case "$draft" in
             missing)
-              gh release create "$TAG" --verify-tag --draft --title "Commander $AGENT agent $VERSION" --generate-notes --latest=false
+              gh release create "$TAG" --verify-tag --draft --title "Commander $AGENT agent $VERSION" --notes-file "$notes_file" --latest=false
               ;;
-            true) ;;
+            true)
+              gh release edit "$TAG" --notes-file "$notes_file"
+              ;;
             false)
               published_dir=$(mktemp -d)
-              trap 'rm -rf "$published_dir"' EXIT
+              trap 'rm -f "$notes_file"; rm -rf "$published_dir"' EXIT
               gh release download "$TAG" --dir "$published_dir"
               published=("$published_dir"/*)
               expected=("${assets[@]}" checksums.txt)
@@ -212,16 +218,22 @@ jobs:
           cp ../LICENSE LICENSE
           sha256sum "${binaries[@]}" LICENSE > checksums.txt
 
+          notes_file=$(mktemp)
+          trap 'rm -f "$notes_file"' EXIT
+          bash ../.github/scripts/release-notes.sh "../docs/releases/note-$VERSION.md" "Commander $VERSION" > "$notes_file"
+
           draft=$(gh api --paginate "repos/$GH_REPO/releases?per_page=100" --jq '.[]' |
             jq -sr --arg version "$VERSION" 'map(select(.tag_name == $version)) | if length == 0 then "missing" else .[0].draft end')
           case "$draft" in
             missing)
-              gh release create "$VERSION" --verify-tag --draft --title "Commander $VERSION" --generate-notes --latest=false
+              gh release create "$VERSION" --verify-tag --draft --title "Commander $VERSION" --notes-file "$notes_file" --latest=false
               ;;
-            true) ;;
+            true)
+              gh release edit "$VERSION" --notes-file "$notes_file"
+              ;;
             false)
               published_dir=$(mktemp -d)
-              trap 'rm -rf "$published_dir"' EXIT
+              trap 'rm -f "$notes_file"; rm -rf "$published_dir"' EXIT
               gh release download "$VERSION" --dir "$published_dir"
               published=("$published_dir"/*)
               expected=("${binaries[@]}" LICENSE checksums.txt)

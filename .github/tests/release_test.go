@@ -88,6 +88,22 @@ func TestReleaseDependencies(t *testing.T) {
 	}
 }
 
+func TestReleaseNotes(t *testing.T) {
+	root, _, _ := readModules(t)
+	version := os.Getenv("RELEASE_VERSION")
+	for _, name := range []string{"Commander", "Commander builder agent", "Commander spawner agent"} {
+		t.Run(name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+			defer cancel()
+			cmd := exec.CommandContext(ctx, "bash", filepath.Join(root, ".github/scripts/release-notes.sh"),
+				filepath.Join(root, "docs/releases", "note-"+version+".md"), name+" "+version)
+			if output, err := cmd.CombinedOutput(); err != nil {
+				t.Fatalf("curated release notes: %v: %s", err, output)
+			}
+		})
+	}
+}
+
 func TestModulesCompile(t *testing.T) {
 	root, work, _ := readModules(t)
 	for _, entry := range work.Use {

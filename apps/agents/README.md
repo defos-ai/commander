@@ -16,7 +16,7 @@ orchestrated and reviewed through the same control plane.
 
 Compose and all-in-one start spawner automatically. Ask Playground:
 
-> Install the web agent, then review defos.ai.
+> Create a Hacker News digest.
 
 To build agents, start a [builder](builder/README.md#run) separately; Compose has
 an opt-in `builder` profile.
@@ -79,9 +79,9 @@ The template uses published Commander dependencies. To use an unreleased local
 checkout, add replacements in your own project's `go.mod`:
 
 ```sh
-go mod edit -require=github.com/defos-ai/commander/framework@v0.3.0
+go mod edit -require=github.com/defos-ai/commander/framework@v0.4.0
 go mod edit -replace=github.com/defos-ai/commander/framework=/absolute/path/to/commander/framework
-go mod edit -require=github.com/defos-ai/commander/providers/fs@v0.3.0
+go mod edit -require=github.com/defos-ai/commander/providers/fs@v0.4.0
 go mod edit -replace=github.com/defos-ai/commander/providers/fs=/absolute/path/to/commander/providers/fs
 ```
 

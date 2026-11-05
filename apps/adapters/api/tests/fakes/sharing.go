@@ -64,12 +64,15 @@ func (p *SharingProducer) Run(ctx context.Context, input json.RawMessage) (actio
 			}
 		}
 	}
-	marker, err := json.Marshal(request.Marker)
+	output, err := json.Marshal(struct {
+		Marker  string `json:"marker"`
+		Finding int64  `json:"finding"`
+	}{Marker: request.Marker, Finding: 9007199254740993})
 	if err != nil {
 		return action.Result{}, err
 	}
 	return action.Result{
-		Output: json.RawMessage(`{"marker":` + string(marker) + `,"finding":9007199254740993}`),
+		Output: output,
 		Artifacts: []action.Artifact{{Name: "finding", Files: []artifacts.FileSource{{
 			Name: "finding.txt", MediaType: "text/plain", Data: []byte("evidence:" + request.Marker),
 		}}}},

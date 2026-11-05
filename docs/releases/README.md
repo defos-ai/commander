@@ -1,24 +1,37 @@
 # Release Commander
 
 Use one stable `v0.X.Y` or `v1.X.Y` version for Commander and every module in
-[go.work](../go.work). The prepared version is `v0.3.0`; the examples below use it.
+[go.work](../../go.work). The prepared version is `v0.4.0`; the examples below use it.
 
-See [release notes](release-notes.md) for Commander and standalone agent changes.
+Read the [v0.4.0 notes](note-v0.4.0.md) for Commander and standalone
+agent changes, or choose an earlier version below.
+
+## Release notes
+
+- [v0.4.0](note-v0.4.0.md)
+- [v0.3.0](note-v0.3.0.md)
+- [v0.2.0](note-v0.2.0.md)
+- [v0.1.0](note-v0.1.0.md)
 
 ## Prepare and validate
 
 1. Update every internal Commander requirement in each `go.mod`, including
-   indirect dependencies, and the matching local mappings in `go.work`.
+   indirect dependencies, and the matching local mappings in `go.work`. Add
+   `docs/releases/note-<version>.md` with `## Commander <version>`,
+   `## Commander builder agent <version>` and `## Commander spawner agent <version>`
+   sections. Include upgrade requirements for saved state and external agents;
+   each section becomes that package's release description. Link the file from
+   the [version index](#release-notes).
 2. Review and commit the changes before publishing.
 3. Run **Release readiness tests** in GitHub Actions with that version for validation without
    publication. For the local module readiness check, run:
 
 ```sh
-RELEASE_VERSION=v0.3.0 go test -count=1 -failfast -timeout=10m -v ./.github/tests/release_test.go
+RELEASE_VERSION=v0.4.0 go test -count=1 -failfast -timeout=10m -v ./.github/tests/release_test.go
 ```
 
 The local check does not replace the full CI pipeline. Review the
-[Release readiness tests](../.github/workflows/test-release.yml) for the required suites.
+[Release readiness tests](../../.github/workflows/test-release.yml) for the required suites.
 
 ## Publish
 
@@ -27,7 +40,7 @@ The local check does not replace the full CI pipeline. Review the
 3. Wait for validation, native builds, tags, images and release assets to complete.
 4. Confirm the root release is **Latest** and the expected images have `stable` tags.
 
-[Make release](../.github/workflows/make-release.yml) publishes the root tag and
+[Make release](../../.github/workflows/make-release.yml) publishes the root tag and
 `<module-directory>/<version>` tags from the same tested commit. Do not create tags
 manually or trigger individual publishing workflows.
 
@@ -52,7 +65,7 @@ not notarized.
 
 Commander and Admin embed the built frontend; `commander-admin serve` starts
 the standalone UI. For Commander download and run commands, use
-the [quick start](../README.md#binary). Use `releases/latest/download/<filename>`
+the [quick start](../../README.md#binary). Use `releases/latest/download/<filename>`
 for the current release, or `releases/download/<version>/<filename>` to pin one.
 
 ## Agent packages
@@ -61,14 +74,14 @@ The publication workflow also creates separate builder and spawner package relea
 
 | Package reference | Release tag |
 | --- | --- |
-| `github.com/defos-ai/commander/apps/agents/builder@v0.3.0` | `apps/agents/builder/v0.3.0` |
-| `github.com/defos-ai/commander/apps/agents/spawner@v0.3.0` | `apps/agents/spawner/v0.3.0` |
+| `github.com/defos-ai/commander/apps/agents/builder@v0.4.0` | `apps/agents/builder/v0.4.0` |
+| `github.com/defos-ai/commander/apps/agents/spawner@v0.4.0` | `apps/agents/spawner/v0.4.0` |
 
 Each contains its six native binaries, `agent.yaml`, `LICENSE` and `checksums.txt`.
 Both support Docker on `linux/amd64`. These references become installable after
 publication completes. Verify the assets before announcing a package as
 installable; existing releases are not updated.
-See [packaging your own agent](agent-packages.md#release-manifest).
+See [packaging your own agent](../agent-packages.md#release-manifest).
 
 ## Docker images
 

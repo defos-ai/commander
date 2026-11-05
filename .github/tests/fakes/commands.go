@@ -50,7 +50,8 @@ case "$1 $2" in
     exit "$GH_STATUS"
     ;;
   'release create')
-    [[ "$*" == "release create $RELEASE_TAG --verify-tag --draft --title $RELEASE_TITLE --generate-notes --latest=false" ]]
+    [[ $# == 10 && "$*" == "release create $RELEASE_TAG --verify-tag --draft --title $RELEASE_TITLE --notes-file $9 --latest=false" ]]
+    cp "$9" "$STATE/notes.md"
     ;;
   'release download')
     [[ "$3" == "$RELEASE_TAG" && "$4" == '--dir' && $# == 5 ]]
@@ -67,7 +68,13 @@ case "$1 $2" in
     done
     ;;
   'release edit')
-    [[ "$*" == "release edit $RELEASE_TAG --draft=false --latest=false" ]]
+    if [[ "${4:-}" == --notes-file ]]; then
+      [[ $# == 5 && "$3" == "$RELEASE_TAG" ]]
+      [[ "${FAIL_NOTES:-0}" == 0 ]] || exit 1
+      cp "$5" "$STATE/notes.md"
+    else
+      [[ "$*" == "release edit $RELEASE_TAG --draft=false --latest=false" ]]
+    fi
     ;;
   *) exit 1 ;;
 esac

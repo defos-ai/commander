@@ -26,7 +26,7 @@ go run ./apps/agents/spawner/cmd --bus-url ./state/bus --storage-url ./state/sto
 
 Use the controller's bus and artifact storage. Native mode is the default;
 installed agents need any host dependencies listed in their README.
-Run with `--help` for flags, or see [release binaries](../../../docs/releases.md#native-binaries).
+Run with `--help` for flags, or see [release binaries](../../../docs/releases/README.md#native-binaries).
 
 ### Docker
 

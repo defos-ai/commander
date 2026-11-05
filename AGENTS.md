@@ -40,7 +40,7 @@ The user's current instructions take precedence over repository guidance.
   Internal requirements target the prepared release version. Version pins do not
   mean a release is published; do not add public `go get` instructions before it is.
   External consumers use the [local setup](apps/agents/README.md#develop-an-agent-in-a-private-repository).
-- Follow [releases](docs/releases.md) to prepare one version across all modules,
+- Follow [releases](docs/releases/README.md) to prepare one version across all modules,
   update requirements, run validation and publish all tags together.
 - Release publishing runs through `make-release.yml` after all suites in
   `test-release.yml` and native build checks succeed for the same commit.

@@ -33,6 +33,27 @@ var nativeBinaryNames = append(append([]string{}, rootBinaryNames...),
 	"commander-builder-agent_windows_amd64.exe", "commander-builder-agent_windows_arm64.exe",
 )
 
+const NativeReleaseNotes = `# Release notes
+
+## Commander v0.1.0
+
+### Improvements
+
+Commander fixture notes.
+
+## Commander builder agent v0.1.0
+
+Builder fixture notes.
+
+## Commander spawner agent v0.1.0
+
+Spawner fixture notes.
+
+## Commander v0.1.00
+
+Other version notes must not be included.
+`
+
 func AgentNativeBinaryNames(agent string) []string {
 	var names []string
 	for _, name := range nativeBinaryNames {
@@ -63,6 +84,17 @@ func NewNative(t *testing.T) *Native {
 		"RELEASES": "", "GH_STATUS": "0",
 	}
 	f.Write(t, "LICENSE", "Commander test license\n")
+	for _, path := range []string{"docs/releases", ".github/scripts"} {
+		if err := os.MkdirAll(filepath.Join(f.dir, path), 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	notesScript, err := os.ReadFile("../scripts/release-notes.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.Write(t, ".github/scripts/release-notes.sh", string(notesScript))
+	f.Write(t, "docs/releases/note-"+f.Environment("VERSION")+".md", NativeReleaseNotes)
 	for _, name := range nativeBinaryNames {
 		f.Write(t, "artifacts/"+name, name+"\n")
 	}
