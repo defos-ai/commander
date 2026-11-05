@@ -45,6 +45,7 @@ type SharingStack struct {
 	client     *http.Client
 	cancel     context.CancelFunc
 	busPath    string
+	files      artifacts.ArtifactFileStore
 }
 
 type sharingAgent struct {
@@ -91,6 +92,7 @@ func NewSharingStack(t *testing.T) *SharingStack {
 	require(err)
 	config.ArtifactFileStore, err = fsartifacts.NewArtifactFileFsStore(storage)
 	require(err)
+	s.files = config.ArtifactFileStore
 	config.ReportStore, err = fsreports.NewReportFsStore(storage)
 	require(err)
 	config.ControllerStore, err = fscontrollers.NewControllerFsStore(database)
@@ -177,6 +179,16 @@ func (s *SharingStack) Request(t *testing.T, method, path string, body any) Resp
 
 func (s *SharingStack) AwaitTask(t *testing.T, operationID, taskID, status string) models.TaskResponse {
 	t.Helper()
+	return s.awaitTask(t, operationID, taskID, status, false)
+}
+
+func (s *SharingStack) AwaitReconciledTask(t *testing.T, operationID, taskID, status string) models.TaskResponse {
+	t.Helper()
+	return s.awaitTask(t, operationID, taskID, status, true)
+}
+
+func (s *SharingStack) awaitTask(t *testing.T, operationID, taskID, status string, allowInterrupted bool) models.TaskResponse {
+	t.Helper()
 	var task models.TaskResponse
 	s.await(t, func() bool {
 		response := s.Request(t, http.MethodGet, "/api/v1/operations/"+operationID+"/tasks/"+taskID, nil)
@@ -186,10 +198,13 @@ func (s *SharingStack) AwaitTask(t *testing.T, operationID, taskID, status strin
 		if err := json.Unmarshal([]byte(response.Body), &task); err != nil {
 			t.Fatal(err)
 		}
-		if task.Status == "failed" || task.Status == "interrupted" {
+		if task.Status == status {
+			return true
+		}
+		if task.Status == "failed" || task.Status == "interrupted" && !allowInterrupted {
 			t.Fatalf("task failed before %s: %+v", status, task)
 		}
-		return task.Status == status
+		return false
 	})
 	return task
 }
@@ -209,6 +224,14 @@ func (s *SharingStack) AwaitWorking(t *testing.T, operationID, taskID string) mo
 }
 
 func (s *SharingStack) Analyzer(agentID string) *fakes.SharingAnalyzer { return s.analyzers[agentID] }
+
+func (s *SharingStack) StartBatchPlanner(t *testing.T) *fakes.SharingBatchPlanner {
+	t.Helper()
+	planner := fakes.NewSharingBatchPlanner()
+	t.Cleanup(planner.Gate().Release)
+	s.startAgent(t, "planner", "planner-agent-00000001", planner, s.files)
+	return planner
+}
 
 func (s *SharingStack) AwaitQuestion(t *testing.T, operationID, key string) models.QuestionResponse {
 	t.Helper()
@@ -259,6 +282,9 @@ func (s *SharingStack) await(t *testing.T, ready func() bool) {
 
 func (s *SharingStack) close(t *testing.T) {
 	t.Helper()
+	if s.Producer != nil {
+		s.Producer.ReleaseGate()
+	}
 	if s.Bus != nil {
 		s.Bus.ReleaseGates()
 	}

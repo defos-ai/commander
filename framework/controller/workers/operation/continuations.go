@@ -75,7 +75,7 @@ func (r *Worker) Resolve(ctx context.Context, command commands.ResolveContinuati
 		}
 
 		next, err := r.store.ResolveContinuation(ctx, command.OperationID, command.TaskID, command.Version, command.Actions)
-		if err := s.acceptUpdate(next, err); err != nil {
+		if err := r.acceptUpdate(s, next, err); err != nil {
 			return operations.Operation{}, err
 		}
 		r.observeAccepted(ctx, s)

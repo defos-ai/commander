@@ -67,6 +67,12 @@ func (w *Worker) forwardSharedResult(ctx context.Context, source sharedData) err
 	if !sharedTaskMatches(op.Tasks[index], stored.Command, call) {
 		return errors.New("shared result has no matching saved task dispatch")
 	}
+	batchID := op.Tasks[index].BatchID
+	// Batched results follow the operation worker's saved event sequence, not
+	// the independently accepted execution notification.
+	if batchID != "" && source.BatchID != batchID {
+		return nil
+	}
 	identity := agentevents.SharedDataSource{AgentID: source.AgentID, CommandID: source.CommandID, ActionName: call.ActionName, OperationID: source.OperationID, TaskID: source.TaskID}
 	var accepted []artifacts.Artifact
 	var artifactErr, forwardingErr error
@@ -77,6 +83,9 @@ func (w *Worker) forwardSharedResult(ctx context.Context, source sharedData) err
 		}
 		if task.ID == source.TaskID || task.OperationID != op.ID || task.Status != operations.TaskRunning ||
 			task.DeadlineAt == nil || !time.Now().Before(*task.DeadlineAt) {
+			continue
+		}
+		if batchID != "" && !w.batchRecipient(batchID, source.TaskID, task) {
 			continue
 		}
 		shareResults, shareArtifacts := sharedResultKinds(op.Mission.Policies.Sharing, call.ActionName, task.ActionName)

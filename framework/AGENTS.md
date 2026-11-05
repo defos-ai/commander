@@ -72,8 +72,10 @@
   and an absent/null/empty sharing list declare no routes. Empty policies are valid.
   Clone the policy container independently and deep-clone each nested slice into
   operation snapshots. Results, accepted artifact metadata and task-scoped
-  answered questions can be forwarded to existing active tasks. Sharing does not
-  start tasks or grant secret/storage access.
+  answered questions can be forwarded to existing active tasks. Aggregation batch
+  boundaries use these same routes without additional include values; recipients
+  receive the permitted producer membership and outcomes. Sharing does not start
+  tasks or grant secret/storage access.
 - Optional mission `policies.completion` stores a mission-wide
   [`CompletionPolicy`](domain/missions/policies/completion_policy.go) with
   required `decision_by: model|operator`. Omission/null retains a nil policy;
@@ -304,14 +306,13 @@
   command and work identity, and keep source and recipient in the same operation.
   Preserve saved source IDs and deep-copy result JSON, artifact metadata and
   answered questions. Shared producer data may include its saved `batch_id`.
-  Controller-origin `TaskBatchUpdate` payloads use the parent task as source work,
+  Controller-origin `TaskBatchUpdate` payloads identify the operation and parent task,
   with unique producer IDs and `task.batch.started`/`task.batch.finished` types.
   Finished updates require exactly one known outcome per member; interrupted
   outcomes are not finished. Keep controller lifecycle and agent data mutually
   exclusive, exclude the receiver from producer membership, and clone task IDs
   and outcome maps. The contract does not authenticate a publisher or prove
-  that every result reached the receiver. The sharing worker does not publish
-  batch lifecycle updates yet. Receivers own deduplication and aggregation.
+  that every result reached the receiver. Receivers own deduplication and aggregation.
   The 32-update buffer fails with `ErrSharedDataOverflow` rather than silently
   continuing with incomplete data; it never blocks the event consumer. Caller cancellation,
   execution/service end and command deadlines bound waits, including detached
@@ -328,6 +329,18 @@
   forward action input, proposals, session mutations or file bytes. A bounded
   worker keeps forwarding I/O outside the owner loop; failures and queue overload
   are logged without changing accepted outcomes.
+  Newly accepted saved operation events drive ordered batch start, source data
+  and finish forwarding. Freeze exact receiver executions and policy-filtered
+  producer IDs at each new batch start for lifecycle/result delivery; exclude all
+  producer-group members as recipients. Do not enroll later receivers or replay
+  saved boundaries after a controller restart, which loses batch enrollment even
+  if receivers remain running. Tag permitted results, artifact metadata and decisions with the
+  producer's saved batch ID. A finish is forwarded only once the entire saved
+  group has known outcomes, including unrouted tasks; interrupted outcomes keep
+  it open. Finish carries only that recipient's filtered members and outcomes,
+  and never proves delivery of every producer update.
+  Keep answered-decision routing live after producer completion and batch finish;
+  the boundary certifies outcomes without closing later decision sharing.
   Cancel and join it during shutdown. Recovery reads do not replay sharing, and
   saved source IDs let receivers deduplicate accepted event redeliveries.
 - After a successful answer save, the operation worker notifies its explicitly

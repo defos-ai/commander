@@ -85,7 +85,7 @@ func (r *Worker) dispatchQueued() {
 				next, err = r.store.DispatchTask(ctx, s.operation.ID, operations.TaskDispatch{TaskID: task.ID, AgentID: agentID, StartedAt: startedAt, DeadlineAt: startedAt.Add(r.taskTimeout)})
 			}
 
-			if err := s.acceptUpdate(next, err); err != nil {
+			if err := r.acceptUpdate(s, next, err); err != nil {
 				break // Retry unsaved dispatch on the next tick.
 			}
 			task = s.operation.Tasks[taskIndex(&s.operation, task.ID)]

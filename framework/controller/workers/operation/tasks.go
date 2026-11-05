@@ -49,7 +49,7 @@ func (r *Worker) Assign(ctx context.Context, command commands.AssignTaskCommand)
 		}
 
 		next, err := r.store.QueueTask(ctx, command.OperationID, task)
-		if err := s.acceptUpdate(next, err); err != nil {
+		if err := r.acceptUpdate(s, next, err); err != nil {
 			return operations.Task{}, err
 		}
 		r.observeAccepted(ctx, s)
@@ -114,7 +114,7 @@ func (r *Worker) finishTask(s *operationState, task operations.Task, result acti
 	saveCtx, done := context.WithTimeout(context.WithoutCancel(r.ctx), 5*time.Second)
 	defer done()
 	next, err := r.store.FinishTask(saveCtx, s.operation.ID, outcome)
-	if err := s.acceptUpdate(next, err); err != nil {
+	if err := r.acceptUpdate(s, next, err); err != nil {
 		s.err = errors.Join(s.err, fmt.Errorf("save task result: %w", err))
 		close(s.changed)
 		s.changed = make(chan struct{})

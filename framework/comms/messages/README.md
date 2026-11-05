@@ -94,10 +94,18 @@ acknowledgement does not prove the action processed an update. Receiver memory i
 local, and live delivery provides no restart replay. Forwarding failures are
 logged and do not change the producer's accepted outcome.
 
-The shared-update contract also supports controller-originated task batch start
-and finish notifications through the same receive call. They identify expected
-producers and known outcomes; a finish notification does not prove every result
-was received. Automatic batch forwarding is not connected yet.
+For aggregation groups, the same call receives controller-originated
+`task.batch.started` and `task.batch.finished` notifications. Start identifies the
+producer tasks permitted by the receiver's sharing routes; producer data carries
+the same batch ID. Finish follows known outcomes for the whole group and reports
+succeeded, failed or cancelled members. Interrupted work keeps the batch open.
+
+Start the receiver before the group and keep it outside the producer membership.
+Batch recipients are selected at start; later tasks and restarted receivers do
+not join an existing batch. Decisions still follow live sharing routes and can
+arrive after finish. A finish notification does not prove every result arrived.
+Controller restarts lose batch enrollment, without replaying the earlier start.
+See [data sharing](../../../docs/features/data-sharing.md) for mission setup.
 
 ## Secret synchronization contracts
 

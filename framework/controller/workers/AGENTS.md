@@ -53,6 +53,25 @@ including workers whose `Run` has not started. No runtime loop starts in assembl
 - [Sharing](sharing/worker.go) owns its bounded queue and best-effort forwarding.
   Read accepted records and observe recipients through `AgentReader`; never
   mutate coordination state or change accepted execution outcomes on failure.
+  Newly accepted operation events drive batch start, source-data and finish
+  forwarding in that order through the same worker. Freeze eligible recipient
+  executions and their policy-filtered producer IDs at a new batch start for
+  lifecycle and result delivery; exclude every task in the producer group.
+  Data retains its agent source and batch ID;
+  lifecycle metadata identifies the controller and parent task. Finish requires
+  known outcomes for the whole saved group, including unrouted members, while
+  each recipient receives only its filtered membership and outcomes. Existing
+  result/artifact/decision routes carry boundaries without new include values.
+  Keep enrollment and forwarding state in memory: no publication records,
+  late enrollment or recovery/history replay. Publication failure cannot turn a
+  finish marker into proof that the recipient received every result.
+  Preserve live routing of task-scoped answered decisions, including answers
+  accepted after producer completion or batch finish. Batch finish certifies
+  outcomes, not closure of future decision sharing. Controller restart loses
+  batch enrollment even when a receiver remains running.
+  Prune expired or finished recipients even if cleanup notifications are dropped.
+  Retire settled batches only through the processed event head; a periodic sweep
+  must not discard a batch whose finish notification is still queued.
 - [Operation worker](operation/worker.go) owns operation scheduling and recovery.
   Controller assembly supplies mandatory mission, operation and report stores, the same
   session worker, an explicit sharing capability and a typed coordination
@@ -60,6 +79,9 @@ including workers whose `Run` has not started. No runtime loop starts in assembl
   admission so accepted results can drain during shutdown. Assembly injects it
   into the command worker; hosts do not construct a second operation worker or
   command consumer.
+  Notify sharing after confirmed accepted operation transitions, using saved
+  event identity rather than rebuilding groups from current continuation lists.
+  Baseline recovered event history without forwarding it again.
 
 `coordination.Worker.Apply` scopes event and secret mutation to its owner loop.
 Keep the supplied state inside that synchronous callback; events bind a local

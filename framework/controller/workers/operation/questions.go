@@ -30,7 +30,7 @@ func (r *Worker) Ask(ctx context.Context, command commands.AskQuestionCommand) (
 		}
 		question := operations.Question{ID: questionID, Status: operations.QuestionPending, TaskID: command.TaskID, Text: command.Text, Options: append([]string(nil), command.Options...), AskedAt: now, FallbackAt: now.Add(timeout)}
 		next, err := r.store.AskQuestion(ctx, command.OperationID, question, command.Version)
-		if err := s.acceptUpdate(next, err); err != nil {
+		if err := r.acceptUpdate(s, next, err); err != nil {
 			return operations.Question{}, err
 		}
 		for _, saved := range s.operation.Clone().Questions {
@@ -52,11 +52,8 @@ func (r *Worker) Answer(ctx context.Context, command commands.AnswerQuestionComm
 			return operations.Operation{}, err
 		}
 		next, err := r.store.AnswerQuestion(ctx, command.OperationID, command.QuestionID, command.Answer, command.AnsweredBy)
-		if err := s.acceptUpdate(next, err); err != nil {
+		if err := r.acceptUpdate(s, next, err); err != nil {
 			return operations.Operation{}, err
-		}
-		if r.sharing != nil {
-			r.sharing.ShareQuestionAnswer(command.OperationID, command.QuestionID)
 		}
 		return s.operation.Clone(), nil
 	})

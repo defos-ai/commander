@@ -62,7 +62,8 @@ func assemble(c *Controller, bus comms.Bus, config ControllerConfig) (result []w
 		list = append(list, secrets)
 	}
 	c.sharing = sharing.New(c.coreLifetime, sharing.Dependencies{
-		Bus: bus, Operations: config.OperationStore, Executions: config.ExecutionStore,
+		ControllerID: config.ID,
+		Bus:          bus, Operations: config.OperationStore, Executions: config.ExecutionStore,
 		Artifacts: config.ArtifactStore, Agents: coordinator, Logger: config.Logger,
 	})
 	list = append(list, c.sharing)

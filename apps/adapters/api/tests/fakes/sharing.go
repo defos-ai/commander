@@ -20,16 +20,19 @@ const (
 	FindingAction  = "find-vulnerabilities"
 	AnalysisAction = "analyze-vulnerabilities"
 	EvidenceAction = "review-evidence"
+	BatchAction    = "plan-investigation"
 )
 
 type SharingProducer struct {
 	*action.Base
-	calls atomic.Int32
+	calls  atomic.Int32
+	gate   atomic.Pointer[SharingGate]
+	active atomic.Pointer[SharingGate]
 }
 
 func NewSharingProducer() *SharingProducer {
 	return &SharingProducer{Base: action.NewBase(actions.Action{Name: FindingAction,
-		InputSchema:  json.RawMessage(`{"type":"object","properties":{"marker":{"type":"string"},"questions":{"type":"boolean"}},"required":["marker"],"additionalProperties":false}`),
+		InputSchema:  json.RawMessage(`{"type":"object","properties":{"marker":{"type":"string"},"questions":{"type":"boolean"},"fail":{"type":"boolean"}},"required":["marker"],"additionalProperties":false}`),
 		OutputSchema: json.RawMessage(`{"type":"object"}`)})}
 }
 
@@ -37,11 +40,23 @@ func (p *SharingProducer) Run(ctx context.Context, input json.RawMessage) (actio
 	var request struct {
 		Marker    string `json:"marker"`
 		Questions bool   `json:"questions"`
+		Fail      bool   `json:"fail"`
 	}
 	if err := action.DecodeInput(input, &request); err != nil {
 		return action.Result{}, err
 	}
 	p.calls.Add(1)
+	if gate := p.gate.Swap(nil); gate != nil {
+		close(gate.entered)
+		select {
+		case <-gate.release:
+		case <-ctx.Done():
+			return action.Result{}, ctx.Err()
+		}
+	}
+	if request.Fail {
+		return action.Result{}, errors.New("fixture vulnerability scan failed")
+	}
 	if request.Questions {
 		for _, key := range []string{"scope", "priority"} {
 			if _, err := action.Question(ctx, key, "Choose the "+key+" for this finding.", "Investigate", "Ignore"); err != nil {
@@ -62,6 +77,51 @@ func (p *SharingProducer) Run(ctx context.Context, input json.RawMessage) (actio
 }
 
 func (p *SharingProducer) Calls() int32 { return p.calls.Load() }
+
+func (p *SharingProducer) BlockNextRun() *SharingGate {
+	gate := &SharingGate{entered: make(chan struct{}), release: make(chan struct{})}
+	p.active.Store(gate)
+	p.gate.Store(gate)
+	return gate
+}
+
+func (p *SharingProducer) ReleaseGate() {
+	if gate := p.active.Load(); gate != nil {
+		gate.Release()
+	}
+}
+
+type SharingBatchPlanner struct {
+	*action.Base
+	gate *SharingGate
+}
+
+func NewSharingBatchPlanner() *SharingBatchPlanner {
+	return &SharingBatchPlanner{Base: action.NewBase(actions.Action{Name: BatchAction,
+		InputSchema:  json.RawMessage(`{"type":"object","properties":{"wait":{"type":"boolean"}},"additionalProperties":false}`),
+		OutputSchema: json.RawMessage(`{"type":"object"}`)}),
+		gate: &SharingGate{entered: make(chan struct{}), release: make(chan struct{})}}
+}
+
+func (p *SharingBatchPlanner) Run(ctx context.Context, input json.RawMessage) (action.Result, error) {
+	var request struct {
+		Wait bool `json:"wait"`
+	}
+	if err := action.DecodeInput(input, &request); err != nil {
+		return action.Result{}, err
+	}
+	if request.Wait {
+		close(p.gate.entered)
+		select {
+		case <-p.gate.release:
+		case <-ctx.Done():
+			return action.Result{}, ctx.Err()
+		}
+	}
+	return action.JSONResult(struct{}{})
+}
+
+func (p *SharingBatchPlanner) Gate() *SharingGate { return p.gate }
 
 type SharedFinding struct {
 	Update    agentevents.SharedData
@@ -89,7 +149,7 @@ func (a *SharingAnalyzer) Run(ctx context.Context, _ json.RawMessage) (action.Re
 	defer func() { stop(); cancel() }()
 	execution, _ := action.ExecutionFromContext(ctx)
 	count := 0
-	seen := make(map[[3]string]bool)
+	seen := make(map[[5]string]bool)
 	for {
 		update, err := action.ReceiveSharedData(receiving)
 		if err != nil {
@@ -100,9 +160,12 @@ func (a *SharingAnalyzer) Run(ctx context.Context, _ json.RawMessage) (action.Re
 			}
 			return action.Result{}, err
 		}
-		source := [3]string{update.Source.AgentID, update.Source.CommandID, ""}
+		source := [5]string{update.Source.AgentID, update.Source.CommandID, "", update.BatchID, ""}
 		if update.Decision != nil {
 			source[2] = update.Decision.ID
+		}
+		if update.Batch != nil {
+			source[4] = string(update.Batch.Type)
 		}
 		if seen[source] {
 			continue
@@ -120,7 +183,9 @@ func (a *SharingAnalyzer) Run(ctx context.Context, _ json.RawMessage) (action.Re
 		}
 		select {
 		case a.received <- finding:
-			count++
+			if update.Batch == nil {
+				count++
+			}
 		case <-receiving.Done():
 			return action.Result{}, receiving.Err()
 		}
@@ -141,11 +206,12 @@ func (g *SharingGate) Release()                 { g.once.Do(func() { close(g.rel
 
 type SharingBus struct {
 	comms.Bus
-	mu            sync.Mutex
-	shared        []messages.Message
-	failedSources map[[2]string]bool
-	gate          atomic.Pointer[SharingGate]
-	allGates      []*SharingGate
+	mu              sync.Mutex
+	shared          []messages.Message
+	failedSources   map[[2]string]bool
+	uncertainAction string
+	gate            atomic.Pointer[SharingGate]
+	allGates        []*SharingGate
 }
 
 func NewSharingBus(bus comms.Bus) *SharingBus {
@@ -153,6 +219,25 @@ func NewSharingBus(bus comms.Bus) *SharingBus {
 }
 
 func (b *SharingBus) Publish(ctx context.Context, topic string, message messages.Message) error {
+	if message.Type == messages.RunAction {
+		var call actions.ActionCall
+		if err := json.Unmarshal(message.Payload, &call); err != nil {
+			return err
+		}
+		b.mu.Lock()
+		uncertain := b.uncertainAction == call.ActionName
+		if uncertain {
+			b.uncertainAction = ""
+		}
+		b.mu.Unlock()
+		if err := b.Bus.Publish(ctx, topic, message); err != nil {
+			return err
+		}
+		if uncertain {
+			return errors.New("fixture action published but confirmation was lost")
+		}
+		return nil
+	}
 	if message.Type != messages.DataShared {
 		return b.Bus.Publish(ctx, topic, message)
 	}
@@ -184,6 +269,12 @@ func (b *SharingBus) Publish(ctx context.Context, topic string, message messages
 		return errors.New("fixture shared-data transport unavailable")
 	}
 	return b.Bus.Publish(ctx, topic, message)
+}
+
+func (b *SharingBus) LoseNextActionConfirmation(actionName string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.uncertainAction = actionName
 }
 
 func (b *SharingBus) BlockNextSharedData() *SharingGate {

@@ -121,7 +121,7 @@ func (r *Worker) Complete(ctx context.Context, command commands.CompleteOperatio
 		}
 		if next.RequiresCompletionApproval() && command.CompletedBy == operations.CompletionModel {
 			next, err := r.store.SaveCompletionDraft(ctx, command.OperationID, output)
-			if err := s.acceptUpdate(next, err); err != nil {
+			if err := r.acceptUpdate(s, next, err); err != nil {
 				return operations.Operation{}, err
 			}
 			return s.operation.Clone(), nil
@@ -137,7 +137,7 @@ func (r *Worker) Complete(ctx context.Context, command commands.CompleteOperatio
 			return operations.Operation{}, fmt.Errorf("save operation report: %w", err)
 		}
 		next, err = r.store.Complete(ctx, command.OperationID, report.ID, output, command.CompletedBy)
-		if err := s.acceptUpdate(next, err); err != nil {
+		if err := r.acceptUpdate(s, next, err); err != nil {
 			return operations.Operation{}, err
 		}
 		return s.operation.Clone(), nil
@@ -154,7 +154,7 @@ func (r *Worker) Fail(ctx context.Context, command commands.FailOperationCommand
 			return operations.Operation{}, err
 		}
 		next, err := r.store.Fail(ctx, command.OperationID, command.Reason)
-		if err := s.acceptUpdate(next, err); err != nil {
+		if err := r.acceptUpdate(s, next, err); err != nil {
 			return operations.Operation{}, err
 		}
 		r.observeAccepted(ctx, s)
@@ -174,7 +174,7 @@ func (r *Worker) Cancel(ctx context.Context, command commands.CancelOperationCom
 			return operations.Operation{}, err
 		}
 		next, err := r.store.Cancel(ctx, command.OperationID)
-		if err := s.acceptUpdate(next, err); err != nil {
+		if err := r.acceptUpdate(s, next, err); err != nil {
 			return operations.Operation{}, err
 		}
 		r.observeAccepted(ctx, s)

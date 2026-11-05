@@ -23,14 +23,18 @@ func (r *Worker) requestContext(ctx context.Context) (context.Context, func()) {
 	}
 }
 
-func (s *operationState) acceptUpdate(next operations.Operation, err error) error {
+func (r *Worker) acceptUpdate(s *operationState, next operations.Operation, err error) error {
 	if err != nil && !errors.Is(err, operations.ErrWriteUncertain) {
 		return err
 	}
+	after := len(s.operation.Events)
 	s.operation = next
 	if err != nil {
 		err = fmt.Errorf("restart controller to reconcile operation %s: %w", next.ID, err)
 		s.err = errors.Join(s.err, err)
+	}
+	if err == nil && r.sharing != nil && len(next.Events) > after {
+		r.sharing.QueueOperationEvents(next.Events[after:])
 	}
 	close(s.changed)
 	s.changed = make(chan struct{})

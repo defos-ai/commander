@@ -13,12 +13,12 @@ import (
 	"github.com/defos-ai/commander/framework/domain/artifacts"
 	"github.com/defos-ai/commander/framework/domain/executions"
 	"github.com/defos-ai/commander/framework/domain/operations"
-	"github.com/defos-ai/commander/framework/id"
 )
 
 const (
-	sharingQueueSize = 16
-	sharingTimeout   = 2 * time.Second
+	sharingQueueSize   = 16
+	sharingTimeout     = 2 * time.Second
+	batchSweepInterval = time.Minute
 )
 
 type AgentReader interface {
@@ -26,15 +26,17 @@ type AgentReader interface {
 }
 
 type Dependencies struct {
-	Bus        comms.Bus
-	Operations operations.OperationStore
-	Executions executions.ExecutionStore
-	Artifacts  artifacts.ArtifactStore
-	Agents     AgentReader
-	Logger     *slog.Logger
+	ControllerID string
+	Bus          comms.Bus
+	Operations   operations.OperationStore
+	Executions   executions.ExecutionStore
+	Artifacts    artifacts.ArtifactStore
+	Agents       AgentReader
+	Logger       *slog.Logger
 }
 
 type Worker struct {
+	controllerID   string
 	lifecycle      *workers.Lifecycle
 	ctx            context.Context
 	bus            comms.Bus
@@ -44,11 +46,13 @@ type Worker struct {
 	agents         AgentReader
 	logger         *slog.Logger
 	queue          chan sharedData
+	batches        map[string]batchRecipients
 }
 
 func New(ctx context.Context, config Dependencies) *Worker {
 	life := workers.NewLifecycle(ctx)
 	return &Worker{
+		controllerID: config.ControllerID, batches: make(map[string]batchRecipients),
 		lifecycle: life, ctx: life.Context(), bus: config.Bus, operationStore: config.Operations,
 		executionStore: config.Executions, artifactStore: config.Artifacts,
 		agents: config.Agents, logger: config.Logger,
@@ -62,6 +66,8 @@ type sharedData struct {
 	OperationID string
 	TaskID      string
 	QuestionID  string
+	BatchID     string
+	Events      []operations.Event
 }
 
 func (w *Worker) QueueResult(message messages.Message) {
@@ -71,13 +77,23 @@ func (w *Worker) QueueResult(message messages.Message) {
 	w.queueSharedData(sharedData{AgentID: message.AgentID, CommandID: message.CorrelationID, OperationID: message.OperationID, TaskID: message.TaskID})
 }
 
-// ShareQuestionAnswer is an operation worker notification after a successful answer save.
-// The worker rereads saved evidence; the notification supplies no answer data.
-func (w *Worker) ShareQuestionAnswer(operationID, questionID string) {
-	if w.operationStore == nil || !id.Valid(operationID) || !id.Valid(questionID) {
+// QueueOperationEvents observes confirmed saves only, never recovered history.
+// One notification retains the order of boundaries and data saved together.
+func (w *Worker) QueueOperationEvents(events []operations.Event) {
+	if w.operationStore == nil {
 		return
 	}
-	w.queueSharedData(sharedData{OperationID: operationID, QuestionID: questionID})
+	var selected []operations.Event
+	for _, event := range events {
+		switch event.Type {
+		case operations.TaskBatchStarted, operations.TaskBatchFinished, operations.TaskFinished,
+			operations.QuestionAnsweredEvent, operations.OperationCompleted, operations.OperationFailed, operations.OperationCancelled:
+			selected = append(selected, event)
+		}
+	}
+	if len(selected) != 0 {
+		w.queueSharedData(sharedData{OperationID: selected[0].OperationID, Events: selected})
+	}
 }
 
 func (w *Worker) queueSharedData(source sharedData) {
@@ -99,15 +115,24 @@ func (w *Worker) Close(ctx context.Context) error {
 }
 
 func (w *Worker) run(ctx context.Context) error {
+	sweep := time.NewTicker(batchSweepInterval)
+	defer sweep.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
+		case <-sweep.C:
+			cleanup, cancel := context.WithTimeout(ctx, sharingTimeout)
+			err := w.pruneSavedBatches(cleanup)
+			cancel()
+			if err != nil && ctx.Err() == nil {
+				w.logger.Warn("shared batch cleanup failed", "error_type", fmt.Sprintf("%T", err))
+			}
 		case source := <-w.queue:
 			forwarding, cancel := context.WithTimeout(ctx, sharingTimeout)
 			var err error
-			if source.QuestionID != "" {
-				err = w.forwardSharedDecision(forwarding, source)
+			if len(source.Events) != 0 {
+				err = w.forwardOperationEvents(forwarding, source.Events)
 			} else {
 				err = w.forwardSharedResult(forwarding, source)
 			}

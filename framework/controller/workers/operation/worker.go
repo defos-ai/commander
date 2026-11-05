@@ -42,15 +42,15 @@ type AgentCatalog interface {
 	Agents(context.Context) ([]agentmodel.Agent, error)
 }
 
-type QuestionAnswerSharer interface {
-	ShareQuestionAnswer(operationID, questionID string)
+type OperationSharing interface {
+	QueueOperationEvents([]operations.Event)
 }
 
 type Dependencies struct {
 	Sessions      runtimeSessions.Coordinator
 	AgentCatalog  AgentCatalog
 	AgentSelector AgentSelector
-	Sharing       QuestionAnswerSharer
+	Sharing       OperationSharing
 	Logger        *slog.Logger
 	// Capacity is per agent for work owned by this operation worker; default one.
 	Capacity int
@@ -76,7 +76,7 @@ type Worker struct {
 	ctx            context.Context
 	cancel         context.CancelFunc
 	executor       ActionExecutor
-	sharing        QuestionAnswerSharer
+	sharing        OperationSharing
 	store          operations.OperationStore
 	missions       missions.MissionStore
 	reports        reports.ReportStore

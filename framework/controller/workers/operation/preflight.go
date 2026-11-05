@@ -43,5 +43,5 @@ func (r *Worker) refreshPreflight(ctx context.Context, state *operationState, re
 	} else {
 		next, err = r.store.RefreshPreflight(ctx, state.operation.ID, records)
 	}
-	return state.acceptUpdate(next, err)
+	return r.acceptUpdate(state, next, err)
 }
