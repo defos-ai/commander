@@ -13,9 +13,9 @@
     "output_schema": {"type": "object"}
   },
   {
-    "name": "analyze-text",
-    "objectives": ["Analyze supplied text and save a downloadable summary.", "Review the grouped results and complete the operation."],
-    "required_actions": ["analyze-text", "write-summary"],
+    "name": "hacker-news-test",
+    "objectives": ["Rank supplied Hacker News stories and save a downloadable digest without fetching external data.", "Review the grouped results and complete the operation."],
+    "required_actions": ["rank-hn-stories", "write-hn-digest"],
     "optional_actions": ["unavailable-test-action"],
     "action_definitions": [
       {
@@ -25,14 +25,33 @@
         "output_schema": {"type": "object"}
       }
     ],
-    "starting_actions": ["analyze-text"],
+    "starting_actions": ["rank-hn-stories"],
     "policies": {
-      "continuation": {"aggregate_results": ["analyze-text"], "model_review": ["write-summary"]}
+      "continuation": {"aggregate_results": ["rank-hn-stories"], "model_review": ["write-hn-digest"]}
     },
     "input_schema": {
       "type": "object",
-      "properties": {"text": {"type": "string", "minLength": 1, "pattern": "\\S"}},
-      "required": ["text"],
+      "properties": {
+        "feed": {"type": "string", "enum": ["top", "new", "best"]},
+        "topics": {"type": "array", "items": {"type": "string"}, "maxItems": 5},
+        "stories": {
+          "type": "array",
+          "maxItems": 20,
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {"type": "integer", "minimum": 1},
+              "title": {"type": "string", "minLength": 1},
+              "url": {"type": "string"},
+              "score": {"type": "integer", "minimum": 0},
+              "comments": {"type": "integer", "minimum": 0}
+            },
+            "required": ["id", "title", "url", "score", "comments"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": ["feed", "topics", "stories"],
       "additionalProperties": false
     },
     "output_schema": {

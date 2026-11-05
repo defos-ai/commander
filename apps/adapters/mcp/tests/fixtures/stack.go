@@ -110,7 +110,7 @@ func Connect(t *testing.T) *Client {
 func ExpectedAgentActions(agentType string) []string {
 	switch agentType {
 	case "example-agent":
-		return []string{"analyze-text", "write-summary"}
+		return []string{"choose-hn-topics", "fetch-hn-stories", "filter-hn-stories", "rank-hn-stories", "write-hn-digest"}
 	case "spawner-agent":
 		return []string{"spawn-agent"}
 	case "builder-agent":
@@ -293,10 +293,10 @@ func (a *Client) Fails(name string, args Object, contains string) {
 		a.t.Fatalf("%s: want error containing %q; got isError=%v, %q", name, contains, result.IsError, resultText(result))
 	}
 }
-func (a *Client) Start(text string) operations.Operation {
+func (a *Client) Start(title string) operations.Operation {
 	a.t.Helper()
 	var op operations.Operation
-	a.Call("start_operation", Object{"mission_name": "analyze-text", "input": Object{"text": text}}, &op)
+	a.Call("start_operation", Object{"mission_name": "hacker-news-test", "input": StoryBatch(title)}, &op)
 	return op
 }
 func (a *Client) Get(id string) OperationDetail {
@@ -346,6 +346,8 @@ func (a *Client) Resolve(opID string, task operations.Task, actions []Object) {
 	a.Call("resolve_continuation", Object{"operation_id": opID, "task_id": task.ID, "version": task.Continuation.Version, "actions": actions}, nil)
 }
 
-func SummaryInput() Object {
-	return Object{"character_count": 4, "word_count": 1, "line_count": 1}
+func StoryBatch(title string) Object {
+	return Object{"feed": "top", "topics": []string{}, "stories": []Object{{
+		"id": 1, "title": title, "url": "https://example.com/story", "score": 42, "comments": 7,
+	}}}
 }

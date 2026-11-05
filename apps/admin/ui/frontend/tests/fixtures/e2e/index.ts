@@ -7,7 +7,13 @@ export const publicAPIURL = 'http://localhost:14274';
 export const username = process.env.COMMANDER_TEST_API_USERNAME ?? 'api-fixture-user';
 export const password = process.env.COMMANDER_TEST_API_PASSWORD ?? 'api-fixture-password';
 const terminal = new Set(['completed', 'cancelled', 'failed']);
-const fixtureMissions = ['analyze-text', 'build-agent', 'fixture-use-agent', 'install-agent'];
+const fixtureMissions = ['hacker-news-test', 'build-agent', 'fixture-use-agent', 'install-agent'];
+
+export function storyBatch(title = 'Commander integration example') {
+  return { feed: 'top', topics: [], stories: [{
+    id: 1, title, url: 'https://example.invalid/story', score: 42, comments: 7,
+  }] };
+}
 
 export class CommanderAPI {
   constructor(private readonly request: APIRequestContext) {}
@@ -80,10 +86,11 @@ export class CommanderAPI {
     }, { timeout: 60_000, message: 'Wait for controller, test missions and ready example, builder, spawner and any previously spawned agents' }).toEqual({
       agents: [
         { type: 'builder-agent', status: 'ready', stale: false, working: false, readyActions: 1 },
-        ...Array(2).fill({ type: 'example-agent', status: 'ready', stale: false, working: false, readyActions: 2 }),
+        ...Array(2).fill({ type: 'example-agent', status: 'ready', stale: false, working: false, readyActions: 5 }),
         { type: 'spawner-agent', status: 'ready', stale: false, working: false, readyActions: 1 },
       ], spawnedReady: true, spawnedCatalog: true,
-      actions: ['analyze-text', 'build-agent', 'checkout-template', 'publish-agent', 'release-agent', 'spawn-agent', 'write-summary'],
+      actions: ['build-agent', 'checkout-template', 'choose-hn-topics', 'fetch-hn-stories', 'filter-hn-stories',
+        'publish-agent', 'rank-hn-stories', 'release-agent', 'spawn-agent', 'write-hn-digest'],
       missions: fixtureMissions, controller: true,
     });
   }
@@ -154,11 +161,11 @@ export async function connect(page: Page, connection = { name: 'Compose test', u
   await expect(page.getByRole('heading', { name: 'Operations', exact: true })).toBeVisible();
 }
 
-export async function startOperation(page: Page, text = 'Commander integration example', missionName = 'analyze-text'): Promise<Operation> {
+export async function startOperation(page: Page, title = 'Commander integration example', missionName = 'hacker-news-test'): Promise<Operation> {
   await page.getByRole('button', { name: 'Start operation', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Start operation', exact: true });
   await dialog.getByLabel('Mission', { exact: true }).selectOption(missionName);
-  await dialog.getByLabel('Mission input (JSON)').fill(JSON.stringify({ text }));
+  await dialog.getByLabel('Mission input (JSON)').fill(JSON.stringify(storyBatch(title)));
   const response = page.waitForResponse(reply => new URL(reply.url()).searchParams.get('path') === '/api/v1/operations' && reply.request().method() === 'POST');
   await dialog.getByRole('button', { name: 'Start operation', exact: true }).click();
   const result = await response;

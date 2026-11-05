@@ -28,12 +28,14 @@ func TestE2ESharedFixtureQueuesUnavailableAction(t *testing.T) {
 	}
 	s := e2efixtures.NewSessionStack(t, "")
 	for _, mission := range missions {
-		if mission["name"] == "analyze-text" {
+		if mission["name"] == "hacker-news-test" {
 			s.Request("POST", "/api/v1/missions", mission, 201, nil)
 		}
 	}
 	var op operations.Operation
-	s.Request("POST", "/api/v1/operations", map[string]any{"mission_name": "analyze-text", "input": map[string]string{"text": "Queued fixture work"}}, 201, &op)
+	s.Request("POST", "/api/v1/operations", map[string]any{"mission_name": "hacker-news-test", "input": map[string]any{
+		"feed": "top", "topics": []string{}, "stories": []any{},
+	}}, 201, &op)
 	task := s.Assign(op.ID, "unavailable-test-action", map[string]any{})
 	if task.Status != operations.TaskQueued || task.AgentID != "" {
 		t.Fatalf("unavailable fixture work did not stay queued: %+v", task)

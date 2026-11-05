@@ -34,7 +34,7 @@ func assertMissionPreflight(t *testing.T, a *fixtures.Client, op fixtures.Operat
 		}
 	}
 	var definition actions.Action
-	a.Call("describe_action", fixtures.Object{"action_name": "analyze-text"}, &definition)
+	a.Call("describe_action", fixtures.Object{"action_name": "rank-hn-stories"}, &definition)
 	if len(definition.MissingRequirements) != 0 {
 		t.Fatalf("machine requirements leaked into the shared catalog: %+v", definition)
 	}

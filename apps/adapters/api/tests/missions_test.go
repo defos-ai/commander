@@ -42,13 +42,13 @@ func TestMissionCatalogAndRepeatedCleanup(t *testing.T) {
 		}
 	}
 	fixtures.Decode[models.OperationResponse](t, a.Request(http.MethodPost, fixtures.OperationPath(buildOperation.ID)+"/cancel", nil), http.StatusOK)
-	path := "/api/v1/missions/analyze-text"
+	path := "/api/v1/missions/hacker-news-test"
 	mission := fixtures.Read[models.MissionResponse](a, path)
 	index := slices.IndexFunc(catalog.Items, func(item models.MissionResponse) bool { return item.Name == mission.Name })
-	if index < 0 || !reflect.DeepEqual(catalog.Items[index], mission) || len(mission.Objectives) == 0 || !slices.Equal(mission.RequiredActions, []string{"analyze-text", "write-summary"}) || !slices.Equal(mission.StartingActions, []string{"analyze-text"}) {
+	if index < 0 || !reflect.DeepEqual(catalog.Items[index], mission) || len(mission.Objectives) == 0 || !slices.Equal(mission.RequiredActions, []string{"rank-hn-stories", "write-hn-digest"}) || !slices.Equal(mission.StartingActions, []string{"rank-hn-stories"}) {
 		t.Fatalf("mission catalog lost schemas or actions: %+v", mission)
 	}
-	if mission.Policies == nil || mission.Policies.Continuation == nil || !slices.Equal(mission.Policies.Continuation.AggregateResults, []string{"analyze-text"}) || !slices.Equal(mission.Policies.Continuation.ModelReview, []string{"write-summary"}) {
+	if mission.Policies == nil || mission.Policies.Continuation == nil || !slices.Equal(mission.Policies.Continuation.AggregateResults, []string{"rank-hn-stories"}) || !slices.Equal(mission.Policies.Continuation.ModelReview, []string{"write-hn-digest"}) {
 		t.Fatalf("mission catalog lost continuation policies: %+v", mission.Policies)
 	}
 

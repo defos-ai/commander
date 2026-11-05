@@ -10,18 +10,18 @@ import (
 
 func TestContinuationCreatesOneRecordedBranch(t *testing.T) {
 	a := fixtures.Connect(t)
-	op := a.Start(fixtures.FixtureText)
-	a.Task(op.ID, "write-summary", fixtures.SummaryInput())
+	op := a.Start(fixtures.FixtureTitle)
+	a.Task(op.ID, "write-hn-digest", fixtures.StoryBatch(fixtures.FixtureTitle))
 	ready := a.Wait(op.ID, func(op models.OperationResponse) bool { return fixtures.ModelDecision(op) != nil })
 	root := *fixtures.ModelDecision(ready)
 	if root.Status != "succeeded" {
-		t.Fatalf("summary action failed: %+v", root)
+		t.Fatalf("digest action failed: %+v", root)
 	}
 	path := fixtures.OperationPath(op.ID) + "/tasks/" + root.ID + "/continuation/resolve"
-	for _, body := range []fixtures.Object{{"version": root.Continuation.Version}, {"version": root.Continuation.Version, "actions": nil}, {"version": root.Continuation.Version, "actions": []fixtures.Object{{"action_name": "write-summary", "agent_id": "pinned"}}}} {
+	for _, body := range []fixtures.Object{{"version": root.Continuation.Version}, {"version": root.Continuation.Version, "actions": nil}, {"version": root.Continuation.Version, "actions": []fixtures.Object{{"action_name": "write-hn-digest", "agent_id": "pinned"}}}} {
 		fixtures.AssertError(t, a.Request(http.MethodPost, path, body), http.StatusBadRequest, "invalid_request")
 	}
-	actions := []fixtures.Object{{"action_name": "write-summary", "input": fixtures.SummaryInput(), "reason": "Save the reviewed result"}, {"action_name": "write-summary", "input": fixtures.SummaryInput()}}
+	actions := []fixtures.Object{{"action_name": "write-hn-digest", "input": fixtures.StoryBatch(fixtures.FixtureTitle), "reason": "Save the reviewed result"}, {"action_name": "write-hn-digest", "input": fixtures.StoryBatch(fixtures.FixtureTitle)}}
 	resolved := a.Resolve(op.ID, root, actions)
 	if len(resolved.Tasks) != 3 || resolved.Tasks[0].Continuation.Status != "resolved" || len(resolved.Tasks[0].Continuation.CreatedTaskIDs) != 2 {
 		t.Fatalf("resolution failed to persist one branch: %+v", resolved)

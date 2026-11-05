@@ -19,7 +19,7 @@ func TestOperationExecutesProposedWorkAndKeepsResults(t *testing.T) {
 	a := fixtures.Connect(t)
 	initialAgents := fixtures.Read[models.ListResponse[models.AgentResponse]](a, "/api/v1/agents")
 	initialActions := fixtures.Read[models.ListResponse[models.ActionResponse]](a, "/api/v1/actions")
-	created := a.Request(http.MethodPost, "/api/v1/operations", fixtures.Object{"mission_name": "analyze-text", "input": fixtures.Object{"text": fixtures.FixtureText}})
+	created := a.Request(http.MethodPost, "/api/v1/operations", fixtures.Object{"mission_name": "hacker-news-test", "input": fixtures.StoryBatch(fixtures.FixtureTitle)})
 	op := fixtures.Decode[models.OperationResponse](t, created, http.StatusCreated)
 	base := fixtures.OperationPath(op.ID)
 	if created.Header.Get("Location") != base || op.Status != "planning" || op.Preflight == nil || !op.Preflight.Ready || len(op.Tasks) != 0 {
@@ -29,7 +29,7 @@ func TestOperationExecutesProposedWorkAndKeepsResults(t *testing.T) {
 	if op.Progress.TotalTasks != 0 || op.Progress.FinishedTasks != 0 || op.Progress.Settled || op.Progress.TaskCounts == nil {
 		t.Fatalf("new operation progress: %+v", op.Progress)
 	}
-	assigned := a.Request(http.MethodPost, base+"/tasks", fixtures.Object{"action_name": "analyze-text", "input": fixtures.Object{"text": fixtures.FixtureText}})
+	assigned := a.Request(http.MethodPost, base+"/tasks", fixtures.Object{"action_name": "rank-hn-stories", "input": fixtures.StoryBatch(fixtures.FixtureTitle)})
 	root := fixtures.Decode[models.TaskResponse](t, assigned, http.StatusCreated)
 	if assigned.Header.Get("Location") != base+"/tasks/"+root.ID || root.OperationID != op.ID || root.CommandID == "" {
 		t.Fatalf("assignment lost task identity: %+v", root)
@@ -37,8 +37,8 @@ func TestOperationExecutesProposedWorkAndKeepsResults(t *testing.T) {
 	settled := a.Wait(op.ID, func(op models.OperationResponse) bool {
 		return fixtures.TasksSettled(op) && fixtures.ModelDecision(op) != nil
 	})
-	if len(settled.Tasks) != 2 || settled.Tasks[0].ActionName != "analyze-text" || settled.Tasks[1].ActionName != "write-summary" {
-		t.Fatalf("controller did not execute the proposed summary action: %+v", settled.Tasks)
+	if len(settled.Tasks) != 2 || settled.Tasks[0].ActionName != "rank-hn-stories" || settled.Tasks[1].ActionName != "write-hn-digest" {
+		t.Fatalf("controller did not execute the proposed digest action: %+v", settled.Tasks)
 	}
 	for _, task := range settled.Tasks {
 		if task.Status != "succeeded" || task.Result == nil || task.OperationID != op.ID || task.AgentID == "" {
@@ -62,17 +62,17 @@ func TestOperationExecutesProposedWorkAndKeepsResults(t *testing.T) {
 	}
 	a.Resolve(op.ID, *decision, []fixtures.Object{})
 	fixtures.AssertError(t, a.Request(http.MethodPost, base+"/complete", fixtures.Object{"output": fixtures.Object{}}), http.StatusUnprocessableEntity, "invalid_output")
-	completed := a.Complete(op.ID, "Text analysis completed")
+	completed := a.Complete(op.ID, "Story digest completed")
 	if completed.Status != "completed" || completed.ReportID == "" || !completed.Progress.Settled || completed.Progress.FinishedTasks != len(completed.Tasks) || completed.Progress.TotalTasks != len(completed.Tasks) {
 		t.Fatalf("completion: %+v", completed)
 	}
 	byID := fixtures.Read[models.ReportResponse](a, "/api/v1/reports/"+completed.ReportID)
 	byOperation := fixtures.Read[models.ReportResponse](a, base+"/report")
-	if !reflect.DeepEqual(byID, byOperation) || byID.OperationID != op.ID || byID.Mission != "analyze-text" || !strings.Contains(string(byID.Output), "Text analysis completed") {
+	if !reflect.DeepEqual(byID, byOperation) || byID.OperationID != op.ID || byID.Mission != "hacker-news-test" || !strings.Contains(string(byID.Output), "Story digest completed") {
 		t.Fatalf("report identity/output changed across routes: %+v %+v", byID, byOperation)
 	}
 	assertSchema(t, a, "Report", a.Request(http.MethodGet, base+"/report", nil))
-	fixtures.AssertError(t, a.Request(http.MethodPost, base+"/tasks", fixtures.Object{"action_name": "analyze-text", "input": fixtures.Object{"text": fixtures.FixtureText}}), http.StatusConflict, "operation_finished")
+	fixtures.AssertError(t, a.Request(http.MethodPost, base+"/tasks", fixtures.Object{"action_name": "rank-hn-stories", "input": fixtures.StoryBatch(fixtures.FixtureTitle)}), http.StatusConflict, "operation_finished")
 	before := a.Request(http.MethodGet, base, nil)
 	for _, path := range []string{base, base + "/report", "/api/v1/reports/" + completed.ReportID, base + "/tasks", base + "/events", base + "/graph"} {
 		if got := a.Request(http.MethodGet, path, nil); got.Status != http.StatusOK {
@@ -82,8 +82,8 @@ func TestOperationExecutesProposedWorkAndKeepsResults(t *testing.T) {
 	if after := a.Request(http.MethodGet, base, nil); after.Body != before.Body {
 		t.Fatal("completed operation queries changed saved state")
 	}
-	if len(completed.Tasks[1].Result.Artifacts) != 1 || len(completed.Tasks[1].Result.Artifacts[0].Files) != 1 {
-		t.Fatal("summary task did not publish downloadable evidence")
+	if len(completed.Tasks[1].Result.Artifacts) != 1 || len(completed.Tasks[1].Result.Artifacts[0].Files) != 2 {
+		t.Fatal("digest task did not publish downloadable evidence")
 	}
 	artifact := completed.Tasks[1].Result.Artifacts[0]
 	artifactPath := "/api/v1/artifacts/" + artifact.ID
@@ -126,7 +126,7 @@ func TestOperationStartReplayCancelAndFail(t *testing.T) {
 	for i, command := range []string{"cancel", "fail"} {
 		t.Run(command, func(t *testing.T) {
 			id := fmt.Sprintf("00000000-0000-4000-8000-%012d", i+1)
-			body := fixtures.Object{"operation_id": id, "mission_name": "analyze-text", "input": fixtures.Object{"text": fixtures.FixtureText}}
+			body := fixtures.Object{"operation_id": id, "mission_name": "hacker-news-test", "input": fixtures.StoryBatch(fixtures.FixtureTitle)}
 			op := fixtures.Post[models.OperationResponse](a, "/api/v1/operations", body, http.StatusCreated)
 			if op.ID != id {
 				t.Fatalf("explicit operation ID changed: %s", op.ID)
@@ -160,16 +160,16 @@ func TestOperationStartReplayCancelAndFail(t *testing.T) {
 
 func TestOperationCommandsRejectInvalidRequests(t *testing.T) {
 	a := fixtures.Connect(t)
-	op := a.Start(fixtures.FixtureText)
+	op := a.Start(fixtures.FixtureTitle)
 	base := fixtures.OperationPath(op.ID)
-	for _, body := range []any{fixtures.Object{}, fixtures.Object{"mission_name": "analyze-text"}, fixtures.Object{"mission_name": "analyze-text", "input": fixtures.Object{}, "unknown": true}} {
+	for _, body := range []any{fixtures.Object{}, fixtures.Object{"mission_name": "hacker-news-test"}, fixtures.Object{"mission_name": "hacker-news-test", "input": fixtures.Object{}, "unknown": true}} {
 		fixtures.AssertError(t, a.Request(http.MethodPost, "/api/v1/operations", body), http.StatusBadRequest, "invalid_request")
 	}
 	fixtures.AssertError(t, a.Request(http.MethodPost, "/api/v1/operations", fixtures.Object{"mission_name": "missing", "input": fixtures.Object{}}), http.StatusNotFound, "mission_not_found")
 	for _, input := range []any{nil, fixtures.Object{}, []string{"text"}, "unexpected text value", true} {
-		fixtures.AssertError(t, a.Request(http.MethodPost, "/api/v1/operations", fixtures.Object{"mission_name": "analyze-text", "input": input}), http.StatusUnprocessableEntity, "invalid_input")
+		fixtures.AssertError(t, a.Request(http.MethodPost, "/api/v1/operations", fixtures.Object{"mission_name": "hacker-news-test", "input": input}), http.StatusUnprocessableEntity, "invalid_input")
 	}
-	for _, body := range []fixtures.Object{{"action_name": "analyze-text", "agent_id": "pinned"}, {"action_name": "analyze-text", "operation_id": op.ID}, {"action_name": "analyze-text", "input": nil}} {
+	for _, body := range []fixtures.Object{{"action_name": "rank-hn-stories", "agent_id": "pinned"}, {"action_name": "rank-hn-stories", "operation_id": op.ID}, {"action_name": "rank-hn-stories", "input": nil}} {
 		fixtures.AssertError(t, a.Request(http.MethodPost, base+"/tasks", body), http.StatusBadRequest, "invalid_request")
 	}
 	for _, tc := range []struct {

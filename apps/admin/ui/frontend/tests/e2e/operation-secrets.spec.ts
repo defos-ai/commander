@@ -1,11 +1,11 @@
 import { expect } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
 import type { OperationPreflight } from '../../src/api/operation-types';
-import { connect, publicAPIURL, test } from '../fixtures/e2e';
+import { connect, publicAPIURL, storyBatch, test } from '../fixtures/e2e';
 
 test('operation secret guidance stays visible in graph and opens the matching connection', async ({ page, api }) => {
   const operation = await api.post<{ id: string }>('/operations', {
-    operation_id: randomUUID(), mission_name: 'analyze-text', input: { text: 'Secret guidance example' },
+    operation_id: randomUUID(), mission_name: 'hacker-news-test', input: storyBatch('Secret guidance example'),
   }, 201);
   const operationPath = `/api/v1/operations/${operation.id}`;
   let blocked = true;

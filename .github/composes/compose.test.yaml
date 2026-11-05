@@ -181,16 +181,13 @@ services:
 
   example-agent-1:
     <<: *agent
-    image: commander-example-agent:test
-    build:
-      context: ../..
-      dockerfile: .github/composes/example-agent.Dockerfile
-      additional_contexts:
-        example-agent-source: https://github.com/defos-ai/commander-example-agent.git#71823ec22f91905e3e0de40a8ea77dcf0aa5354f
+    image: ghcr.io/defos-ai/commander-example-agent:stable
+    pull_policy: always
 
   example-agent-2:
     <<: *agent
-    image: commander-example-agent:test
+    image: ghcr.io/defos-ai/commander-example-agent:stable
+    pull_policy: always
 
   builder-agent:
     <<: *agent

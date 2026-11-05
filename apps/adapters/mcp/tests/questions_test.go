@@ -23,7 +23,7 @@ func TestQuestionsLatestAnswerAndAssignmentBlocking(t *testing.T) {
 		Operations []fixtures.OperationDetail `json:"operations"`
 	}
 	a.Call("list_operations", fixtures.Object{}, &list)
-	a.Fails("assign_task", fixtures.Object{"operation_id": op.ID, "action_name": "write-summary", "input": fixtures.SummaryInput()}, "pending question")
+	a.Fails("assign_task", fixtures.Object{"operation_id": op.ID, "action_name": "write-hn-digest", "input": fixtures.StoryBatch("Hacker News fixture")}, "pending question")
 
 	if saved.Status != operations.Waiting || saved.LastQuestion == nil || saved.LastQuestion.ID != latest.ID || saved.RemainingQuestions != 1 || len(saved.Tasks) != 0 {
 		t.Fatalf("pending question view: %+v", saved)
@@ -72,7 +72,7 @@ func TestQuestionsLatestAnswerAndAssignmentBlocking(t *testing.T) {
 func TestLinkedQuestionWaitsForModelAnswerAfterOperatorWindow(t *testing.T) {
 	a := fixtures.Connect(t)
 	op := a.Start("Linked question fixture")
-	a.Task(op.ID, "write-summary", fixtures.SummaryInput())
+	a.Task(op.ID, "write-hn-digest", fixtures.StoryBatch("Hacker News fixture"))
 	ready := a.Wait(op.ID, func(op fixtures.OperationDetail) bool { return fixtures.ModelDecision(op) != nil })
 	task := fixtures.ModelDecision(ready)
 	if task.Status != operations.TaskSucceeded {
@@ -80,13 +80,13 @@ func TestLinkedQuestionWaitsForModelAnswerAfterOperatorWindow(t *testing.T) {
 	}
 	originalVersion := task.Continuation.Version
 	var question operations.Question
-	a.Call("ask_question", fixtures.Object{"operation_id": op.ID, "task_id": task.ID, "version": originalVersion, "text": "Should the summary be accepted?", "options": []string{"Yes", "No"}, "timeout_seconds": 3}, &question)
+	a.Call("ask_question", fixtures.Object{"operation_id": op.ID, "task_id": task.ID, "version": originalVersion, "text": "Should the digest be accepted?", "options": []string{"Yes", "No"}, "timeout_seconds": 3}, &question)
 	waiting := a.Get(op.ID)
 	continuation := waiting.Tasks[0].Continuation
 	if continuation == nil || continuation.DecisionBy != operations.DecisionUser || continuation.Status != operations.ContinuationWaiting || continuation.QuestionID != question.ID {
 		t.Fatalf("question did not pause decision: %+v", waiting)
 	}
-	answer := "Yes, accept the summary."
+	answer := "Yes, accept the digest."
 	a.Fails("answer_question", fixtures.Object{"operation_id": op.ID, "question_id": question.ID, "answer": answer}, "operator")
 	a.Fails("resolve_continuation", fixtures.Object{"operation_id": op.ID, "task_id": task.ID, "version": originalVersion, "actions": []fixtures.Object{}}, "pending")
 

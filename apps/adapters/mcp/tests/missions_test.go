@@ -30,7 +30,7 @@ func TestMissions(t *testing.T) {
 		}
 		summaries[name] = summary
 	}
-	for _, name := range []string{"analyze-text", "build-agent", "fixture-use-agent", "install-agent"} {
+	for _, name := range []string{"hacker-news-test", "build-agent", "fixture-use-agent", "install-agent"} {
 		if summaries[name] == nil {
 			t.Fatalf("missing agent mission: %s", name)
 		}
@@ -54,9 +54,9 @@ func TestMissions(t *testing.T) {
 		}
 	}
 	a.Call("cancel_operation", fixtures.Object{"operation_id": buildOperation.ID}, nil)
-	summary := summaries["analyze-text"]
+	summary := summaries["hacker-news-test"]
 	var raw json.RawMessage
-	a.Call("describe_mission", fixtures.Object{"mission_name": "analyze-text"}, &raw)
+	a.Call("describe_mission", fixtures.Object{"mission_name": "hacker-news-test"}, &raw)
 	mission, err := missions.LoadMission(raw)
 	if err != nil {
 		t.Fatalf("mission detail does not match the mission definition format: %v", err)
@@ -69,10 +69,10 @@ func TestMissions(t *testing.T) {
 			t.Fatalf("mission detail objectives differ from summary: %+v", mission)
 		}
 	}
-	if !slices.Equal(mission.StartingActions, []string{"analyze-text"}) || !slices.Equal(mission.RequiredActions, []string{"analyze-text", "write-summary"}) {
+	if !slices.Equal(mission.StartingActions, []string{"rank-hn-stories"}) || !slices.Equal(mission.RequiredActions, []string{"rank-hn-stories", "write-hn-digest"}) {
 		t.Fatalf("incorrect fixture workflow: %+v", mission)
 	}
-	if mission.Policies == nil || mission.Policies.Continuation == nil || !slices.Equal(mission.Policies.Continuation.AggregateResults, []string{"analyze-text"}) || !slices.Equal(mission.Policies.Continuation.ModelReview, []string{"write-summary"}) {
+	if mission.Policies == nil || mission.Policies.Continuation == nil || !slices.Equal(mission.Policies.Continuation.AggregateResults, []string{"rank-hn-stories"}) || !slices.Equal(mission.Policies.Continuation.ModelReview, []string{"write-hn-digest"}) {
 		t.Fatalf("mission detail lost continuation policies: %+v", mission.Policies)
 	}
 
@@ -81,9 +81,9 @@ func TestMissions(t *testing.T) {
 	}
 	a.Fails("describe_mission", fixtures.Object{"mission_name": "missing"}, "unknown")
 	a.Fails("start_operation", fixtures.Object{"mission_name": "missing", "input": fixtures.Object{}}, "unknown")
-	a.Fails("start_operation", fixtures.Object{"mission_name": "analyze-text", "input": fixtures.Object{"text": ""}}, "input")
+	a.Fails("start_operation", fixtures.Object{"mission_name": "hacker-news-test", "input": fixtures.Object{}}, "input")
 	opID := id.OperationID()
-	args := fixtures.Object{"operation_id": opID, "mission_name": "analyze-text", "input": fixtures.Object{"text": "Explicit operation identity"}}
+	args := fixtures.Object{"operation_id": opID, "mission_name": "hacker-news-test", "input": fixtures.StoryBatch("Explicit operation identity")}
 	var op operations.Operation
 	a.Call("start_operation", args, &op)
 	if op.ID != opID || op.Status != operations.Planning {

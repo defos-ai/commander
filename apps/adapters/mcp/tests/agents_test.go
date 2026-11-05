@@ -67,7 +67,7 @@ func TestAgentsAndActions(t *testing.T) {
 		t.Fatalf("agent query lost identity or readiness: %+v", detail)
 	}
 	var action actions.Action
-	a.Call("describe_action", fixtures.Object{"agent_id": detail.ID, "action_name": "write-summary"}, &action)
+	a.Call("describe_action", fixtures.Object{"agent_id": detail.ID, "action_name": "write-hn-digest"}, &action)
 	if len(action.InputSchema) == 0 || len(action.OutputSchema) == 0 || action.Status != actions.Ready {
 		t.Fatalf("missing schema or readiness: %+v", action)
 	}
@@ -78,7 +78,7 @@ func TestAgentsAndActions(t *testing.T) {
 		{"list_agents", fixtures.Object{}},
 		{"list_actions", fixtures.Object{}},
 		{"describe_agent", fixtures.Object{"agent_id": exampleID}},
-		{"describe_action", fixtures.Object{"agent_id": exampleID, "action_name": "write-summary"}},
+		{"describe_action", fixtures.Object{"agent_id": exampleID, "action_name": "write-hn-digest"}},
 	} {
 		var raw json.RawMessage
 		a.Call(query.name, query.args, &raw)
@@ -114,11 +114,11 @@ func TestAgentsAndActions(t *testing.T) {
 	}
 
 	op := a.Start("Agent query fixture")
-	assertAgentSelectionRejected(t, "assign_task", fixtures.Object{"operation_id": op.ID, "agent_id": detail.ID, "action_name": "write-summary", "input": fixtures.SummaryInput()})
+	assertAgentSelectionRejected(t, "assign_task", fixtures.Object{"operation_id": op.ID, "agent_id": detail.ID, "action_name": "write-hn-digest", "input": fixtures.StoryBatch("Hacker News fixture")})
 	if len(a.Get(op.ID).Tasks) != 0 {
 		t.Fatal("rejected request created work")
 	}
-	assigned := a.Task(op.ID, "write-summary", fixtures.SummaryInput())
+	assigned := a.Task(op.ID, "write-hn-digest", fixtures.StoryBatch("Hacker News fixture"))
 	settled := a.Wait(op.ID, allTasksSucceeded)
 	task := settled.Tasks[0]
 	if task.ID != assigned.ID || task.AgentID == "" || task.Result == nil || len(task.Result.Output) == 0 {

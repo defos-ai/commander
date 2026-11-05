@@ -58,14 +58,13 @@ add their service prerequisites and checks.
 ## Shared stack and cleanup
 
 - Stack-backed API and MCP packages share state. Run them sequentially (`-p 1`
-  when combined). Use two lightweight example-agent instances from the same pinned
-  source commit in both test Compose files. Exercise Commander contracts through
-  `analyze-text` and its proposed `write-summary` artifact; action behavior belongs
+  when combined). Use two lightweight example-agent instances from
+  `ghcr.io/defos-ai/commander-example-agent:stable` in both test Compose files.
+  Pull the image at startup; do not build a local replacement. Exercise Commander
+  contracts through `rank-hn-stories` and its proposed `write-hn-digest`, using
+  inline story batches without live Hacker News requests. Action behavior belongs
   in the standalone agent repositories. Do not add web/browser-agent hosts or Go
   imports to Commander tests. Chromium in integration CI serves Admin UI tests only.
-  Build that pinned source against the current Commander workspace through
-  [the test Dockerfile](../../.github/composes/example-agent.Dockerfile), not its
-  published SDK dependencies. Keep workspace edits inside the build image.
 - The API/MCP stacks include a spawner and local HTTPS package fixture. FS uses
   native child processes; full-provider tests use a loopback registry and Docker
   sibling containers. Keep the fixture under `apps/agents/spawner/tests/e2e/`;

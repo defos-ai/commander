@@ -3,6 +3,7 @@ package api_test
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"mime"
 	"net/http"
 	"reflect"
@@ -16,21 +17,21 @@ import (
 
 func TestArtifactDownloadsPreserveBytesAndOwnership(t *testing.T) {
 	a := fixtures.Connect(t)
-	left, right := a.Start(fixtures.FixtureText), a.Start("Independent input")
-	a.Task(left.ID, "write-summary", fixtures.SummaryInput())
-	a.Task(right.ID, "write-summary", fixtures.SummaryInput())
+	left, right := a.Start(fixtures.FixtureTitle), a.Start("Independent input")
+	a.Task(left.ID, "write-hn-digest", fixtures.StoryBatch(fixtures.FixtureTitle))
+	a.Task(right.ID, "write-hn-digest", fixtures.StoryBatch(fixtures.FixtureTitle))
 	var previous *models.ArtifactResponse
 	for _, op := range []models.OperationResponse{left, right} {
 		finished := a.Wait(op.ID, fixtures.TasksSettled)
 		task := finished.Tasks[0]
 		if task.Status != "succeeded" || task.Result == nil || len(task.Result.Artifacts) != 1 {
-			t.Fatalf("summary action did not publish an artifact: %+v", task)
+			t.Fatalf("digest action did not publish an artifact: %+v", task)
 		}
 		artifact := task.Result.Artifacts[0]
 		base := "/api/v1/artifacts/" + artifact.ID
 		metadata := a.Request(http.MethodGet, base, nil)
 		saved := fixtures.Decode[models.ArtifactResponse](t, metadata, http.StatusOK)
-		if !reflect.DeepEqual(saved, artifact) || saved.AgentID != task.AgentID || saved.CommandID != task.CommandID || len(saved.Files) != 1 {
+		if !reflect.DeepEqual(saved, artifact) || saved.AgentID != task.AgentID || saved.CommandID != task.CommandID || len(saved.Files) != 2 {
 			t.Fatalf("artifact ownership/grouping differs: %+v", saved)
 		}
 		assertSchema(t, a, "Artifact", metadata)
@@ -49,8 +50,26 @@ func TestArtifactDownloadsPreserveBytesAndOwnership(t *testing.T) {
 			if err != nil || kind != "attachment" || params["filename"] != file.Name {
 				t.Fatalf("download filename: %q: %v", result.Header.Get("Content-Disposition"), err)
 			}
-			if file.Name != "summary.md" || file.MediaType != "text/markdown" || !strings.HasPrefix(result.Body, "# Text summary\n") {
-				t.Fatalf("download lost the agent's artifact descriptor or bytes: %+v", file)
+			switch file.Name {
+			case "digest.md":
+				if file.MediaType != "text/markdown" || !strings.HasPrefix(result.Body, "# Hacker News reading digest\n") || !strings.Contains(result.Body, fixtures.FixtureTitle) {
+					t.Fatalf("download lost the digest descriptor or bytes: %+v", file)
+				}
+			case "stories.json":
+				var batch fixtures.Object
+				if file.MediaType != "application/json" || json.Unmarshal([]byte(result.Body), &batch) != nil {
+					t.Fatalf("download lost the story batch descriptor or JSON bytes: %+v", file)
+				}
+				want, err := json.Marshal(fixtures.StoryBatch(fixtures.FixtureTitle))
+				if err != nil {
+					t.Fatal(err)
+				}
+				var expected fixtures.Object
+				if json.Unmarshal(want, &expected) != nil || !reflect.DeepEqual(batch, expected) {
+					t.Fatal("download changed the supplied story batch")
+				}
+			default:
+				t.Fatalf("unexpected digest artifact file: %+v", file)
 			}
 			head := a.Request(http.MethodHead, path, nil)
 			if head.Status != http.StatusOK || head.Body != "" || head.Header.Get("Content-Length") != result.Header.Get("Content-Length") || head.Header.Get("Content-Disposition") != result.Header.Get("Content-Disposition") {

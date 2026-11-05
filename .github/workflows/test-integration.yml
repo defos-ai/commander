@@ -57,8 +57,7 @@ jobs:
         working-directory: apps/admin/ui/frontend
         run: npx playwright install --with-deps --only-shell chromium
 
-      # Both stacks reuse local images. The lightweight example agent is pinned
-      # to source so tests do not depend on another release being published.
+      # Both stacks reuse local Commander images and pull the example-agent stable image.
       - name: Build shared test images
         if: env.RUN_FS == 'true' || env.RUN_FULL == 'true' || inputs.all || contains(fromJSON(inputs.changes), 's3')
         uses: ./.github/actions/build-test-images
@@ -66,7 +65,7 @@ jobs:
           compose-file: .github/composes/compose.full.test.yaml
           targets: >-
             ${{ format('{0}{1}',
-                (env.RUN_FS == 'true' || env.RUN_FULL == 'true') && 'controller,api,mcp,missions,builder-agent,spawner-agent,example-agent-1,fixture-releases,fixture-agent' || 'minio,minio-init',
+                (env.RUN_FS == 'true' || env.RUN_FULL == 'true') && 'controller,api,mcp,missions,builder-agent,spawner-agent,fixture-releases,fixture-agent' || 'minio,minio-init',
                 (env.RUN_FS == 'true' || env.RUN_FULL == 'true') &&
                 (inputs.all || contains(fromJSON(inputs.changes), 's3') || env.RUN_FULL == 'true') && ',minio,minio-init' || '') }}
 

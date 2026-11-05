@@ -24,8 +24,8 @@ import (
 func TestConcurrentOperationsStayIsolated(t *testing.T) {
 	a := fixtures.Connect(t)
 	b := fixtures.OpenSession(t)
-	texts := []string{"First isolated operation", "Second independent operation"}
-	first, second := a.Start(texts[0]), b.Start(texts[1])
+	titles := []string{"First isolated operation", "Second independent operation"}
+	first, second := a.Start(titles[0]), b.Start(titles[1])
 	var empty struct {
 		Tasks      []operations.Task `json:"tasks"`
 		NextCursor *string           `json:"next_cursor"`
@@ -35,9 +35,9 @@ func TestConcurrentOperationsStayIsolated(t *testing.T) {
 		t.Fatalf("new operation must have an empty task list: %+v", empty)
 	}
 	var question operations.Question
-	a.Call("ask_question", fixtures.Object{"operation_id": first.ID, "text": "Analyze the first text?", "options": []string{"Yes", "No"}, "timeout_seconds": 1}, &question)
-	a.Fails("assign_task", fixtures.Object{"operation_id": first.ID, "action_name": "analyze-text", "input": fixtures.Object{"text": texts[0]}}, "pending question")
-	b.Task(second.ID, "analyze-text", fixtures.Object{"text": texts[1]})
+	a.Call("ask_question", fixtures.Object{"operation_id": first.ID, "text": "Rank the first story?", "options": []string{"Yes", "No"}, "timeout_seconds": 1}, &question)
+	a.Fails("assign_task", fixtures.Object{"operation_id": first.ID, "action_name": "rank-hn-stories", "input": fixtures.StoryBatch(titles[0])}, "pending question")
+	b.Task(second.ID, "rank-hn-stories", fixtures.StoryBatch(titles[1]))
 	right := b.Wait(second.ID, func(op fixtures.OperationDetail) bool { return fixtures.ModelDecision(op) != nil })
 	left := a.Get(first.ID)
 	if len(left.Tasks) != 0 || len(left.Questions) != 1 || len(right.Questions) != 0 || !allTasksSucceeded(right) {
@@ -52,7 +52,7 @@ func TestConcurrentOperationsStayIsolated(t *testing.T) {
 		return false
 	})
 	a.Call("answer_question", fixtures.Object{"operation_id": first.ID, "question_id": question.ID, "answer": "Yes"}, nil)
-	a.Task(first.ID, "analyze-text", fixtures.Object{"text": texts[0]})
+	a.Task(first.ID, "rank-hn-stories", fixtures.StoryBatch(titles[0]))
 	left = a.Wait(first.ID, func(op fixtures.OperationDetail) bool { return fixtures.ModelDecision(op) != nil })
 	if len(left.Tasks) != 2 || len(right.Tasks) != 2 {
 		t.Fatalf("expected a root and proposed child per operation: first=%+v second=%+v", left.Tasks, right.Tasks)
@@ -71,8 +71,8 @@ func TestConcurrentOperationsStayIsolated(t *testing.T) {
 	for index, op := range []fixtures.OperationDetail{left, right} {
 		assertTaskQueries(t, a, op)
 		root, child := op.Tasks[0], op.Tasks[1]
-		var input struct{ Text string }
-		if err := json.Unmarshal(root.Input, &input); err != nil || input.Text != texts[index] {
+		var input struct{ Stories []struct{ Title string } }
+		if err := json.Unmarshal(root.Input, &input); err != nil || len(input.Stories) != 1 || input.Stories[0].Title != titles[index] {
 			t.Fatalf("task input crossed operation boundaries: %s (%v)", root.Input, err)
 		}
 		var proposedInput, savedInput fixtures.Object
@@ -86,7 +86,7 @@ func TestConcurrentOperationsStayIsolated(t *testing.T) {
 			t.Fatalf("child lost its parent's proposed input: %+v (%v)", child, err)
 		}
 		if len(child.Result.Artifacts) != 1 {
-			t.Fatalf("summary artifact missing: %+v", child.Result)
+			t.Fatalf("digest artifact missing: %+v", child.Result)
 		}
 		for _, task := range op.Tasks {
 			if task.OperationID != op.ID || task.Status != operations.TaskSucceeded {
@@ -109,7 +109,7 @@ func TestConcurrentOperationsStayIsolated(t *testing.T) {
 			}
 		}
 		a.Resolve(op.ID, *fixtures.ModelDecision(op), []fixtures.Object{})
-		summary := "Analysis " + op.ID
+		summary := "Digest " + op.ID
 		a.Call("complete_operation", fixtures.Object{"operation_id": op.ID, "output": fixtures.Object{"summary": summary}}, nil)
 		var report reports.Report
 		b.Call("get_report", fixtures.Object{"operation_id": op.ID}, &report)
@@ -203,17 +203,17 @@ func allTasksSucceeded(op fixtures.OperationDetail) bool {
 	return true
 }
 
-func TestOperationTextWorkflow(t *testing.T) {
-	const reportSummary = "MCP text workflow passed"
-	const text = "Analyze this fixture and save its summary."
+func TestOperationDigestWorkflow(t *testing.T) {
+	const reportSummary = "MCP digest workflow passed"
+	const title = "Rank this fixture and save its digest."
 	a := fixtures.Connect(t)
 	var op fixtures.OperationDetail
-	a.Call("start_operation", fixtures.Object{"mission_name": "analyze-text", "input": fixtures.Object{"text": text}}, &op)
+	a.Call("start_operation", fixtures.Object{"mission_name": "hacker-news-test", "input": fixtures.StoryBatch(title)}, &op)
 	assertMissionPreflight(t, a, op, 2)
 	if op.Progress.TotalTasks != 0 || op.Progress.FinishedTasks != 0 || op.Progress.Settled || op.Progress.TaskCounts == nil {
 		t.Fatalf("new operation progress: %+v", op.Progress)
 	}
-	root := a.Task(op.ID, "analyze-text", fixtures.Object{"text": text})
+	root := a.Task(op.ID, "rank-hn-stories", fixtures.StoryBatch(title))
 	settled := a.Wait(op.ID, func(op fixtures.OperationDetail) bool { return fixtures.ModelDecision(op) != nil })
 	if settled.Preflight == nil || !settled.Preflight.Ready || len(settled.Tasks) != 2 {
 		t.Fatalf("ready mission lost preflight or proposed work: %+v", settled)
@@ -231,7 +231,7 @@ func TestOperationTextWorkflow(t *testing.T) {
 		}
 	}
 	child := settled.Tasks[1]
-	if child.ActionName != "write-summary" || len(child.Result.Artifacts) != 1 {
+	if child.ActionName != "write-hn-digest" || len(child.Result.Artifacts) != 1 {
 		t.Fatalf("proposed action lost its artifact: %+v", child)
 	}
 	assertArtifactResource(t, a, child.Result.Artifacts[0])
@@ -253,7 +253,7 @@ func TestOperationTextWorkflow(t *testing.T) {
 		t.Fatalf("report=%+v", report)
 	}
 	assertEvents(t, a, op.ID)
-	a.Fails("assign_task", fixtures.Object{"operation_id": op.ID, "action_name": "write-summary", "input": fixtures.SummaryInput()}, "finished")
+	a.Fails("assign_task", fixtures.Object{"operation_id": op.ID, "action_name": "write-hn-digest", "input": fixtures.StoryBatch("Hacker News fixture")}, "finished")
 }
 
 func TestOperationCancellationAndFailure(t *testing.T) {
@@ -276,7 +276,7 @@ func TestOperationCancellationAndFailure(t *testing.T) {
 				t.Fatalf("terminal operation: %+v", ended)
 			}
 			a.Fails("get_report", fixtures.Object{"operation_id": op.ID}, "report")
-			a.Fails("assign_task", fixtures.Object{"operation_id": op.ID, "action_name": "write-summary"}, "finished")
+			a.Fails("assign_task", fixtures.Object{"operation_id": op.ID, "action_name": "write-hn-digest"}, "finished")
 		})
 	}
 }
@@ -295,8 +295,13 @@ func assertArtifactResource(t *testing.T, a *fixtures.Client, expected artifacts
 	if err := json.Unmarshal([]byte(result.Contents[0].Text), &saved); err != nil {
 		t.Fatal(err)
 	}
-	if !saved.Equal(expected) || len(saved.Files) != 1 {
+	if !saved.Equal(expected) || len(saved.Files) != 2 {
 		t.Fatalf("artifact metadata lost ownership or files: %+v", saved)
+	}
+	fileNames := []string{saved.Files[0].Name, saved.Files[1].Name}
+	slices.Sort(fileNames)
+	if !slices.Equal(fileNames, []string{"digest.md", "stories.json"}) {
+		t.Fatalf("digest artifact lost its Markdown or source data file: %+v", saved.Files)
 	}
 	for _, file := range saved.Files {
 		resource, err := a.Session.ReadResource(a.Context, &mcp.ReadResourceParams{URI: uri + "/files/" + file.ID})
@@ -310,6 +315,12 @@ func assertArtifactResource(t *testing.T, a *fixtures.Client, expected artifacts
 		digest := sha256.Sum256(data)
 		if int64(len(data)) != file.Size || hex.EncodeToString(digest[:]) != file.SHA256 {
 			t.Fatal("file bytes do not match saved size and digest")
+		}
+		if file.Name == "digest.md" && (file.MediaType != "text/markdown" || !bytes.HasPrefix(data, []byte("# Hacker News reading digest\n"))) {
+			t.Fatalf("digest lost its Markdown content or media type: %+v", file)
+		}
+		if file.Name == "stories.json" && (file.MediaType != "application/json" || !json.Valid(data)) {
+			t.Fatalf("digest lost its JSON source data or media type: %+v", file)
 		}
 	}
 }
@@ -378,8 +389,10 @@ func assertInvalidPageLimits(t *testing.T, tool, operationID string) {
 func TestOperationDecisionAfterActionFailure(t *testing.T) {
 	a := fixtures.Connect(t)
 	op := a.Start("Recover an invalid action input")
-	// The JSON matches the action schema, but execution rejects inconsistent counts.
-	a.Task(op.ID, "write-summary", fixtures.Object{"character_count": 1, "word_count": 0, "line_count": 1})
+	// The JSON matches the action schema, but execution rejects negative story scores.
+	invalid := fixtures.StoryBatch("Invalid story")
+	invalid["stories"].([]fixtures.Object)[0]["score"] = -1
+	a.Task(op.ID, "write-hn-digest", invalid)
 	failed := a.Wait(op.ID, func(op fixtures.OperationDetail) bool { return fixtures.ModelDecision(op) != nil })
 	parent := fixtures.ModelDecision(failed)
 	if parent.Status != operations.TaskFailed || parent.Error == "" {
@@ -387,7 +400,7 @@ func TestOperationDecisionAfterActionFailure(t *testing.T) {
 	}
 
 	assertAgentSelectionRejected(t, "resolve_continuation", fixtures.Object{"operation_id": op.ID, "task_id": parent.ID, "version": parent.Continuation.Version,
-		"actions": []fixtures.Object{{"action_name": "write-summary", "agent_id": parent.AgentID, "input": fixtures.SummaryInput()}}})
+		"actions": []fixtures.Object{{"action_name": "write-hn-digest", "agent_id": parent.AgentID, "input": fixtures.StoryBatch("Hacker News fixture")}}})
 	unchanged := a.Get(op.ID)
 	pending := fixtures.ModelDecision(unchanged)
 	if len(unchanged.Tasks) != 1 || pending == nil || pending.Continuation.Version != parent.Continuation.Version {
@@ -395,7 +408,7 @@ func TestOperationDecisionAfterActionFailure(t *testing.T) {
 	}
 
 	decision := fixtures.Object{"operation_id": op.ID, "task_id": parent.ID, "version": parent.Continuation.Version,
-		"actions": []fixtures.Object{{"action_name": "write-summary", "input": fixtures.SummaryInput(), "reason": "Retry with valid analysis counts"}}}
+		"actions": []fixtures.Object{{"action_name": "write-hn-digest", "input": fixtures.StoryBatch("Hacker News fixture"), "reason": "Retry with a valid story batch"}}}
 	a.Call("resolve_continuation", decision, nil)
 	a.Fails("resolve_continuation", decision, "pending")
 	continued := a.Wait(op.ID, func(op fixtures.OperationDetail) bool { return len(op.Tasks) == 2 && fixtures.ModelDecision(op) != nil })
@@ -414,7 +427,7 @@ func TestOperationDecisionAfterActionFailure(t *testing.T) {
 func TestCompletionUsesSavedMissionPolicy(t *testing.T) {
 	a := fixtures.OpenSession(t)
 	var definition missions.Mission
-	a.Call("describe_mission", fixtures.Object{"mission_name": "analyze-text"}, &definition)
+	a.Call("describe_mission", fixtures.Object{"mission_name": "hacker-news-test"}, &definition)
 	operatorDefinition := definition.Clone()
 	operatorDefinition.Name += "-operator-" + id.New()
 	if operatorDefinition.Policies == nil {
@@ -424,7 +437,7 @@ func TestCompletionUsesSavedMissionPolicy(t *testing.T) {
 	operatorDefinition.OutputSchema = json.RawMessage(`{"anyOf":[{"type":"object","properties":{"summary":{"type":"string"}},"required":["summary"],"additionalProperties":false},{"type":"null"}]}`)
 	a.Call("create_mission", fixtures.MissionDefinition(operatorDefinition), nil)
 	var operation operations.Operation
-	a.Call("start_operation", fixtures.Object{"mission_name": operatorDefinition.Name, "input": fixtures.Object{"text": "Operator reviews final output"}}, &operation)
+	a.Call("start_operation", fixtures.Object{"mission_name": operatorDefinition.Name, "input": fixtures.StoryBatch("Operator reviews final output")}, &operation)
 	defer a.CancelActiveOperation(operation.ID)
 	operatorDefinition.Policies.Completion.DecisionBy = policies.Model
 	a.Call("update_mission", fixtures.MissionDefinition(operatorDefinition), nil)
@@ -461,7 +474,7 @@ func TestCompletionUsesSavedMissionPolicy(t *testing.T) {
 	a.Call("cancel_operation", fixtures.Object{"operation_id": operation.ID}, nil)
 
 	var modelOperation operations.Operation
-	a.Call("start_operation", fixtures.Object{"mission_name": operatorDefinition.Name, "input": fixtures.Object{"text": "Model completes final output"}}, &modelOperation)
+	a.Call("start_operation", fixtures.Object{"mission_name": operatorDefinition.Name, "input": fixtures.StoryBatch("Model completes final output")}, &modelOperation)
 	defer a.CancelActiveOperation(modelOperation.ID)
 	var completed operations.Operation
 	a.Call("complete_operation", fixtures.Object{"operation_id": modelOperation.ID, "output": output}, &completed)

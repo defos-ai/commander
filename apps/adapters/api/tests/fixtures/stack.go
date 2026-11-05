@@ -19,7 +19,7 @@ import (
 type Object = map[string]any
 
 const AbsentID = "00000000-0000-4000-8000-000000ffffff"
-const FixtureText = "Commander keeps execution results."
+const FixtureTitle = "Commander keeps execution results."
 
 type Client struct {
 	t        *testing.T
@@ -106,7 +106,7 @@ func Connect(t *testing.T) *Client {
 func ExpectedAgentActions(agentType string) []string {
 	switch agentType {
 	case "example-agent":
-		return []string{"analyze-text", "write-summary"}
+		return []string{"choose-hn-topics", "fetch-hn-stories", "filter-hn-stories", "rank-hn-stories", "write-hn-digest"}
 	case "spawner-agent":
 		return []string{"spawn-agent"}
 	case "builder-agent":
@@ -119,7 +119,7 @@ func ExpectedAgentActions(agentType string) []string {
 }
 
 func ExpectedMissions() []string {
-	return []string{"analyze-text", "build-agent", "fixture-use-agent", "install-agent"}
+	return []string{"hacker-news-test", "build-agent", "fixture-use-agent", "install-agent"}
 }
 
 func HasExpectedMissions(missions []models.MissionResponse) bool {
@@ -251,9 +251,9 @@ func errorCode(result Response) string {
 	return payload.Error
 }
 
-func (a *Client) Start(text string) models.OperationResponse {
+func (a *Client) Start(title string) models.OperationResponse {
 	a.t.Helper()
-	return Post[models.OperationResponse](a, "/api/v1/operations", Object{"mission_name": "analyze-text", "input": Object{"text": text}}, http.StatusCreated)
+	return Post[models.OperationResponse](a, "/api/v1/operations", Object{"mission_name": "hacker-news-test", "input": StoryBatch(title)}, http.StatusCreated)
 }
 
 func OperationPath(id string) string { return "/api/v1/operations/" + id }
@@ -263,8 +263,10 @@ func (a *Client) Task(id, action string, input Object) models.TaskResponse {
 	return Post[models.TaskResponse](a, OperationPath(id)+"/tasks", Object{"action_name": action, "input": input}, http.StatusCreated)
 }
 
-func SummaryInput() Object {
-	return Object{"character_count": 12, "word_count": 2, "line_count": 1}
+func StoryBatch(title string) Object {
+	return Object{"feed": "top", "topics": []string{}, "stories": []Object{{
+		"id": 1, "title": title, "url": "https://example.com/story", "score": 42, "comments": 7,
+	}}}
 }
 
 func (a *Client) Wait(id string, done func(models.OperationResponse) bool) models.OperationResponse {

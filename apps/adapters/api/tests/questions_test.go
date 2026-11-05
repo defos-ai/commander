@@ -11,7 +11,7 @@ import (
 
 func TestQuestionsLatestAnswerAndAssignmentBlocking(t *testing.T) {
 	a := fixtures.Connect(t)
-	op := a.Start(fixtures.FixtureText)
+	op := a.Start(fixtures.FixtureTitle)
 	base := fixtures.OperationPath(op.ID)
 	first := fixtures.Post[models.QuestionResponse](a, base+"/questions", fixtures.Object{"text": "Which release matters?"}, http.StatusCreated)
 	created := a.Request(http.MethodPost, base+"/questions", fixtures.Object{"text": "Which result matters most?", "options": []string{"Summary", "Words", "Lines", "Characters"}})
@@ -27,7 +27,7 @@ func TestQuestionsLatestAnswerAndAssignmentBlocking(t *testing.T) {
 		t.Fatalf("default question lifecycle: %+v", latest)
 	}
 	assertSchema(t, a, "Question", created)
-	fixtures.AssertError(t, a.Request(http.MethodPost, base+"/tasks", fixtures.Object{"action_name": "analyze-text", "input": fixtures.Object{"text": fixtures.FixtureText}}), http.StatusConflict, "question_pending")
+	fixtures.AssertError(t, a.Request(http.MethodPost, base+"/tasks", fixtures.Object{"action_name": "rank-hn-stories", "input": fixtures.StoryBatch(fixtures.FixtureTitle)}), http.StatusConflict, "question_pending")
 	fixtures.AssertError(t, a.Request(http.MethodPost, base+"/complete", fixtures.Object{"output": fixtures.Object{"summary": "Unanswered"}}), http.StatusConflict, "question_pending")
 	answer := "Prioritize the summary.\nKeep the original input."
 	fixtures.Post[models.OperationResponse](a, base+"/questions/"+latest.ID+"/answer", fixtures.Object{"answer": answer}, http.StatusOK)
@@ -59,12 +59,12 @@ func TestLinkedQuestionsKeepWaitingUntilOperatorAnswers(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			a := fixtures.Connect(t)
-			op := a.Start(fixtures.FixtureText)
-			a.Task(op.ID, "write-summary", fixtures.SummaryInput())
+			op := a.Start(fixtures.FixtureTitle)
+			a.Task(op.ID, "write-hn-digest", fixtures.StoryBatch(fixtures.FixtureTitle))
 			ready := a.Wait(op.ID, func(op models.OperationResponse) bool { return fixtures.ModelDecision(op) != nil })
 			task := *fixtures.ModelDecision(ready)
 			if task.Status != "succeeded" {
-				t.Fatalf("summary task failed: %+v", task)
+				t.Fatalf("digest task failed: %+v", task)
 			}
 			base := fixtures.OperationPath(op.ID)
 			question := fixtures.Post[models.QuestionResponse](a, base+"/questions", fixtures.Object{"text": "Is this a release preview?", "options": []string{"Yes", "No"}, "task_id": task.ID, "version": task.Continuation.Version, "timeout_seconds": 1}, http.StatusCreated)
