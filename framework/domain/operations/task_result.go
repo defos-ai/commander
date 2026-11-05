@@ -73,6 +73,7 @@ func (o *Operation) FinishTask(result TaskResult) (bool, error) {
 		kind, message = TaskInterruptedEvent, "Execution outcome is unknown; inspect before explicitly assigning replacement work"
 	}
 	o.AppendEvent(kind, result.TaskID, "", message)
+	o.finishBatches()
 	o.UpdatedAt = time.Now().UTC()
 	return true, nil
 }

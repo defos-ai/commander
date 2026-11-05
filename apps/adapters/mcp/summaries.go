@@ -69,6 +69,7 @@ type continuationSummary struct {
 type taskSummary struct {
 	ID                  string                `json:"id"`
 	ParentTaskID        string                `json:"parent_task_id,omitempty"`
+	BatchID             string                `json:"batch_id,omitempty"`
 	AgentID             string                `json:"agent_id"`
 	AgentType           string                `json:"agent_type,omitempty"`
 	MissingRequirements []actions.Requirement `json:"missing_requirements,omitempty"`
@@ -83,7 +84,7 @@ type taskSummary struct {
 
 func summarizeTask(task queries.TaskView) taskSummary {
 	summary := taskSummary{
-		ID: task.ID, ParentTaskID: task.ParentTaskID, AgentID: task.AgentID, ActionName: task.ActionName, Status: task.Status,
+		ID: task.ID, ParentTaskID: task.ParentTaskID, BatchID: task.BatchID, AgentID: task.AgentID, ActionName: task.ActionName, Status: task.Status,
 		Error: task.Error, StartedAt: task.StartedAt, FinishedAt: task.FinishedAt,
 	}
 	if len(task.MissingRequirements) != 0 {

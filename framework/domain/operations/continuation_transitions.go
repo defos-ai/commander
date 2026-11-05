@@ -6,6 +6,7 @@ import (
 	"time"
 
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/id"
 )
 
 // continueTask is part of the same operation update as the result. No publication
@@ -56,8 +57,13 @@ func createChildren(op *Operation, parentIndex int, actions []actionmodel.NextAc
 	c := parent.Continuation
 	// Each decision owns its group; earlier children remain in the task graph.
 	c.CreatedTaskIDs = make([]string, 0, len(actions))
+	batchID := ""
+	if collect && len(actions) > 0 {
+		batchID = id.New()
+	}
 	for _, action := range actions {
 		task := NewTask(op.ID, parent.ID, action)
+		task.BatchID = batchID
 		c.CreatedTaskIDs = append(c.CreatedTaskIDs, task.ID)
 		op.Tasks = append(op.Tasks, task)
 		op.AppendEvent(TaskAssigned, task.ID, "", "Follow-up task queued")
@@ -65,6 +71,7 @@ func createChildren(op *Operation, parentIndex int, actions []actionmodel.NextAc
 	c.Status = ContinuationResolved
 	if collect && len(actions) > 0 {
 		c.DecisionBy, c.Status = DecisionCode, ContinuationWaiting
+		op.appendBatchEvent(BatchStarted, batchID, parent.ID, "Aggregation batch accepted; producer tasks may still be queued")
 	}
 }
 

@@ -14,7 +14,7 @@ func (o *Operation) QueueTask(task Task) (bool, error) {
 	if !id.Valid(task.ID) || !id.Valid(task.OperationID) || task.OperationID != o.ID || task.CommandID != task.ID {
 		return false, errors.New("task assignment requires matching operation and command identities")
 	}
-	if task.Status != TaskQueued || task.AgentID != "" || task.ParentTaskID != "" || !task.StartedAt.IsZero() || task.DeadlineAt != nil || task.FinishedAt != nil || task.Result != nil || task.Continuation != nil || task.Error != "" {
+	if task.Status != TaskQueued || task.AgentID != "" || task.ParentTaskID != "" || task.BatchID != "" || !task.StartedAt.IsZero() || task.DeadlineAt != nil || task.FinishedAt != nil || task.Result != nil || task.Continuation != nil || task.Error != "" {
 		return false, errors.New("direct task assignment requires a queued task without execution or continuation state")
 	}
 	if err := (actions.NextAction{ActionName: task.ActionName, Input: task.Input}).Validate(); err != nil {

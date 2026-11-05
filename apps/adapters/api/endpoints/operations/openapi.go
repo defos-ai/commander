@@ -53,6 +53,9 @@ func RegisterOpenAPI(paths, components map[string]any, options *jsonschema.ForOp
 		case "Task", "GraphTask":
 			schema.Properties["status"].Enum = []any{"queued", "running", "succeeded", "failed", "cancelled", "interrupted"}
 			if model.name == "Task" {
+				schema.Properties["batch_id"].ReadOnly = true
+				schema.Properties["batch_id"].Format = "uuid"
+				schema.Properties["batch_id"].Description = "Stable identity of this task's direct-child aggregation batch. Retained across later continuation decisions and late outcomes; absent for work outside aggregation."
 				schema.Properties["agent_type"].Description = "Registered type of the assigned agent reporting this live execution wait; present only with missing_requirements."
 				schema.Properties["missing_requirements"].Description = "Current secret names reported by matching live running work before its saved deadline. Values are never included. These read-only requirements may change without updated_at changing; they neither alter mission preflight nor extend the task deadline."
 			}
@@ -74,6 +77,11 @@ func RegisterOpenAPI(paths, components map[string]any, options *jsonschema.ForOp
 			schema.Properties["settled"].Description = "True only when the operation is terminal and every saved task has a known finished outcome. Keep polling while false, including after cancellation or failure."
 		case "Operation", "Event", "OperationGraph":
 			schema.Properties["status"].Enum = []any{"planning", "running", "waiting", "completed", "failed", "cancelled"}
+			if model.name == "Event" {
+				schema.Properties["batch_id"].ReadOnly = true
+				schema.Properties["batch_id"].Format = "uuid"
+				schema.Properties["batch_id"].Description = "Aggregation batch identity on batch.started and batch.finished events; task_id names its parent task. Start records accepted membership before dispatch; finish records known producer outcomes, including failures or cancellations. Interrupted outcomes do not finish a batch."
+			}
 			if model.name == "Operation" {
 				schema.Properties["completion_draft"].ReadOnly = true
 				schema.Properties["completion_draft"].Description = "Final output submitted by a model under operator completion policy, awaiting explicit operator approval. No final report exists yet. An operator may review or edit it before completing through the existing completion API."

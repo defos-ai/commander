@@ -113,12 +113,17 @@ func TestContinuationModelDecisionsCollectOnlyTheirOwnChildren(t *testing.T) {
 	if len(initial.Tasks) != 1 || initial.Tasks[0].Continuation.DecisionBy != operations.DecisionModel {
 		t.Fatalf("aggregation bypassed initial model review: %+v", initial)
 	}
-	_, err := r.Resolve(t.Context(), commands.ResolveContinuationCommand{
+	started, err := r.Resolve(t.Context(), commands.ResolveContinuationCommand{
 		OperationID: op.ID, TaskID: parent.ID, Version: initial.Tasks[0].Continuation.Version, Actions: proposals,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
+	firstBatch := started.Tasks[1].BatchID
+	if firstBatch == "" || started.Tasks[2].BatchID != firstBatch || started.Tasks[1].Status != operations.TaskQueued || started.Tasks[2].Status != operations.TaskQueued {
+		t.Fatalf("accepted group has no stable queued membership: %+v", started.Tasks)
+	}
+	assertBatchEvents(t, started, firstBatch, parent.ID, 1, 0)
 	first, second := fixtures.Receive(t, calls), fixtures.Receive(t, calls)
 	first.Reply <- fixtures.Output("inspect", actions.NextAction{ActionName: "follow-up", Input: first.Call.Input})
 	partial := fixtures.AwaitOperation(t, r, op.ID, func(op operations.Operation) bool {
@@ -127,12 +132,14 @@ func TestContinuationModelDecisionsCollectOnlyTheirOwnChildren(t *testing.T) {
 	if c := partial.Tasks[0].Continuation; c.DecisionBy != operations.DecisionCode || c.Status != operations.ContinuationWaiting || continuationDecisionCount(partial) != 0 {
 		t.Fatalf("model-selected children escaped the aggregation group: %+v", partial)
 	}
+	assertBatchEvents(t, partial, firstBatch, parent.ID, 1, 0)
 	second.Reply <- fixtures.Output("inspect", actions.NextAction{ActionName: "follow-up", Input: second.Call.Input})
 	grouped := fixtures.AwaitOperation(t, r, op.ID, func(op operations.Operation) bool { return op.Status == operations.Planning })
 	decision := grouped.Tasks[0].Continuation
 	if len(grouped.Tasks) != 3 || continuationDecisionCount(grouped) != 1 || decision.DecisionBy != operations.DecisionModel || decision.Status != operations.ContinuationPending || len(decision.ProposedActions) != 2 {
 		t.Fatalf("expected one model decision with both child proposals: %+v", grouped)
 	}
+	assertBatchEvents(t, grouped, firstBatch, parent.ID, 1, 1)
 	_, err = r.Resolve(t.Context(), commands.ResolveContinuationCommand{
 		OperationID: op.ID, TaskID: parent.ID, Version: decision.Version,
 		Actions: []actions.NextAction{{ActionName: "inspect", Input: json.RawMessage(`{"page":3}`)}},
@@ -149,11 +156,18 @@ func TestContinuationModelDecisionsCollectOnlyTheirOwnChildren(t *testing.T) {
 	if len(current.Tasks) != 4 || c.Status != operations.ContinuationWaiting || !reflect.DeepEqual(c.CreatedTaskIDs, []string{third.Call.Work.TaskID}) {
 		t.Fatalf("new model decision reused an earlier aggregation group: %+v", current)
 	}
+	secondBatch := current.Tasks[3].BatchID
+	if secondBatch == "" || secondBatch == firstBatch || current.Tasks[1].BatchID != firstBatch || current.Tasks[2].BatchID != firstBatch {
+		t.Fatalf("new decision replaced an earlier batch identity: %+v", current.Tasks)
+	}
+	assertBatchEvents(t, current, secondBatch, parent.ID, 1, 0)
 	third.Reply <- fixtures.Output("inspect", actions.NextAction{ActionName: "follow-up", Input: third.Call.Input})
 	final := fixtures.AwaitOperation(t, r, op.ID, func(op operations.Operation) bool { return op.Status == operations.Planning })
 	if continuationDecisionCount(final) != 2 || len(final.Tasks) != 4 || !reflect.DeepEqual(final.Tasks[0].Continuation.ProposedActions, []actions.NextAction{{ActionName: "follow-up", Input: json.RawMessage(`{"page":3}`)}}) {
 		t.Fatalf("later group repeated old proposals or lost its own result: %+v", final)
 	}
+	assertBatchEvents(t, final, firstBatch, parent.ID, 1, 1)
+	assertBatchEvents(t, final, secondBatch, parent.ID, 1, 1)
 }
 
 func TestContinuationOperationKeepsItsMissionSnapshot(t *testing.T) {

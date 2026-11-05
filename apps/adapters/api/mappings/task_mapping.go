@@ -23,6 +23,7 @@ func ToTaskResponse(task operations.Task) models.TaskResponse {
 		ID:           task.ID,
 		OperationID:  task.OperationID,
 		ParentTaskID: task.ParentTaskID,
+		BatchID:      task.BatchID,
 		AgentID:      task.AgentID,
 		ActionName:   task.ActionName,
 		CommandID:    task.CommandID,

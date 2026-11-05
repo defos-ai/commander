@@ -12,6 +12,7 @@ func ToEventResponse(event operations.Event) models.EventResponse {
 		Type:        string(event.Type),
 		Status:      string(event.Status),
 		TaskID:      event.TaskID,
+		BatchID:     event.BatchID,
 		QuestionID:  event.QuestionID,
 		Message:     event.Message,
 		CreatedAt:   event.CreatedAt,

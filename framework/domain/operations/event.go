@@ -13,6 +13,8 @@ const (
 	TaskAssigned              EventType = "task.assigned"
 	TaskFinished              EventType = "task.finished"
 	TaskInterruptedEvent      EventType = "task.interrupted"
+	BatchStarted              EventType = "batch.started"
+	BatchFinished             EventType = "batch.finished"
 	OperationRecovered        EventType = "operation.recovered"
 	QuestionAsked             EventType = "question.asked"
 	QuestionAnsweredEvent     EventType = "question.answered"
@@ -28,6 +30,7 @@ type Event struct {
 	Type        EventType `json:"type"`
 	Status      Status    `json:"status"`
 	TaskID      string    `json:"task_id,omitempty"`
+	BatchID     string    `json:"batch_id,omitempty"`
 	QuestionID  string    `json:"question_id,omitempty"`
 	Message     string    `json:"message,omitempty"`
 	CreatedAt   time.Time `json:"created_at"`

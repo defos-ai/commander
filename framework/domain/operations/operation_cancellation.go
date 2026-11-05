@@ -9,6 +9,7 @@ func (o *Operation) Cancel() error {
 	o.Status = Cancelled
 	o.cancelQueued()
 	o.AppendEvent(OperationCancelled, "", "", "New assignments cancelled; dispatched tasks may still finish")
+	o.finishBatches()
 	o.UpdatedAt = time.Now().UTC()
 	return nil
 }

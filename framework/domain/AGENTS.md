@@ -56,6 +56,13 @@ applies to all domain packages below this directory.
   Its aggregation/model-review scopes are independent and may overlap. Clone each
   slice independently, even when inputs share a backing array. Aggregation covers
   saved direct children; failures and empty proposals still require model review.
+  Aggregated children retain a stable `Task.BatchID` for each accepted group,
+  independent of later continuation versions and child lists. Task membership
+  and `batch.started`/`batch.finished` events persist within the operation;
+  no separate batch store exists. Finish requires known outcomes for every
+  member, including failed or cancelled tasks. Interrupted outcomes remain
+  unknown even when continuation review is ready. Late results can close an
+  earlier batch after another group starts or the operation becomes terminal.
   Continuation does not override completion or sharing settings. Reject removed
   root `rules` and nested `policies.placement` fields, including null or empty values,
   rather than silently accepting definitions with discarded constraints.

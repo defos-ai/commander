@@ -57,7 +57,7 @@ function isContinuation(value: unknown): value is OperationContinuation {
 
 function isTask(value: unknown): value is OperationTask {
   return isObject(value) && isIdentifier(value.id) && typeof value.operation_id === 'string' &&
-    isOptionalString(value.parent_task_id) &&
+    isOptionalString(value.parent_task_id) && (value.batch_id === undefined || isUUID(value.batch_id)) &&
     typeof value.agent_id === 'string' && typeof value.action_name === 'string' && hasScopedRequirements(value) &&
     isOptionalString(value.command_id) && isOptionalDate(value.deadline_at) &&
     typeof value.status === 'string' && isOptionalString(value.error) &&
@@ -80,6 +80,7 @@ function isEvent(value: unknown): value is OperationEvent {
   return isObject(value) && isUnsignedInteger(value.sequence) && typeof value.operation_id === 'string' &&
     typeof value.type === 'string' && typeof value.status === 'string' &&
     isOptionalString(value.task_id) && isOptionalString(value.question_id) &&
+    (value.batch_id === undefined || isUUID(value.batch_id)) &&
     isOptionalString(value.message) && isDate(value.created_at);
 }
 

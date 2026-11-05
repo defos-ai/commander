@@ -34,6 +34,7 @@ export interface OperationTask {
   id: string;
   operation_id: string;
   parent_task_id?: string;
+  batch_id?: string;
   agent_id: string;
   agent_type?: string;
   missing_requirements?: ActionRequirement[] | null;
@@ -92,6 +93,7 @@ export interface OperationEvent {
   status: string;
   task_id?: string;
   question_id?: string;
+  batch_id?: string;
   message?: string;
   created_at: string;
 }

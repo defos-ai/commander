@@ -127,6 +127,7 @@ func (o *Operation) Fail(reason string) error {
 	o.Status, o.Error = Failed, reason
 	o.cancelQueued()
 	o.AppendEvent(OperationFailed, "", "", reason)
+	o.finishBatches()
 	o.UpdatedAt = time.Now().UTC()
 	return nil
 }

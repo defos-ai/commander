@@ -21,6 +21,7 @@ type TaskResponse struct {
 	ID                  string                      `json:"id"`
 	OperationID         string                      `json:"operation_id"`
 	ParentTaskID        string                      `json:"parent_task_id,omitempty"`
+	BatchID             string                      `json:"batch_id,omitempty"`
 	AgentID             string                      `json:"agent_id"`
 	AgentType           string                      `json:"agent_type,omitempty"`
 	MissingRequirements []ActionRequirementResponse `json:"missing_requirements,omitempty"`

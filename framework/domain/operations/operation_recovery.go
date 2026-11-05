@@ -77,5 +77,5 @@ func (o Operation) validateRecovery() error {
 			}
 		}
 	}
-	return nil
+	return o.validateBatches()
 }
