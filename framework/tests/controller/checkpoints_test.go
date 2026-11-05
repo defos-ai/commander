@@ -25,7 +25,7 @@ func TestControllerCheckpointsPersistBeforeReplyAndLoadIndependently(t *testing.
 		if err != nil || string(saved.Checkpoints["package"]) != `{"version":"v0.2.0"}` {
 			t.Fatal("checkpoint response preceded durable persistence")
 		}
-		if message.CorrelationID != request.ID || message.Work != request.Work {
+		if message.CorrelationID != request.ID || (message.OperationID != request.OperationID || message.TaskID != request.TaskID) {
 			t.Fatal("checkpoint response lost its request or work identity")
 		}
 	})
@@ -72,7 +72,7 @@ func TestControllerCheckpointsRequireSavedExecutionOwnership(t *testing.T) {
 			case "unknown command":
 				command.ID = id.MessageID()
 			case "wrong work":
-				command.Work.TaskID = id.New()
+				command.TaskID = id.New()
 			case "wrong saved owner":
 				store.IgnoreLookup()
 				command.AgentID = "fixture-agent-ffffffff"
@@ -142,7 +142,7 @@ func TestControllerCheckpointCompletionPreservesExactReplays(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, result, _ := fixtures.ArtifactResult(t)
-	result.AgentID, result.CorrelationID, result.Work = store.Snapshot().Command.AgentID, store.Snapshot().Command.ID, store.Snapshot().Command.Work
+	result.AgentID, result.CorrelationID, result.OperationID, result.TaskID = store.Snapshot().Command.AgentID, store.Snapshot().Command.ID, store.Snapshot().Command.OperationID, store.Snapshot().Command.TaskID
 	completed := time.Now().UTC()
 	store.Change(func(record *executions.Execution) { record.Result, record.CompletedAt = &result, &completed })
 	for _, test := range []struct {

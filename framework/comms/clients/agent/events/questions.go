@@ -73,7 +73,7 @@ func NewQuestionResponse(request messages.Message, response QuestionResponse) (m
 	if err := request.Validate(); err != nil {
 		return messages.Message{}, err
 	}
-	if request.Type != messages.QuestionRequested || request.CorrelationID != response.CommandID || !request.ExpiresAt.IsZero() || request.Work.OperationID == "" {
+	if request.Type != messages.QuestionRequested || request.CorrelationID != response.CommandID || !request.ExpiresAt.IsZero() || request.OperationID == "" {
 		return messages.Message{}, errors.New("question response must match its request command and operation")
 	}
 	var identity struct {
@@ -87,7 +87,8 @@ func NewQuestionResponse(request messages.Message, response QuestionResponse) (m
 	if err != nil {
 		return messages.Message{}, err
 	}
-	message.CorrelationID, message.Work = request.ID, request.Work
+	message.CorrelationID = request.ID
+	message.OperationID, message.TaskID = request.OperationID, request.TaskID
 	if _, err := DecodeQuestionResponse(message); err != nil {
 		return messages.Message{}, err
 	}
@@ -101,14 +102,14 @@ func DecodeQuestionResponse(message messages.Message) (QuestionResponse, error) 
 	if err := message.Validate(); err != nil {
 		return QuestionResponse{}, err
 	}
-	if message.Type != QuestionResponded || !id.Valid(message.CorrelationID) || !message.ExpiresAt.IsZero() || message.Work.OperationID == "" {
+	if message.Type != QuestionResponded || !id.Valid(message.CorrelationID) || !message.ExpiresAt.IsZero() || message.OperationID == "" {
 		return QuestionResponse{}, errors.New("question response requires operation work, request correlation and no expiry")
 	}
 	var response QuestionResponse
 	if err := domain.Decode(message.Payload, &response); err != nil {
 		return QuestionResponse{}, errors.New("invalid question response")
 	}
-	if response.Question != nil && response.Question.TaskID != message.Work.TaskID {
+	if response.Question != nil && response.Question.TaskID != message.TaskID {
 		return QuestionResponse{}, errors.New("question response must match its execution work")
 	}
 	return response, nil

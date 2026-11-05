@@ -39,7 +39,7 @@ func (a *Agent) Serve(ctx context.Context, bus comms.Bus, scope *environment.Dis
 	checkpoints := &checkpointClient{agentID: a.ID(), service: workersCtx, events: events, pending: make(map[string]checkpointWait)}
 	questions := &questionClient{agentID: a.ID(), service: workersCtx, events: events, pending: make(map[string]questionWait)}
 	logs := &logClient{agentID: a.ID(), service: workersCtx, events: events}
-	contexts := &sharedContextClient{agentID: a.ID(), service: workersCtx}
+	sharing := &sharedDataClient{agentID: a.ID(), service: workersCtx}
 	var heartbeatDone chan struct{}
 	var resultsDone chan struct{}
 	var eventsDone chan struct{}
@@ -163,9 +163,9 @@ func (a *Agent) Serve(ctx context.Context, bus comms.Bus, scope *environment.Dis
 	go func() {
 		defer close(eventsDone)
 		err := eventConsumer.Consume(workersCtx, func(ctx context.Context, message messages.Message) error {
-			if message.Type == agentevents.ContextShared {
-				if err := contexts.receive(message); err != nil {
-					a.config.Logger.Warn("shared context rejected", "message_id", message.ID, "reason", err.Error())
+			if message.Type == agentevents.DataShared {
+				if err := sharing.receive(message); err != nil {
+					a.config.Logger.Warn("shared data rejected", "message_id", message.ID, "reason", err.Error())
 				}
 				return nil
 			}
@@ -219,7 +219,7 @@ func (a *Agent) Serve(ctx context.Context, bus comms.Bus, scope *environment.Dis
 		}()
 	}
 	a.config.Logger.Info("agent ready", "action_count", len(a.config.Actions))
-	runtime := agentRuntime{agent: a, events: events, checkpoints: checkpoints, questions: questions, logs: logs, contexts: contexts, shutdown: func(ctx context.Context, commandID string) error {
+	runtime := agentRuntime{agent: a, events: events, checkpoints: checkpoints, questions: questions, logs: logs, sharing: sharing, shutdown: func(ctx context.Context, commandID string) error {
 		stopCommandID = commandID
 		stopBackground()
 		// Finish shutdown before returning to the consumer for ACK. Announce

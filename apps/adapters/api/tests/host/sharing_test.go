@@ -62,7 +62,7 @@ func TestSharedDataUsesSavedPoliciesAndAcceptedEvidence(t *testing.T) {
 		t.Fatalf("sharing skipped a recipient or shared disabled work: got %d execution pairs", pairs)
 	}
 	for _, message := range shared {
-		if message.Work.OperationID != operation.ID || message.AgentID == unsharedAnalysis.AgentID {
+		if message.OperationID != operation.ID || message.AgentID == unsharedAnalysis.AgentID {
 			t.Fatalf("shared evidence escaped its operation: %+v", message)
 		}
 	}
@@ -141,7 +141,7 @@ func TestSharedDataRechecksCancellationAfterReadingArtifacts(t *testing.T) {
 		t.Fatalf("cancelled operation forwarded stale evidence after readback: %+v", shared)
 	}
 	for _, message := range shared {
-		if message.Work.OperationID != active.ID {
+		if message.OperationID != active.ID {
 			t.Fatalf("cancelled operation forwarded stale evidence after readback: %+v", message)
 		}
 	}
@@ -222,11 +222,11 @@ func TestSharedDataForwardsSavedTaskDecisions(t *testing.T) {
 		t.Fatalf("decision filtering lost a question, shared an operation-wide question or exposed a result: %d pairs", pairs)
 	}
 	for _, message := range shared {
-		update, err := agentevents.DecodeContextUpdate(message)
+		update, err := agentevents.DecodeSharedData(message)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if message.Work.OperationID != operation.ID || message.AgentID == otherAnalysis.AgentID ||
+		if message.OperationID != operation.ID || message.AgentID == otherAnalysis.AgentID ||
 			update.Decision != nil && (update.Decision.ID == operationQuestion.ID || message.AgentID != analysis.AgentID) ||
 			len(update.Result) != 0 && message.AgentID != evidence.AgentID {
 			t.Fatalf("saved decision or result escaped its selected task scope: %+v", message)
@@ -294,7 +294,7 @@ func countSharedPairs(t *testing.T, shared []messages.Message) int {
 	t.Helper()
 	pairs := make(map[[5]string][]byte)
 	for _, message := range shared {
-		update, err := agentevents.DecodeContextUpdate(message)
+		update, err := agentevents.DecodeSharedData(message)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -324,8 +324,8 @@ func assertSharedDecision(t *testing.T, finding fakes.SharedFinding, source, tar
 	t.Helper()
 	update := finding.Update
 	if update.Source.AgentID != source.AgentID || update.Source.CommandID != source.CommandID || update.Source.ActionName != source.ActionName ||
-		update.Source.Work.OperationID != source.OperationID || update.Source.Work.TaskID != source.ID ||
-		finding.Execution.CommandID != target.CommandID || finding.Execution.Work.OperationID != target.OperationID || finding.Execution.Work.TaskID != target.ID {
+		update.Source.OperationID != source.OperationID || update.Source.TaskID != source.ID ||
+		finding.Execution.CommandID != target.CommandID || finding.Execution.OperationID != target.OperationID || finding.Execution.TaskID != target.ID {
 		t.Fatalf("forwarding lost decision source or recipient provenance: %+v; recipient: %+v", update.Source, finding.Execution)
 	}
 	decision := update.Decision
@@ -344,8 +344,8 @@ func assertSharedFinding(t *testing.T, finding fakes.SharedFinding, source, targ
 	t.Helper()
 	update := finding.Update
 	if update.Source.AgentID != source.AgentID || update.Source.CommandID != source.CommandID || update.Source.ActionName != source.ActionName ||
-		update.Source.Work.OperationID != source.OperationID || update.Source.Work.TaskID != source.ID ||
-		finding.Execution.CommandID != target.CommandID || finding.Execution.Work.OperationID != target.OperationID || finding.Execution.Work.TaskID != target.ID {
+		update.Source.OperationID != source.OperationID || update.Source.TaskID != source.ID ||
+		finding.Execution.CommandID != target.CommandID || finding.Execution.OperationID != target.OperationID || finding.Execution.TaskID != target.ID {
 		t.Fatalf("forwarding lost source or recipient execution provenance: %+v; recipient: %+v", update.Source, finding.Execution)
 	}
 	if update.Decision != nil || source.Result == nil {

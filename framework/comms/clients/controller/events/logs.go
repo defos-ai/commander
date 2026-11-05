@@ -24,7 +24,8 @@ func NewExecutionLog(log executions.Log) (messages.Message, error) {
 	}
 	message := messages.Message{
 		ID: log.ID, Type: ExecutionLogged, AgentID: log.AgentID,
-		CorrelationID: log.CommandID, Work: log.Work, Payload: payload, CreatedAt: log.CreatedAt,
+		CorrelationID: log.CommandID, OperationID: log.OperationID, TaskID: log.TaskID,
+		Payload: payload, CreatedAt: log.CreatedAt,
 	}
 	if _, err := DecodeExecutionLog(message); err != nil {
 		return messages.Message{}, err
@@ -48,7 +49,7 @@ func DecodeExecutionLog(message messages.Message) (executions.Log, error) {
 		return executions.Log{}, errors.New("invalid execution log payload")
 	}
 	if log.ID != message.ID || log.AgentID != message.AgentID || log.CommandID != message.CorrelationID ||
-		log.Work != message.Work || !log.CreatedAt.Equal(message.CreatedAt) {
+		log.OperationID != message.OperationID || log.TaskID != message.TaskID || !log.CreatedAt.Equal(message.CreatedAt) {
 		return executions.Log{}, errors.New("execution log does not match its envelope")
 	}
 	return log, nil

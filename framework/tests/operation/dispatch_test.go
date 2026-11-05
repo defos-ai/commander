@@ -49,7 +49,7 @@ func TestDispatchWriteFailureKeepsTaskQueuedUntilRetry(t *testing.T) {
 	if err != nil || len(reserved.Tasks) != 1 || reserved.Tasks[0].Status != operations.TaskRunning || reserved.Tasks[0].CommandID != task.ID || reserved.Tasks[0].StartedAt.IsZero() || reserved.Tasks[0].DeadlineAt == nil {
 		t.Fatalf("retry executed without a complete reservation: %+v, %v", reserved, err)
 	}
-	if call.Agent != reserved.Tasks[0].AgentID || task.AgentID != "" || call.Call.Work.TaskID != task.ID || len(reserved.Events) != len(events)+1 || reserved.Events[len(events)].Type != operations.TaskDispatched {
+	if call.Agent != reserved.Tasks[0].AgentID || task.AgentID != "" || call.Call.TaskID != task.ID || len(reserved.Events) != len(events)+1 || reserved.Events[len(events)].Type != operations.TaskDispatched {
 		t.Fatalf("retry changed or duplicated the Dispatch: call=%+v, operation=%+v", call, reserved)
 	}
 	call.Reply <- fixtures.Output("inspect")

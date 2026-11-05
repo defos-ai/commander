@@ -161,9 +161,9 @@ func consumerMessageLogger(logger *slog.Logger, message messages.Message) *slog.
 	if message.AdapterID != "" {
 		logger = logger.With("adapter_id", message.AdapterID)
 	}
-	if message.Work != (messages.WorkContext{}) {
-		logger = logger.With("operation_id", message.Work.OperationID,
-			"task_id", message.Work.TaskID)
+	if message.OperationID != "" || message.TaskID != "" {
+		logger = logger.With("operation_id", message.OperationID,
+			"task_id", message.TaskID)
 	}
 	return logger
 }

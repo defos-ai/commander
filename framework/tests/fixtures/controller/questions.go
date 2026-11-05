@@ -18,8 +18,8 @@ func ExecutionQuestionConsumer(t *testing.T) (consumers.EventConsumer, *controll
 	command := execution.Snapshot().Command
 	deadline := time.Now().Add(time.Hour)
 	store := operationfakes.NewOperationStore()
-	operation := operations.Operation{ID: command.Work.OperationID, Status: operations.Running,
-		Tasks: []operations.Task{{ID: command.Work.TaskID, CommandID: command.ID, OperationID: command.Work.OperationID,
+	operation := operations.Operation{ID: command.OperationID, Status: operations.Running,
+		Tasks: []operations.Task{{ID: command.TaskID, CommandID: command.ID, OperationID: command.OperationID,
 			AgentID: command.AgentID, ActionName: "capture", Status: operations.TaskRunning, DeadlineAt: &deadline}}}
 	if err := store.Create(t.Context(), operation); err != nil {
 		t.Fatal(err)
@@ -30,7 +30,7 @@ func ExecutionQuestionConsumer(t *testing.T) (consumers.EventConsumer, *controll
 
 func ExecutionQuestionRequest(t *testing.T, command messages.Message, key, text string, options ...string) messages.Message {
 	t.Helper()
-	request, err := controllerevents.NewQuestionRequest(command.AgentID, command.Work, controllerevents.QuestionRequest{
+	request, err := controllerevents.NewQuestionRequest(command.AgentID, command.OperationID, command.TaskID, controllerevents.QuestionRequest{
 		CommandID: command.ID, Key: key, Text: text, Options: options,
 	})
 	if err != nil {

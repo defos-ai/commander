@@ -214,9 +214,8 @@ func validateWorkRequirements(snapshot agentmodel.AgentSnapshot, actions map[str
 	if snapshot.Status != agentmodel.AgentWorking || !id.Valid(work.CommandID) || !actions[work.ActionName] {
 		return errors.New("runtime requirements must identify an executing command and action")
 	}
-	workContext := messages.WorkContext{OperationID: work.OperationID, TaskID: work.TaskID}
-	if err := workContext.Validate(); err != nil {
-		return err
+	if (work.OperationID != "" || work.TaskID != "") && (!id.Valid(work.OperationID) || !id.Valid(work.TaskID)) {
+		return errors.New("runtime requirements require both operation and task UUIDs, or neither")
 	}
 	seen := make(map[actionmodel.Requirement]bool, len(work.MissingRequirements))
 	for _, requirement := range work.MissingRequirements {

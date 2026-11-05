@@ -178,7 +178,7 @@ func (s *ExecutionFsStore) path(ctx context.Context, agentID, commandID string) 
 }
 
 func sameExecutionMessage(a, b messages.Message) bool {
-	if a.ID != b.ID || a.Type != b.Type || a.AgentID != b.AgentID || a.CorrelationID != b.CorrelationID || a.Work != b.Work {
+	if a.ID != b.ID || a.Type != b.Type || a.AgentID != b.AgentID || a.CorrelationID != b.CorrelationID || a.OperationID != b.OperationID || a.TaskID != b.TaskID {
 		return false
 	}
 	var first, second any

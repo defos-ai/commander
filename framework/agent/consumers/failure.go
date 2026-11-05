@@ -21,6 +21,7 @@ func reportFailure(ctx context.Context, events controllerevents.Client, logger *
 	if err != nil {
 		return err
 	}
-	response.CorrelationID, response.Work = command.ID, command.Work
+	response.CorrelationID = command.ID
+	response.OperationID, response.TaskID = command.OperationID, command.TaskID
 	return events.Publish(ctx, response)
 }

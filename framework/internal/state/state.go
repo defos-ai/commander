@@ -23,11 +23,12 @@ type CommandReply struct {
 }
 
 type PendingCommand struct {
-	Context  context.Context
-	AgentID  string
-	Work     messages.WorkContext
-	Expected messages.MessageType
-	Reply    chan CommandReply
+	Context     context.Context
+	AgentID     string
+	OperationID string
+	TaskID      string
+	Expected    messages.MessageType
+	Reply       chan CommandReply
 }
 
 // The controller loop owns Pending and all mutations. Readers only access the

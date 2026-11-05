@@ -28,7 +28,7 @@ func AuthorizeSource(ctx context.Context, selector string, visibility agentpacka
 		return ctx, nil
 	}
 	execution, ok := action.ExecutionFromContext(ctx)
-	if !ok || !id.Valid(execution.CommandID) || !id.Valid(execution.Work.OperationID) || execution.Work.Validate() != nil {
+	if !ok || !id.Valid(execution.CommandID) || !id.Valid(execution.OperationID) || !id.Valid(execution.TaskID) {
 		return ctx, ErrSourceApprovalRequired
 	}
 	text := fmt.Sprintf("Install agent from %s (repository visibility: %s)?", reference.String(), visibility)
@@ -46,7 +46,7 @@ func AuthorizeSource(ctx context.Context, selector string, visibility agentpacka
 		return ctx, err
 	}
 	return context.WithValue(ctx, sourceApprovalKey{}, sourceApproval{
-		selector: reference.String(), commandID: execution.CommandID, operationID: execution.Work.OperationID,
+		selector: reference.String(), commandID: execution.CommandID, operationID: execution.OperationID,
 	}), nil
 }
 
@@ -58,7 +58,7 @@ func RequireTrustedSource(ctx context.Context, selector string) error {
 	if !strings.EqualFold(reference.Owner, "defos-ai") {
 		approval, _ := ctx.Value(sourceApprovalKey{}).(sourceApproval)
 		execution, ok := action.ExecutionFromContext(ctx)
-		if !ok || approval.commandID == "" || approval.commandID != execution.CommandID || approval.operationID != execution.Work.OperationID || approval.selector != reference.String() {
+		if !ok || approval.commandID == "" || approval.commandID != execution.CommandID || approval.operationID != execution.OperationID || approval.selector != reference.String() {
 			return ErrSourceApprovalRequired
 		}
 	}

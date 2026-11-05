@@ -23,6 +23,9 @@ applies to all domain packages below this directory.
 
 ## Preserve model distinctions
 
+- Action calls, execution logs and messages expose `OperationID` and `TaskID`
+  directly. Both may be empty for work outside an operation; otherwise both must
+  be canonical UUIDs. Compare both when matching a dispatch, reply or delivery.
 - [Action definitions](actions/definition.go) describe desired/static contracts.
   [Actions](actions/action.go) add observed readiness; a definition does not
   register an executor. [NextAction](actions/next_action.go) is a proposal whose

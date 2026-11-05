@@ -40,7 +40,7 @@ func (c ActionConsumer) Consume(ctx context.Context, command messages.Message) e
 
 	var call agentcommands.ActionCall
 	commandErr := domain.Decode(command.Payload, &call)
-	if commandErr == nil && call.Work != command.Work {
+	if commandErr == nil && (call.OperationID != command.OperationID || call.TaskID != command.TaskID) {
 		commandErr = errors.New("command work context does not match payload")
 	}
 	if commandErr == nil {
@@ -66,7 +66,8 @@ func (c ActionConsumer) Consume(ctx context.Context, command messages.Message) e
 	if err != nil {
 		return err
 	}
-	result.CorrelationID, result.Work = command.ID, command.Work
+	result.CorrelationID = command.ID
+	result.OperationID, result.TaskID = command.OperationID, command.TaskID
 	acknowledgeCommand := !errors.Is(commandErr, actionmodel.ErrArtifactPersistence)
 	if err := c.Outcomes.complete(ctx, result, acknowledgeCommand); err != nil {
 		return err

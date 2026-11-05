@@ -55,8 +55,8 @@ func (c Client) Publish(ctx context.Context, message messages.Message) error {
 		if _, err := DecodeQuestionResponse(message); err != nil {
 			return err
 		}
-	case ContextShared:
-		if _, err := DecodeContextUpdate(message); err != nil {
+	case DataShared:
+		if _, err := DecodeSharedData(message); err != nil {
 			return err
 		}
 	default:

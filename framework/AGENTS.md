@@ -298,14 +298,22 @@
   return, panic or caller cancellation. An unavailable log capability skips the
   reporter. Completion describes only that named stage, not acceptance of an
   artifact, a remote side effect or the entire operation.
-- [`action.ReceiveContext`](agent/action/context.go) waits on an execution-scoped
+- [`action.ReceiveSharedData`](agent/action/sharing.go) waits on an execution-scoped
   memory buffer fed by the independent agent event inbox; it sends no request.
   Bind it before announcing `AgentWorking`, match the exact recipient agent,
   command and work identity, and keep source and recipient in the same operation.
   Preserve saved source IDs and deep-copy result JSON, artifact metadata and
-  answered questions. Receivers own deduplication and aggregation. The 32-update
-  buffer fails with `ErrContextOverflow` rather than silently continuing with
-  incomplete data; it never blocks the event consumer. Caller cancellation,
+  answered questions. Shared producer data may include its saved `batch_id`.
+  Controller-origin `TaskBatchUpdate` payloads use the parent task as source work,
+  with unique producer IDs and `task.batch.started`/`task.batch.finished` types.
+  Finished updates require exactly one known outcome per member; interrupted
+  outcomes are not finished. Keep controller lifecycle and agent data mutually
+  exclusive, exclude the receiver from producer membership, and clone task IDs
+  and outcome maps. The contract does not authenticate a publisher or prove
+  that every result reached the receiver. The sharing worker does not publish
+  batch lifecycle updates yet. Receivers own deduplication and aggregation.
+  The 32-update buffer fails with `ErrSharedDataOverflow` rather than silently
+  continuing with incomplete data; it never blocks the event consumer. Caller cancellation,
   execution/service end and command deadlines bound waits, including detached
   contexts. Standalone work clears inherited access. Discard buffered data when
   execution ends; delivery neither changes action outcomes nor extends deadlines.

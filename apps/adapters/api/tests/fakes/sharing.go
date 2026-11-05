@@ -64,7 +64,7 @@ func (p *SharingProducer) Run(ctx context.Context, input json.RawMessage) (actio
 func (p *SharingProducer) Calls() int32 { return p.calls.Load() }
 
 type SharedFinding struct {
-	Update    agentevents.ContextUpdate
+	Update    agentevents.SharedData
 	Execution action.Execution
 	Files     map[string][]byte
 }
@@ -91,7 +91,7 @@ func (a *SharingAnalyzer) Run(ctx context.Context, _ json.RawMessage) (action.Re
 	count := 0
 	seen := make(map[[3]string]bool)
 	for {
-		update, err := action.ReceiveContext(receiving)
+		update, err := action.ReceiveSharedData(receiving)
 		if err != nil {
 			if a.stop.Err() != nil {
 				return action.JSONResult(struct {
@@ -153,10 +153,10 @@ func NewSharingBus(bus comms.Bus) *SharingBus {
 }
 
 func (b *SharingBus) Publish(ctx context.Context, topic string, message messages.Message) error {
-	if message.Type != messages.ContextShared {
+	if message.Type != messages.DataShared {
 		return b.Bus.Publish(ctx, topic, message)
 	}
-	update, err := agentevents.DecodeContextUpdate(message)
+	update, err := agentevents.DecodeSharedData(message)
 	if err != nil {
 		return err
 	}

@@ -70,7 +70,7 @@ func TestInconclusiveLateObservationsPreserveInterruptedEvidence(t *testing.T) {
 
 func TestLateExecutionFailureBecomesKnownOutcome(t *testing.T) {
 	r, execution, original, interrupted := fixtures.InterruptedExecution(t, fixtures.Config())
-	failure := &executions.CommandFailure{AgentID: original.Agent, CommandID: original.Call.Work.TaskID,
+	failure := &executions.CommandFailure{AgentID: original.Agent, CommandID: original.Call.TaskID,
 		Detail: executions.CommandError{ErrorType: "build_failed", Message: "generated agent tests failed"}}
 	fixtures.ObserveLate(t, execution).Reply <- fakes.ObservedOutcome{Err: fmt.Errorf("saved result: %w", failure)}
 	failed := fixtures.AwaitOperation(t, r, interrupted.ID, func(op operations.Operation) bool { return op.Tasks[0].Status == operations.TaskFailed })

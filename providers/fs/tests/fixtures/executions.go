@@ -29,6 +29,6 @@ func CheckpointMessages(t *testing.T) (messages.Message, messages.Message) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	result.CorrelationID, result.Work = command.ID, command.Work
+	result.CorrelationID, result.OperationID, result.TaskID = command.ID, command.OperationID, command.TaskID
 	return command, result
 }

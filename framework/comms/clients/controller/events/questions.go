@@ -25,12 +25,13 @@ func (request QuestionRequest) Validate() error {
 	return operations.ValidateExecutionQuestion(request.Key, request.Text, request.Options)
 }
 
-func NewQuestionRequest(agentID string, work messages.WorkContext, request QuestionRequest) (messages.Message, error) {
+func NewQuestionRequest(agentID, operationID, taskID string, request QuestionRequest) (messages.Message, error) {
 	message, err := messages.NewMessage(QuestionRequested, agentID, request)
 	if err != nil {
 		return messages.Message{}, err
 	}
-	message.CorrelationID, message.Work = request.CommandID, work
+	message.CorrelationID = request.CommandID
+	message.OperationID, message.TaskID = operationID, taskID
 	if _, err := DecodeQuestionRequest(message); err != nil {
 		return messages.Message{}, err
 	}
@@ -44,7 +45,7 @@ func DecodeQuestionRequest(message messages.Message) (QuestionRequest, error) {
 	if err := message.Validate(); err != nil {
 		return QuestionRequest{}, err
 	}
-	if message.Type != QuestionRequested || !id.Valid(message.CorrelationID) || !message.ExpiresAt.IsZero() || message.Work.OperationID == "" {
+	if message.Type != QuestionRequested || !id.Valid(message.CorrelationID) || !message.ExpiresAt.IsZero() || message.OperationID == "" {
 		return QuestionRequest{}, errors.New("question request requires operation work, command correlation and no expiry")
 	}
 	var request QuestionRequest

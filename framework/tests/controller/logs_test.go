@@ -64,9 +64,9 @@ func TestControllerExecutionLogsRequireSavedOwnership(t *testing.T) {
 				log.CommandID = id.New()
 				fixture.Executions.IgnoreLookup()
 			case "operation":
-				log.Work.OperationID = id.New()
+				log.OperationID = id.New()
 			case "task":
-				log.Work.TaskID = id.New()
+				log.TaskID = id.New()
 			case "action":
 				log.ActionName = "other-action"
 			case "unknown claim":

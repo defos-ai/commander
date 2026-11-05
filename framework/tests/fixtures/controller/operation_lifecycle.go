@@ -110,6 +110,6 @@ func SuccessfulOperationResult(t *testing.T, command messages.Message) messages.
 	if err != nil {
 		t.Fatal(err)
 	}
-	result.CorrelationID, result.Work = command.ID, command.Work
+	result.CorrelationID, result.OperationID, result.TaskID = command.ID, command.OperationID, command.TaskID
 	return result
 }

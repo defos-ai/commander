@@ -71,9 +71,9 @@ func (f *LoggingAgent) Stop(t *testing.T) {
 	}
 }
 
-func (f *LoggingAgent) Command(t *testing.T, work messages.WorkContext, expiresAt ...time.Time) messages.Message {
+func (f *LoggingAgent) Command(t *testing.T, operationID, taskID string, expiresAt ...time.Time) messages.Message {
 	t.Helper()
-	command, err := agentcommands.NewRunAction(f.Runtime.ID(), actions.ActionCall{ActionName: LoggingActionName, Work: work})
+	command, err := agentcommands.NewRunAction(f.Runtime.ID(), actions.ActionCall{ActionName: LoggingActionName, OperationID: operationID, TaskID: taskID})
 	if err != nil {
 		t.Fatal(err)
 	}

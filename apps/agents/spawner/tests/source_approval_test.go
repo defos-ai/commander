@@ -263,8 +263,8 @@ func TestSourceApprovalKeepsPackagePinAndExecutionScope(t *testing.T) {
 		{"different source", ctx, "github.com/other/different-agent@stable"},
 		{"different version", ctx, "github.com/other/worker-agent@v1.2.3"},
 		{"new context", t.Context(), fixtures.UntrustedSource},
-		{"different execution", action.WithExecution(ctx, action.Execution{CommandID: id.MessageID(), Work: approved.Work}), fixtures.UntrustedSource},
-		{"different operation", action.WithExecution(ctx, action.Execution{CommandID: approved.CommandID, Work: fixtures.SourceApprovalExecution().Work}), fixtures.UntrustedSource},
+		{"different execution", action.WithExecution(ctx, action.Execution{CommandID: id.MessageID(), OperationID: approved.OperationID, TaskID: approved.TaskID}), fixtures.UntrustedSource},
+		{"different operation", action.WithExecution(ctx, action.Execution{CommandID: approved.CommandID, OperationID: id.OperationID(), TaskID: approved.TaskID}), fixtures.UntrustedSource},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			_, err := runtimes.PinPackage(test.context, requestID, test.reference, resolver)

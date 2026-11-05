@@ -5,16 +5,17 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/defos-ai/commander/framework/comms/messages"
 	"github.com/defos-ai/commander/framework/domain"
 	"github.com/defos-ai/commander/framework/domain/sessions"
+	"github.com/defos-ai/commander/framework/id"
 )
 
 type ActionCall struct {
-	Session    *sessions.Binding    `json:"session,omitempty"`
-	ActionName string               `json:"action_name"`
-	Input      json.RawMessage      `json:"input,omitempty"`
-	Work       messages.WorkContext `json:"work,omitzero"`
+	Session     *sessions.Binding `json:"session,omitempty"`
+	ActionName  string            `json:"action_name"`
+	Input       json.RawMessage   `json:"input,omitempty"`
+	OperationID string            `json:"operation_id,omitempty"`
+	TaskID      string            `json:"task_id,omitempty"`
 }
 
 func (c ActionCall) Validate() error {
@@ -23,8 +24,8 @@ func (c ActionCall) Validate() error {
 			return err
 		}
 	}
-	if err := c.Work.Validate(); err != nil {
-		return err
+	if (c.OperationID != "" || c.TaskID != "") && (!id.Valid(c.OperationID) || !id.Valid(c.TaskID)) {
+		return errors.New("action call requires both operation and task UUIDs, or neither")
 	}
 	if strings.TrimSpace(c.ActionName) == "" {
 		return errors.New("action_name must not be blank")

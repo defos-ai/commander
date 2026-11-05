@@ -47,7 +47,7 @@ func TestCancellationWriteFailurePreservesQueuedWorkAndRetry(t *testing.T) {
 	// The failed cancellation must leave queued work eligible to execute.
 	first.Reply <- fixtures.Output("inspect")
 	next := fixtures.Receive(t, calls)
-	if next.Call.Work.TaskID != second.ID {
+	if next.Call.TaskID != second.ID {
 		t.Fatalf("failed cancellation lost the next queued task: %+v", next)
 	}
 	cancelled, err := r.Cancel(t.Context(), command)

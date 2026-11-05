@@ -175,8 +175,8 @@ func spawnRequestID(ctx context.Context) (string, error) {
 	if !ok || execution.CommandID == "" {
 		return "", errors.New("spawn-agent requires a controller-dispatched execution")
 	}
-	if err := execution.Work.Validate(); err != nil {
-		return "", fmt.Errorf("spawn-agent execution identity: %w", err)
+	if (execution.OperationID != "" || execution.TaskID != "") && (!id.Valid(execution.OperationID) || !id.Valid(execution.TaskID)) {
+		return "", errors.New("spawn-agent execution identity requires operation and task UUIDs")
 	}
 	if !id.Valid(execution.CommandID) {
 		return "", errors.New("spawn-agent command ID must be a UUID")

@@ -27,10 +27,10 @@ func (c *Worker) RecoverAction(ctx context.Context, agentID string, call actionm
 	if err := call.Validate(); err != nil {
 		return actionmodel.ActionOutput{}, err
 	}
-	if call.Work.TaskID == "" {
+	if call.TaskID == "" {
 		return actionmodel.ActionOutput{}, errors.New("action recovery requires a task ID")
 	}
-	return c.recoverAction(ctx, agentID, call.Work.TaskID, call)
+	return c.recoverAction(ctx, agentID, call.TaskID, call)
 }
 
 func (c *Worker) recoverAction(ctx context.Context, agentID, commandID string, call actionmodel.ActionCall) (actionmodel.ActionOutput, error) {
@@ -91,14 +91,14 @@ func (c *Worker) executionResult(ctx context.Context, agentID, commandID string,
 		return actionmodel.ActionOutput{}, false, recoveryOutcomeError(fmt.Errorf("invalid execution outcome: %w", err))
 	}
 	command := record.Command
-	if command.ID != commandID || command.AgentID != agentID || command.Type != agentcommands.RunAction || command.Work != call.Work {
+	if command.ID != commandID || command.AgentID != agentID || command.Type != agentcommands.RunAction || (command.OperationID != call.OperationID || command.TaskID != call.TaskID) {
 		return actionmodel.ActionOutput{}, false, recoveryOutcomeError(errors.New("stored command does not match the recovering task"))
 	}
 	var storedCall actionmodel.ActionCall
 	if err := domain.Decode(command.Payload, &storedCall); err != nil {
 		return actionmodel.ActionOutput{}, false, recoveryOutcomeError(err)
 	}
-	if storedCall.ActionName != call.ActionName || storedCall.Work != call.Work || !sameActionInput(storedCall.Input, call.Input) {
+	if storedCall.ActionName != call.ActionName || (storedCall.OperationID != call.OperationID || storedCall.TaskID != call.TaskID) || !sameActionInput(storedCall.Input, call.Input) {
 		return actionmodel.ActionOutput{}, false, recoveryOutcomeError(errors.New("stored action request does not match the recovering task"))
 	}
 	if record.Result == nil {

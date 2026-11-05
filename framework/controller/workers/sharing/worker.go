@@ -57,17 +57,18 @@ func New(ctx context.Context, config Dependencies) *Worker {
 }
 
 type sharedData struct {
-	AgentID    string
-	CommandID  string
-	Work       messages.WorkContext
-	QuestionID string
+	AgentID     string
+	CommandID   string
+	OperationID string
+	TaskID      string
+	QuestionID  string
 }
 
 func (w *Worker) QueueResult(message messages.Message) {
-	if w.operationStore == nil || message.Type != messages.ActionSucceeded || message.Work.OperationID == "" {
+	if w.operationStore == nil || message.Type != messages.ActionSucceeded || message.OperationID == "" {
 		return
 	}
-	w.queueSharedData(sharedData{AgentID: message.AgentID, CommandID: message.CorrelationID, Work: message.Work})
+	w.queueSharedData(sharedData{AgentID: message.AgentID, CommandID: message.CorrelationID, OperationID: message.OperationID, TaskID: message.TaskID})
 }
 
 // ShareQuestionAnswer is an operation worker notification after a successful answer save.
@@ -76,7 +77,7 @@ func (w *Worker) ShareQuestionAnswer(operationID, questionID string) {
 	if w.operationStore == nil || !id.Valid(operationID) || !id.Valid(questionID) {
 		return
 	}
-	w.queueSharedData(sharedData{Work: messages.WorkContext{OperationID: operationID}, QuestionID: questionID})
+	w.queueSharedData(sharedData{OperationID: operationID, QuestionID: questionID})
 }
 
 func (w *Worker) queueSharedData(source sharedData) {
@@ -84,8 +85,8 @@ func (w *Worker) queueSharedData(source sharedData) {
 	case <-w.ctx.Done():
 	case w.queue <- source:
 	default:
-		w.logger.Warn("shared data forwarding queue is full", "operation_id", source.Work.OperationID,
-			"task_id", source.Work.TaskID, "command_id", source.CommandID, "question_id", source.QuestionID)
+		w.logger.Warn("shared data forwarding queue is full", "operation_id", source.OperationID,
+			"task_id", source.TaskID, "command_id", source.CommandID, "question_id", source.QuestionID)
 	}
 }
 
@@ -112,8 +113,8 @@ func (w *Worker) run(ctx context.Context) error {
 			}
 			cancel()
 			if err != nil && ctx.Err() == nil {
-				w.logger.Warn("shared data forwarding failed", "operation_id", source.Work.OperationID,
-					"task_id", source.Work.TaskID, "command_id", source.CommandID, "question_id", source.QuestionID, "error_type", fmt.Sprintf("%T", err))
+				w.logger.Warn("shared data forwarding failed", "operation_id", source.OperationID,
+					"task_id", source.TaskID, "command_id", source.CommandID, "question_id", source.QuestionID, "error_type", fmt.Sprintf("%T", err))
 			}
 		}
 	}

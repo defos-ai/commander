@@ -25,7 +25,7 @@ func (c *SecretEventConsumer) transientReceived(ctx context.Context, message mes
 		return err
 	}
 	if request.EffectiveType() != secrets.SecretTransient || request.AgentID != message.AgentID ||
-		request.OperationID != message.Work.OperationID || request.TaskID != message.Work.TaskID ||
+		request.OperationID != message.OperationID || request.TaskID != message.TaskID ||
 		message.CreatedAt.Before(request.RequestedAt) || !message.CreatedAt.Before(request.ExpiresAt) || message.CreatedAt.After(now.Add(maxAgentClockSkew)) {
 		return InvalidMessage(errors.New("transient receipt does not match its request"))
 	}
@@ -35,7 +35,7 @@ func (c *SecretEventConsumer) transientReceived(ctx context.Context, message mes
 	}
 	delivery := c.transient[request.ID]
 	if request.Status != secrets.Pending || delivery == nil || delivery.message.ID != message.CorrelationID ||
-		delivery.message.Work != message.Work || delivery.message.AgentID != message.AgentID || message.CreatedAt.Before(delivery.message.CreatedAt) ||
+		(delivery.message.OperationID != message.OperationID || delivery.message.TaskID != message.TaskID) || delivery.message.AgentID != message.AgentID || message.CreatedAt.Before(delivery.message.CreatedAt) ||
 		delivery.message.CorrelationID != request.ID || !delivery.message.ExpiresAt.Equal(request.ExpiresAt) {
 		return InvalidMessage(errors.New("transient receipt requires its exact held delivery"))
 	}

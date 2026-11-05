@@ -11,48 +11,49 @@ import (
 	"github.com/defos-ai/commander/framework/comms/messages"
 )
 
-const contextBufferSize = 32
+const sharedDataBufferSize = 32
 
-type sharedContextClientKey struct{}
+type sharedDataClientKey struct{}
 
-type sharedContextClient struct {
+type sharedDataClient struct {
 	agentID string
 	service context.Context
 	mu      sync.Mutex
-	active  *executionContextInbox
+	active  *executionDataInbox
 }
 
-type executionContextInbox struct {
-	client    *sharedContextClient
-	lifetime  context.Context
-	commandID string
-	work      messages.WorkContext
-	deadline  time.Time
-	updates   chan agentevents.ContextUpdate
-	overflow  chan struct{}
+type executionDataInbox struct {
+	client      *sharedDataClient
+	lifetime    context.Context
+	commandID   string
+	operationID string
+	taskID      string
+	deadline    time.Time
+	updates     chan agentevents.SharedData
+	overflow    chan struct{}
 }
 
-func (c *sharedContextClient) bind(ctx context.Context, commandID string, work messages.WorkContext) *executionContextInbox {
-	inbox := &executionContextInbox{client: c, lifetime: ctx, commandID: commandID, work: work,
-		deadline: consumers.CommandDeadline(ctx), updates: make(chan agentevents.ContextUpdate, contextBufferSize), overflow: make(chan struct{})}
+func (c *sharedDataClient) bind(ctx context.Context, commandID, operationID, taskID string) *executionDataInbox {
+	inbox := &executionDataInbox{client: c, lifetime: ctx, commandID: commandID, operationID: operationID, taskID: taskID,
+		deadline: consumers.CommandDeadline(ctx), updates: make(chan agentevents.SharedData, sharedDataBufferSize), overflow: make(chan struct{})}
 	c.mu.Lock()
 	c.active = inbox
 	c.mu.Unlock()
 	return inbox
 }
 
-func (c *sharedContextClient) receive(message messages.Message) error {
+func (c *sharedDataClient) receive(message messages.Message) error {
 	if message.AgentID != c.agentID {
 		return nil
 	}
-	update, err := agentevents.DecodeContextUpdate(message)
+	update, err := agentevents.DecodeSharedData(message)
 	if err != nil {
-		return action.ErrContextRejected
+		return action.ErrSharedDataRejected
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	inbox := c.active
-	if inbox == nil || inbox.commandID != message.CorrelationID || inbox.work != message.Work || inbox.contextError(c.service) != nil {
+	if inbox == nil || inbox.commandID != message.CorrelationID || inbox.operationID != message.OperationID || inbox.taskID != message.TaskID || inbox.contextError(c.service) != nil {
 		return nil
 	}
 	select {
@@ -61,11 +62,11 @@ func (c *sharedContextClient) receive(message messages.Message) error {
 	default:
 		close(inbox.overflow)
 		inbox.drain()
-		return action.ErrContextOverflow
+		return action.ErrSharedDataOverflow
 	}
 }
 
-func (r *executionContextInbox) close() {
+func (r *executionDataInbox) close() {
 	r.client.mu.Lock()
 	defer r.client.mu.Unlock()
 	if r.client.active == r {
@@ -74,7 +75,7 @@ func (r *executionContextInbox) close() {
 	r.drain()
 }
 
-func (r *executionContextInbox) drain() {
+func (r *executionDataInbox) drain() {
 	for {
 		select {
 		case <-r.updates:
@@ -84,14 +85,14 @@ func (r *executionContextInbox) drain() {
 	}
 }
 
-func (r *executionContextInbox) ReceiveContext(ctx context.Context) (agentevents.ContextUpdate, error) {
+func (r *executionDataInbox) ReceiveSharedData(ctx context.Context) (agentevents.SharedData, error) {
 	if !r.deadline.IsZero() {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithDeadline(ctx, r.deadline)
 		defer cancel()
 	}
 	if err := r.contextError(ctx); err != nil {
-		return agentevents.ContextUpdate{}, err
+		return agentevents.SharedData{}, err
 	}
 	caller := ctx
 	ctx, cancel := context.WithCancel(ctx)
@@ -100,18 +101,18 @@ func (r *executionContextInbox) ReceiveContext(ctx context.Context) (agentevents
 	defer func() { stopExecution(); stopService(); cancel() }()
 	select {
 	case <-ctx.Done():
-		return agentevents.ContextUpdate{}, r.contextError(caller)
+		return agentevents.SharedData{}, r.contextError(caller)
 	case <-r.overflow:
-		return agentevents.ContextUpdate{}, r.contextError(caller)
+		return agentevents.SharedData{}, r.contextError(caller)
 	case update := <-r.updates:
 		if err := r.contextError(caller); err != nil {
-			return agentevents.ContextUpdate{}, err
+			return agentevents.SharedData{}, err
 		}
 		return update.Clone(), nil
 	}
 }
 
-func (r *executionContextInbox) contextError(ctx context.Context) error {
+func (r *executionDataInbox) contextError(ctx context.Context) error {
 	if err := requestCanceled(ctx, r.lifetime, r.client.service); err != nil {
 		return err
 	}
@@ -120,10 +121,10 @@ func (r *executionContextInbox) contextError(ctx context.Context) error {
 	}
 	select {
 	case <-r.overflow:
-		return action.ErrContextOverflow
+		return action.ErrSharedDataOverflow
 	default:
 		return nil
 	}
 }
 
-var _ action.ContextProvider = (*executionContextInbox)(nil)
+var _ action.SharedDataProvider = (*executionDataInbox)(nil)

@@ -1,17 +1,19 @@
 # Working on wire messages
 
-- Keep [`message.go`](message.go) limited to the shared envelope, constructors,
-  validation and work context; [`types.go`](types.go) owns message type names and
+- Keep [`message.go`](message.go) limited to the shared envelope, constructors and
+  validation, including explicit `OperationID` and `TaskID` fields.
+  [`types.go`](types.go) owns message type names and
   [`routing.go`](routing.go) owns destination builders. Typed recipient payloads
   belong in [`../clients`](../clients/), not this package.
 - Use routing helpers for exact topic names. Agent commands and result receipts
   use separate subscriptions so long commands cannot delay acceptance receipts.
 - Preserve envelope validation: UUID message/correlation IDs, valid runtime IDs,
   object payloads and timestamps. Adapter messages have an adapter ID with no
-  agent or work context; agent messages have an agent ID with no adapter ID.
-- A nonzero work context requires operation and task IDs. Preserve this context
-  across commands, outcomes and receipts; replies correlate to the command ID.
-- Result receipts match result ID, command ID and work context and follow durable
+  agent, operation or task IDs; agent messages have an agent ID with no adapter ID.
+- Operation and task IDs must both be empty or both be canonical UUIDs. Preserve
+  both fields across commands, outcomes and receipts; replies correlate to the
+  command ID. Shared-data sources require both IDs.
+- Result receipts match result ID, command ID, operation ID and task ID and follow durable
   controller persistence. They must never be treated as broker acknowledgements.
 - Checkpoint requests correlate to the original action command; responses
   correlate to the checkpoint request and retain command/name/work identity.
@@ -59,8 +61,8 @@
   separate from secret payloads; canceled execution waits reject late replies.
 - Preserve `expires_at` as a start deadline. Cached outcomes can replay after
   expiry; new command work cannot. No expiry means no admission limit.
-- [`ContextShared`](../clients/agent/events/context.go) uses the agent event inbox,
-  targeting an exact recipient command and work context. Decode at most 256 KiB
+- [`DataShared`](../clients/agent/events/sharing.go) uses the agent event inbox,
+  targeting an exact recipient command, operation and task. Decode at most 256 KiB
   and require another source task in the same operation. Preserve existing source
   identities, artifact ownership and answered-question origin; metadata does not
   prove acceptance or grant new authority. Share selected output data without
@@ -70,6 +72,13 @@
   operation policy; current recipient task, claim and observed work must agree.
   Task-scoped decisions follow successful answer saves, retaining their original
   question IDs and operator/model provenance. Broker ACK is not action consumption.
+  Batch lifecycle payloads use a controller source with the operation and parent
+  task IDs and no agent/command/action identity. Producer updates retain their agent source and
+  may carry a batch UUID. Require unique expected member IDs, exclude both parent
+  and recipient, and accept only known outcomes for every member at finish.
+  Deep-clone membership/outcomes. Keep the existing 256 KiB encoded limit and
+  reject oversized groups rather than truncating them. Lifecycle metadata is
+  descriptive; trusted bus access remains the publisher authorization boundary.
 - When changing a wire field or message type, update its typed clients, producing
   and consuming code, validation and recovery together. Reflect protocol behavior
   in the [message contract](README.md) without duplicating payload inventories.

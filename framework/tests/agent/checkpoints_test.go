@@ -27,20 +27,20 @@ func TestCheckpointResponsesMatchActiveExecution(t *testing.T) {
 		// Public execution metadata cannot retarget the runtime's checkpoint
 		// capability to another command or operation.
 		ctx = action.WithExecution(ctx, action.Execution{CommandID: id.New(),
-			Work: messages.WorkContext{OperationID: id.New(), TaskID: id.New()}})
+			OperationID: id.New(), TaskID: id.New()})
 		err := action.SaveCheckpoint(ctx, "launch-intent", data)
 		returned <- err
 		return err
 	})
 	fixture := fixtures.StartCheckpointAgent(t, executor)
-	work := messages.WorkContext{OperationID: id.New(), TaskID: id.New()}
-	commandID := fixture.Command(t, "checkpoint", `{}`, work)
+	operationID, taskID := id.New(), id.New()
+	commandID := fixture.Command(t, "checkpoint", `{}`, operationID, taskID)
 	request := fixture.Next(t, controllerevents.CheckpointRequested)
 	payload, err := controllerevents.DecodeCheckpointRequest(request)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if request.AgentID != fixture.Runtime().ID() || request.Work != work || request.CorrelationID != commandID ||
+	if request.AgentID != fixture.Runtime().ID() || (request.OperationID != operationID || request.TaskID != taskID) || request.CorrelationID != commandID ||
 		payload.CommandID != commandID || payload.Operation != controllerevents.CheckpointSave {
 		t.Fatal("checkpoint request used caller-supplied execution identity")
 	}
@@ -53,7 +53,7 @@ func TestCheckpointResponsesMatchActiveExecution(t *testing.T) {
 	for _, mutate := range []func(*messages.Message, *agentevents.CheckpointResponse){
 		func(m *messages.Message, _ *agentevents.CheckpointResponse) { m.AgentID = "other-12345678" },
 		func(m *messages.Message, _ *agentevents.CheckpointResponse) { m.CorrelationID = id.New() },
-		func(m *messages.Message, _ *agentevents.CheckpointResponse) { m.Work.TaskID = id.New() },
+		func(m *messages.Message, _ *agentevents.CheckpointResponse) { m.TaskID = id.New() },
 		func(_ *messages.Message, r *agentevents.CheckpointResponse) { r.CommandID = id.New() },
 		func(_ *messages.Message, r *agentevents.CheckpointResponse) { r.Name = "different-checkpoint" },
 		func(_ *messages.Message, r *agentevents.CheckpointResponse) {
@@ -199,7 +199,7 @@ func TestStandaloneWorkRejectsInheritedCheckpoints(t *testing.T) {
 	injected := fakes.NewUnexpectedCheckpointProvider(t)
 	ctx := action.WithCheckpoints(t.Context(), injected)
 	ctx = action.WithExecution(ctx, action.Execution{CommandID: id.New(),
-		Work: messages.WorkContext{OperationID: id.New(), TaskID: id.New()}})
+		OperationID: id.New(), TaskID: id.New()})
 	if _, err := runtime.Work(ctx, agent.ActionCall{ActionName: "checkpoint"}); err != nil {
 		t.Fatal(err)
 	}

@@ -23,7 +23,7 @@ func CheckpointConsumer(t *testing.T) (consumers.EventConsumer, *fakes.Checkpoin
 
 func CheckpointRequest(t *testing.T, command messages.Message, name, operation, data string) messages.Message {
 	t.Helper()
-	request, err := controllerevents.NewCheckpointRequest(command.AgentID, command.Work,
+	request, err := controllerevents.NewCheckpointRequest(command.AgentID, command.OperationID, command.TaskID,
 		controllerevents.CheckpointRequest{CommandID: command.ID, Name: name, Operation: operation, Data: json.RawMessage(data)})
 	if err != nil {
 		t.Fatal(err)

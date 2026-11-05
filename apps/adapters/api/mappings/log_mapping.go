@@ -10,7 +10,7 @@ func ToLogResponses(logs []executions.Log) []models.LogResponse {
 	for index, log := range logs {
 		responses[index] = models.LogResponse{
 			ID: log.ID, AgentID: log.AgentID, CommandID: log.CommandID, ActionName: log.ActionName,
-			OperationID: log.Work.OperationID, TaskID: log.Work.TaskID, Message: log.Message, CreatedAt: log.CreatedAt,
+			OperationID: log.OperationID, TaskID: log.TaskID, Message: log.Message, CreatedAt: log.CreatedAt,
 		}
 	}
 	return responses

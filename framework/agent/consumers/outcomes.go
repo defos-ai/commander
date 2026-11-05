@@ -95,7 +95,7 @@ func (o *Outcomes) claim(ctx context.Context, command messages.Message) (*messag
 	result, err := outcomeRequest(ctx, o, func() (claim, error) {
 		if record, exists := o.records[command.ID]; exists {
 			previous := record.command
-			if previous.Type != command.Type || previous.AgentID != command.AgentID || previous.Work != command.Work ||
+			if previous.Type != command.Type || previous.AgentID != command.AgentID || (previous.OperationID != command.OperationID || previous.TaskID != command.TaskID) ||
 				previous.CorrelationID != command.CorrelationID || !previous.CreatedAt.Equal(command.CreatedAt) || !previous.ExpiresAt.Equal(command.ExpiresAt) || !bytes.Equal(previous.Payload, command.Payload) {
 				return claim{}, errors.New("command ID already received with different content")
 			}
@@ -142,7 +142,7 @@ func (o *Outcomes) validateReceipt(ctx context.Context, message messages.Message
 	_, err := outcomeRequest(ctx, o, func() (struct{}, error) {
 		record, exists := o.records[message.CorrelationID]
 		if !exists || record.result == nil || record.result.ID != receipt.ResultID ||
-			record.result.AgentID != message.AgentID || record.result.Work != message.Work {
+			record.result.AgentID != message.AgentID || (record.result.OperationID != message.OperationID || record.result.TaskID != message.TaskID) {
 			return struct{}{}, errors.New("result receipt does not match a completed command")
 		}
 		return struct{}{}, nil

@@ -40,12 +40,12 @@ func TestOperationWorkerDefersRecoveredExecutionUntilRun(t *testing.T) {
 	}
 	fixtures.StartWorker(t, r)
 	recovered := fixtures.Receive(t, calls)
-	if recovered.Call.Work.OperationID != running.ID || recovered.Call.Work.TaskID != running.Tasks[0].ID {
+	if recovered.Call.OperationID != running.ID || recovered.Call.TaskID != running.Tasks[0].ID {
 		t.Fatalf("Run did not resume the saved execution first: %+v", recovered)
 	}
 	recovered.Reply <- fixtures.Output("inspect")
 	dispatched := fixtures.Receive(t, calls)
-	if dispatched.Call.Work.OperationID != queued.ID || dispatched.Call.Work.TaskID != queued.Tasks[0].ID {
+	if dispatched.Call.OperationID != queued.ID || dispatched.Call.TaskID != queued.Tasks[0].ID {
 		t.Fatalf("Run did not preserve the saved queued task: %+v", dispatched)
 	}
 	dispatched.Reply <- fixtures.Output("inspect")
@@ -303,11 +303,11 @@ func TestResultSaveFailureReachesWaitersAndRecoversWithoutNewExecution(t *testin
 	}
 	restarted := fixtures.NewWorker(t, config, exec)
 	recovered := fixtures.Receive(t, observed)
-	if recovered.Agent != call.Agent || recovered.Call.Work != call.Call.Work {
+	if recovered.Agent != call.Agent || (recovered.Call.OperationID != call.Call.OperationID || recovered.Call.TaskID != call.Call.TaskID) {
 		t.Fatalf("result reconciliation changed the saved command: %+v", recovered)
 	}
 	child := fixtures.Receive(t, calls)
-	if child.Call.Work.TaskID == task.ID || child.Call.Work.OperationID != op.ID || child.Call.ActionName != "inspect" {
+	if child.Call.TaskID == task.ID || child.Call.OperationID != op.ID || child.Call.ActionName != "inspect" {
 		t.Fatalf("recovery repeated the parent instead of starting its child: %+v", child)
 	}
 	child.Reply <- fixtures.Output("inspect")
@@ -321,7 +321,7 @@ func TestResultSaveFailureReachesWaitersAndRecoversWithoutNewExecution(t *testin
 		t.Fatalf("recovery changed the parent command or result: %+v", parent)
 	}
 	c := parent.Continuation
-	if settled.Tasks[1].ID != child.Call.Work.TaskID || settled.Tasks[1].ParentTaskID != task.ID || c == nil || len(c.CreatedTaskIDs) != 1 || c.CreatedTaskIDs[0] != settled.Tasks[1].ID {
+	if settled.Tasks[1].ID != child.Call.TaskID || settled.Tasks[1].ParentTaskID != task.ID || c == nil || len(c.CreatedTaskIDs) != 1 || c.CreatedTaskIDs[0] != settled.Tasks[1].ID {
 		t.Fatalf("recovery lost the automatic child relationship: %+v", settled)
 	}
 	finished := 0

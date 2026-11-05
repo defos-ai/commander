@@ -1,8 +1,8 @@
 # Message contracts
 
 Keep clients, controllers and agent integrations aligned as operations cross
-service boundaries. Typed commands and events preserve correlation IDs and work
-context so teams can trace execution messages to their operations and tasks.
+service boundaries. Typed commands and events preserve correlation IDs and
+explicit `operation_id` and `task_id` fields so teams can trace execution messages.
 Use the typed [`comms/clients`](../clients/) publishers and
 [`routing.go`](routing.go) when constructing destinations.
 
@@ -78,10 +78,10 @@ Query saved operation logs through the
 [HTTP API](../../../apps/adapters/api/README.md#execution-logs)
 or MCP's [`operation_logs`](../../../apps/adapters/README.md#queries-and-artifacts).
 
-## Shared context
+## Shared data
 
 Inside an action served by `Agent.Serve`, use
-[`action.ReceiveContext(ctx)`](../../agent/action/context.go) to receive selected
+[`action.ReceiveSharedData(ctx)`](../../agent/action/sharing.go) to receive selected
 results, artifact metadata or answered decisions from another task in the same
 operation. Updates preserve source execution and existing record IDs for receiver
 deduplication. Artifact bytes remain in file storage; shared decisions preserve
@@ -93,6 +93,11 @@ uses the existing agent event inbox while the action runs. Broker
 acknowledgement does not prove the action processed an update. Receiver memory is
 local, and live delivery provides no restart replay. Forwarding failures are
 logged and do not change the producer's accepted outcome.
+
+The shared-update contract also supports controller-originated task batch start
+and finish notifications through the same receive call. They identify expected
+producers and known outcomes; a finish notification does not prove every result
+was received. Automatic batch forwarding is not connected yet.
 
 ## Secret synchronization contracts
 

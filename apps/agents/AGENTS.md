@@ -104,7 +104,7 @@
 
 ## Receiving shared data
 
-Use `action.ReceiveContext(ctx)` inside an operation execution served by
+Use `action.ReceiveSharedData(ctx)` inside an operation execution served by
 `Agent.Serve`. Inject the artifact file store from the host's factory and use the
 same storage as the producers. Register the returned executor in
 `AgentConfig.Actions`; handle constructor errors. Producers return ordinary
@@ -184,9 +184,9 @@ func NewCollectFindings(files artifacts.ArtifactFileStore) (action.Executor, err
 			attachments := make(map[string]evidence)
 			decisions := make(map[[3]string]operations.Question)
 			for len(results) < input.ExpectedResults {
-				update, err := action.ReceiveContext(ctx)
+				update, err := action.ReceiveSharedData(ctx)
 				if err != nil {
-					if errors.Is(err, action.ErrContextOverflow) {
+					if errors.Is(err, action.ErrSharedDataOverflow) {
 						return CollectFindingsOutput{}, fmt.Errorf("findings are incomplete: %w", err)
 					}
 					return CollectFindingsOutput{}, err

@@ -52,8 +52,8 @@ func (q LogQuery) Validate() error {
 }
 
 func (q LogQuery) Matches(log Log) bool {
-	return (q.OperationID == "" || q.OperationID == log.Work.OperationID) &&
-		(q.TaskID == "" || q.TaskID == log.Work.TaskID) &&
+	return (q.OperationID == "" || q.OperationID == log.OperationID) &&
+		(q.TaskID == "" || q.TaskID == log.TaskID) &&
 		(q.AgentID == "" || q.AgentID == log.AgentID) &&
 		(q.ActionName == "" || q.ActionName == log.ActionName)
 }

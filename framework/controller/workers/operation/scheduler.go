@@ -6,7 +6,6 @@ import (
 	"sort"
 	"time"
 
-	"github.com/defos-ai/commander/framework/comms/messages"
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
 	agentmodel "github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/operations"
@@ -93,7 +92,7 @@ func (r *Worker) dispatchQueued() {
 			agentID = task.AgentID
 			used[agentID]++
 			r.lastAgent = agentID
-			call := actionmodel.ActionCall{Session: binding, ActionName: task.ActionName, Input: append([]byte(nil), task.Input...), Work: messages.WorkContext{OperationID: task.OperationID, TaskID: task.ID}}
+			call := actionmodel.ActionCall{Session: binding, ActionName: task.ActionName, Input: append([]byte(nil), task.Input...), OperationID: task.OperationID, TaskID: task.ID}
 			r.workers++
 			go r.runTask(task, call)
 		}

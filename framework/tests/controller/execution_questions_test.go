@@ -23,8 +23,8 @@ func TestExecutionQuestionPersistsBeforeReplyAndRetainsFirstWindow(t *testing.T)
 	command := executions.Snapshot().Command
 	request := fixtures.ExecutionQuestionRequest(t, command, "continue", "Continue this action?", "Yes", "No")
 	bus.BeforePublish(func(message messages.Message) {
-		stored, err := store.Get(t.Context(), command.Work.OperationID)
-		if err != nil || len(stored.Questions) != 1 || message.CorrelationID != request.ID || message.Work != request.Work {
+		stored, err := store.Get(t.Context(), command.OperationID)
+		if err != nil || len(stored.Questions) != 1 || message.CorrelationID != request.ID || (message.OperationID != request.OperationID || message.TaskID != request.TaskID) {
 			t.Fatal("question response preceded persistence or lost its request identity")
 		}
 	})
@@ -34,11 +34,11 @@ func TestExecutionQuestionPersistsBeforeReplyAndRetainsFirstWindow(t *testing.T)
 	}
 	first := executionQuestionResponse(t, bus)
 	if first.Question == nil || first.Error != "" || first.Question.Status != operations.QuestionPending ||
-		first.Question.CommandID != command.ID || first.Question.TaskID != command.Work.TaskID || first.Question.Key != "continue" ||
+		first.Question.CommandID != command.ID || first.Question.TaskID != command.TaskID || first.Question.Key != "continue" ||
 		first.Question.FallbackAt.Sub(first.Question.AskedAt) != operations.DefaultQuestionTimeout {
 		t.Fatalf("execution question lost its active scope or operator window: %+v", first)
 	}
-	before, err := store.Get(t.Context(), command.Work.OperationID)
+	before, err := store.Get(t.Context(), command.OperationID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,7 +52,7 @@ func TestExecutionQuestionPersistsBeforeReplyAndRetainsFirstWindow(t *testing.T)
 		t.Fatal(err)
 	}
 	repeated := executionQuestionResponse(t, bus)
-	after, err := store.Get(t.Context(), command.Work.OperationID)
+	after, err := store.Get(t.Context(), command.OperationID)
 	if err != nil || !reflect.DeepEqual(first.Question, repeated.Question) || !reflect.DeepEqual(before, after) || bus.Messages()[1].CorrelationID != retry.ID {
 		t.Fatal("repeated request changed the saved question, window or operation history")
 	}
@@ -68,7 +68,7 @@ func TestExecutionQuestionUsesOperatorFirstAndReturnsAcceptedAnswer(t *testing.T
 				t.Fatal(err)
 			}
 			question := executionQuestionResponse(t, bus).Question
-			before, err := store.Get(t.Context(), command.Work.OperationID)
+			before, err := store.Get(t.Context(), command.OperationID)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -118,7 +118,7 @@ func TestExecutionQuestionRejectsConflictingKeyWithoutNewQuestion(t *testing.T) 
 	if err := consumer.Consume(t.Context(), request); err != nil {
 		t.Fatal(err)
 	}
-	before, err := store.Get(t.Context(), command.Work.OperationID)
+	before, err := store.Get(t.Context(), command.OperationID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,16 +144,16 @@ func TestExecutionQuestionRequiresActiveSavedOwner(t *testing.T) {
 			case "unknown agent":
 				command.AgentID = "fixture-agent-ffffffff"
 			case "wrong work":
-				command.Work.TaskID = id.TaskID()
+				command.TaskID = id.TaskID()
 			case "finished execution":
 				_, result, _ := fixtures.ArtifactResult(t)
-				result.AgentID, result.CorrelationID, result.Work = command.AgentID, command.ID, command.Work
+				result.AgentID, result.CorrelationID, result.OperationID, result.TaskID = command.AgentID, command.ID, command.OperationID, command.TaskID
 				completed := time.Now().UTC()
 				execution.Change(func(record *executions.Execution) { record.Result, record.CompletedAt = &result, &completed })
 			case "unconfigured store":
 				consumer.Operations = nil
 			default:
-				if _, err := store.Update(t.Context(), command.Work.OperationID, func(op *operations.Operation) error {
+				if _, err := store.Update(t.Context(), command.OperationID, func(op *operations.Operation) error {
 					switch scenario {
 					case "finished task":
 						op.Tasks[0].Status = operations.TaskFailed
@@ -181,7 +181,7 @@ func TestExecutionQuestionRequiresActiveSavedOwner(t *testing.T) {
 			} else if err != nil || executionQuestionResponse(t, bus).Error != agentevents.QuestionInactive {
 				t.Fatalf("inactive owner accepted a question: %v", err)
 			}
-			stored, err := store.Get(t.Context(), execution.Snapshot().Command.Work.OperationID)
+			stored, err := store.Get(t.Context(), execution.Snapshot().Command.OperationID)
 			if err != nil || len(stored.Questions) != 0 {
 				t.Fatal("inactive or invalid owner created a question")
 			}
@@ -206,7 +206,7 @@ func TestExecutionQuestionRecoversUncertainSaveAndLostReply(t *testing.T) {
 			if err := consumer.Consume(t.Context(), request); !errors.Is(err, failure) {
 				t.Fatalf("lost write/reply confirmation was hidden: %v", err)
 			}
-			before, err := store.Get(t.Context(), command.Work.OperationID)
+			before, err := store.Get(t.Context(), command.OperationID)
 			if err != nil || len(before.Questions) != 1 || len(bus.Messages()) != 0 {
 				t.Fatal("uncertain write lost the question or acknowledged before confirmation")
 			}
@@ -217,7 +217,7 @@ func TestExecutionQuestionRecoversUncertainSaveAndLostReply(t *testing.T) {
 			}
 
 			response := executionQuestionResponse(t, bus)
-			after, err := store.Get(t.Context(), command.Work.OperationID)
+			after, err := store.Get(t.Context(), command.OperationID)
 			if response.Question == nil || !reflect.DeepEqual(*response.Question, before.Questions[0]) || err != nil || !reflect.DeepEqual(before, after) {
 				t.Fatal("retry duplicated the question or reset its saved waiting window")
 			}
@@ -233,7 +233,7 @@ func TestExecutionQuestionConfirmsAnswerPersistenceBeforeReturningIt(t *testing.
 		t.Fatal(err)
 	}
 	question := executionQuestionResponse(t, bus).Question
-	before, err := store.AnswerQuestion(t.Context(), command.Work.OperationID, question.ID, "Yes", operations.AnswerOperator)
+	before, err := store.AnswerQuestion(t.Context(), command.OperationID, question.ID, "Yes", operations.AnswerOperator)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -265,7 +265,7 @@ func TestExecutionQuestionLateAnswerDoesNotResumeFailedTask(t *testing.T) {
 		t.Fatal(err)
 	}
 	question := executionQuestionResponse(t, bus).Question
-	before, err := store.Update(t.Context(), command.Work.OperationID, func(op *operations.Operation) error {
+	before, err := store.Update(t.Context(), command.OperationID, func(op *operations.Operation) error {
 		op.Tasks[0].Status = operations.TaskFailed
 		op.Tasks[0].Continuation = &operations.Continuation{Status: operations.ContinuationPending, DecisionBy: operations.DecisionModel, Version: 4}
 		_, err := op.Recover(time.Now())

@@ -45,7 +45,7 @@ func TestControllerCloseKeepsRoutingUntilAcceptedOperationResultsDrain(t *testin
 				t.Fatal(err)
 			}
 			command := fixtures.Receive(t, ctx, bus.Commands())
-			if command.Type != agentcommands.RunAction || command.Work.OperationID != op.ID || command.Work.TaskID != task.ID {
+			if command.Type != agentcommands.RunAction || command.OperationID != op.ID || command.TaskID != task.ID {
 				t.Fatalf("controller-owned operation did not dispatch its saved task: %+v", command)
 			}
 			pending := fixtures.Discover(ctx, c)

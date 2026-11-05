@@ -280,7 +280,7 @@ func (c *SecretEventConsumer) transientActive(ctx context.Context, request secre
 		return false, err
 	}
 	claim := messages.Message{AgentID: request.AgentID, CorrelationID: request.CommandID,
-		Work: messages.WorkContext{OperationID: request.OperationID, TaskID: request.TaskID}}
+		OperationID: request.OperationID, TaskID: request.TaskID}
 	if !questionExecutionActive(op, claim, now) {
 		return false, nil
 	}
@@ -301,7 +301,7 @@ func (c *SecretEventConsumer) transientClaim(ctx context.Context, request secret
 		return executions.Execution{}, err
 	}
 	claim := messages.Message{AgentID: request.AgentID, CorrelationID: request.CommandID,
-		Work: messages.WorkContext{OperationID: request.OperationID, TaskID: request.TaskID}}
+		OperationID: request.OperationID, TaskID: request.TaskID}
 	if err := checkpointOwner(record, claim); err != nil {
 		return executions.Execution{}, err
 	}

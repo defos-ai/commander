@@ -78,8 +78,8 @@ func listExecutionLogs(ctx context.Context, query queries.Operations, criteria e
 	}
 	for _, log := range logs {
 		result.Logs = append(result.Logs, executionLog{ID: log.ID, AgentID: log.AgentID,
-			CommandID: log.CommandID, ActionName: log.ActionName, OperationID: log.Work.OperationID,
-			TaskID: log.Work.TaskID, Message: log.Message, CreatedAt: log.CreatedAt})
+			CommandID: log.CommandID, ActionName: log.ActionName, OperationID: log.OperationID,
+			TaskID: log.TaskID, Message: log.Message, CreatedAt: log.CreatedAt})
 		result.NextCursor = log.ID
 	}
 	return result, nil

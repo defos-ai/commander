@@ -58,7 +58,7 @@ func NewTransientSecretResponse(request secrets.Request, value []byte, code stri
 		return messages.Message{}, err
 	}
 	message.CorrelationID, message.ExpiresAt = request.ID, request.ExpiresAt
-	message.Work = messages.WorkContext{OperationID: request.OperationID, TaskID: request.TaskID}
+	message.OperationID, message.TaskID = request.OperationID, request.TaskID
 	if err := ValidateTransientSecretResponseRequest(message, request); err != nil {
 		return messages.Message{}, err
 	}
@@ -73,7 +73,7 @@ func DecodeTransientSecretResponse(message messages.Message) (TransientSecretRes
 	if err := message.Validate(); err != nil {
 		return TransientSecretResponse{}, err
 	}
-	if message.Type != SecretTransientResponded || !id.Valid(message.CorrelationID) || message.Work.OperationID == "" || message.ExpiresAt.IsZero() {
+	if message.Type != SecretTransientResponded || !id.Valid(message.CorrelationID) || message.OperationID == "" || message.ExpiresAt.IsZero() {
 		return TransientSecretResponse{}, errors.New("transient secret response requires request correlation, execution work and expiry")
 	}
 	var response TransientSecretResponse
@@ -100,8 +100,7 @@ func ValidateTransientSecretResponseRequest(message messages.Message, request se
 		return err
 	}
 	defer clear(response.Value)
-	work := messages.WorkContext{OperationID: request.OperationID, TaskID: request.TaskID}
-	if message.AgentID != request.AgentID || message.CorrelationID != request.ID || message.Work != work ||
+	if message.AgentID != request.AgentID || message.CorrelationID != request.ID || message.OperationID != request.OperationID || message.TaskID != request.TaskID ||
 		!message.ExpiresAt.Equal(request.ExpiresAt) || message.CreatedAt.Before(request.RequestedAt) {
 		return errors.New("transient response must match its request identity, recipient, execution and lifetime")
 	}

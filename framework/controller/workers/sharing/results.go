@@ -20,7 +20,7 @@ import (
 )
 
 func (w *Worker) forwardSharedResult(ctx context.Context, source sharedData) error {
-	if w.operationStore == nil || source.Work.OperationID == "" {
+	if w.operationStore == nil || source.OperationID == "" {
 		return nil
 	}
 	stored, err := w.executionStore.Get(ctx, source.AgentID, source.CommandID)
@@ -30,7 +30,7 @@ func (w *Worker) forwardSharedResult(ctx context.Context, source sharedData) err
 	if err := stored.Validate(); err != nil {
 		return err
 	}
-	if stored.Command.AgentID != source.AgentID || stored.Command.ID != source.CommandID || stored.Command.Work != source.Work {
+	if stored.Command.AgentID != source.AgentID || stored.Command.ID != source.CommandID || (stored.Command.OperationID != source.OperationID || stored.Command.TaskID != source.TaskID) {
 		return errors.New("shared result does not match its saved execution")
 	}
 	if stored.Result == nil || stored.Result.Type != messages.ActionSucceeded {
@@ -44,14 +44,14 @@ func (w *Worker) forwardSharedResult(ctx context.Context, source sharedData) err
 	if err != nil {
 		return err
 	}
-	op, err := w.operationStore.Get(ctx, source.Work.OperationID)
+	op, err := w.operationStore.Get(ctx, source.OperationID)
 	if errors.Is(err, operations.ErrUnknownOperation) {
 		return nil
 	}
 	if err != nil {
 		return err
 	}
-	if op.ID != source.Work.OperationID {
+	if op.ID != source.OperationID {
 		return errors.New("shared result operation does not match its saved scope")
 	}
 	if op.Status.Terminal() || op.Mission.Policies == nil || len(op.Mission.Policies.Sharing) == 0 {
@@ -60,14 +60,14 @@ func (w *Worker) forwardSharedResult(ctx context.Context, source sharedData) err
 	if err := op.Mission.Policies.Validate(); err != nil {
 		return err
 	}
-	index := slices.IndexFunc(op.Tasks, func(task operations.Task) bool { return task.ID == source.Work.TaskID })
+	index := slices.IndexFunc(op.Tasks, func(task operations.Task) bool { return task.ID == source.TaskID })
 	if index < 0 {
 		return nil
 	}
 	if !sharedTaskMatches(op.Tasks[index], stored.Command, call) {
 		return errors.New("shared result has no matching saved task dispatch")
 	}
-	identity := agentevents.ContextSource{AgentID: source.AgentID, CommandID: source.CommandID, ActionName: call.ActionName, Work: source.Work}
+	identity := agentevents.SharedDataSource{AgentID: source.AgentID, CommandID: source.CommandID, ActionName: call.ActionName, OperationID: source.OperationID, TaskID: source.TaskID}
 	var accepted []artifacts.Artifact
 	var artifactErr, forwardingErr error
 	artifactsRead := false
@@ -75,7 +75,7 @@ func (w *Worker) forwardSharedResult(ctx context.Context, source sharedData) err
 		if err := ctx.Err(); err != nil {
 			return errors.Join(forwardingErr, err)
 		}
-		if task.ID == source.Work.TaskID || task.OperationID != op.ID || task.Status != operations.TaskRunning ||
+		if task.ID == source.TaskID || task.OperationID != op.ID || task.Status != operations.TaskRunning ||
 			task.DeadlineAt == nil || !time.Now().Before(*task.DeadlineAt) {
 			continue
 		}
@@ -83,7 +83,7 @@ func (w *Worker) forwardSharedResult(ctx context.Context, source sharedData) err
 		if !shareResults && (!shareArtifacts || len(output.Artifacts) == 0) {
 			continue
 		}
-		update := agentevents.ContextUpdate{Source: identity}
+		update := agentevents.SharedData{Source: identity, BatchID: op.Tasks[index].BatchID}
 		if shareResults {
 			update.Result = bytes.Clone(output.Output)
 		}
@@ -115,12 +115,11 @@ func sharedResultKinds(policy policies.SharingPolicy, from, to string) (results,
 
 func sharedTaskMatches(task operations.Task, command messages.Message, call actions.ActionCall) bool {
 	return task.ID == task.CommandID && task.CommandID == command.ID && task.AgentID == command.AgentID &&
-		task.OperationID == command.Work.OperationID && task.ID == command.Work.TaskID && call.Work == command.Work && task.ActionName == call.ActionName
+		task.OperationID == command.OperationID && task.ID == command.TaskID && (call.OperationID == command.OperationID && call.TaskID == command.TaskID) && task.ActionName == call.ActionName
 }
 
-func (w *Worker) publishSharedUpdate(ctx context.Context, task operations.Task, update agentevents.ContextUpdate) error {
-	work := messages.WorkContext{OperationID: task.OperationID, TaskID: task.ID}
-	message, err := agentevents.NewContextUpdate(task.AgentID, task.CommandID, work, update)
+func (w *Worker) publishSharedUpdate(ctx context.Context, task operations.Task, update agentevents.SharedData) error {
+	message, err := agentevents.NewSharedData(task.AgentID, task.CommandID, task.OperationID, task.ID, update)
 	if err != nil {
 		return err
 	}

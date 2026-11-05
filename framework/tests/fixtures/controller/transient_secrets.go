@@ -26,15 +26,15 @@ func (fixture TransientSecrets) CompleteExecution(t *testing.T) {
 	t.Helper()
 	command := fixture.Executions.Snapshot().Command
 	_, result, output := ArtifactResult(t)
-	result.AgentID, result.CorrelationID, result.Work = command.AgentID, command.ID, command.Work
+	result.AgentID, result.CorrelationID, result.OperationID, result.TaskID = command.AgentID, command.ID, command.OperationID, command.TaskID
 	now := time.Now().UTC()
 	fixture.Executions.Change(func(record *executions.Execution) {
 		record.Result, record.CompletedAt = &result, &now
 	})
-	_, err := fixture.Operations.Update(t.Context(), command.Work.OperationID, func(operation *operations.Operation) error {
+	_, err := fixture.Operations.Update(t.Context(), command.OperationID, func(operation *operations.Operation) error {
 		for index := range operation.Tasks {
 			task := &operation.Tasks[index]
-			if task.ID == command.Work.TaskID {
+			if task.ID == command.TaskID {
 				task.Status, task.Result, task.FinishedAt = operations.TaskSucceeded, &output, &now
 			}
 		}
@@ -52,7 +52,7 @@ func TransientSecretConsumer(t *testing.T) TransientSecrets {
 	consumer.Executions, consumer.Operations = execution, questions.Operations
 	command := execution.Snapshot().Command
 	request := TransientSecretRequest()
-	request.OperationID, request.TaskID, request.CommandID = command.Work.OperationID, command.Work.TaskID, command.ID
+	request.OperationID, request.TaskID, request.CommandID = command.OperationID, command.TaskID, command.ID
 	t.Cleanup(consumer.ClearTransient)
 	return TransientSecrets{Consumer: &consumer, Requests: requests, Values: values, Bus: bus,
 		Executions: execution, Operations: operations, Request: request}

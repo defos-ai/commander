@@ -37,13 +37,13 @@ func PendingExecutionQuestion(t *testing.T, message messages.Message) operations
 	now := time.Now().UTC()
 	return operations.Question{ID: id.QuestionID(), Status: operations.QuestionPending,
 		CommandID: request.CommandID, Key: request.Key, Text: request.Text, Options: request.Options,
-		TaskID: message.Work.TaskID, AskedAt: now.Add(-time.Minute), FallbackAt: now.Add(time.Minute)}
+		TaskID: message.TaskID, AskedAt: now.Add(-time.Minute), FallbackAt: now.Add(time.Minute)}
 }
 
 func QuestionCommand(t *testing.T, agentID string, deadline time.Time) messages.Message {
 	t.Helper()
 	command, err := agentcommands.NewRunAction(agentID, actions.ActionCall{ActionName: "question",
-		Work: messages.WorkContext{OperationID: id.OperationID(), TaskID: id.TaskID()}})
+		OperationID: id.OperationID(), TaskID: id.TaskID()})
 	if err != nil {
 		t.Fatal(err)
 	}

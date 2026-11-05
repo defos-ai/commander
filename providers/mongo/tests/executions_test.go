@@ -37,14 +37,13 @@ func TestExecutionMongoStoreReplayAndImmutableResult(t *testing.T) {
 	}
 	replay := command
 	replay.CreatedAt = replay.CreatedAt.Add(time.Hour)
-	work, _ := json.Marshal(command.Work)
-	replay.Payload = json.RawMessage(fmt.Sprintf(`{ "work": %s, "input": {"site":"example.test","serial":9007199254740993}, "action_name": "check" }`, work))
+	replay.Payload = json.RawMessage(fmt.Sprintf(`{ "operation_id": %q, "task_id": %q, "input": {"site":"example.test","serial":9007199254740993}, "action_name": "check" }`, command.OperationID, command.TaskID))
 	restored, claimed, err := catalog.Claim(t.Context(), replay)
 	if err != nil || claimed || !reflect.DeepEqual(restored, saved) {
 		t.Fatalf("semantic replay changed the reservation: %#v, claimed=%t, error=%v", restored, claimed, err)
 	}
 	for _, change := range []func(*messages.Message){
-		func(m *messages.Message) { m.Work.OperationID = "30000000-0000-4000-8000-000000000099" },
+		func(m *messages.Message) { m.OperationID = "30000000-0000-4000-8000-000000000099" },
 		func(m *messages.Message) {
 			m.Payload = json.RawMessage(strings.ReplaceAll(string(m.Payload), "9007199254740993", "9007199254740992"))
 		},
@@ -57,7 +56,7 @@ func TestExecutionMongoStoreReplayAndImmutableResult(t *testing.T) {
 	}
 	result := fixtures.ExecutionResult(command)
 	wrongWork := result
-	wrongWork.Work.OperationID = "30000000-0000-4000-8000-000000000099"
+	wrongWork.OperationID = "30000000-0000-4000-8000-000000000099"
 	if err := catalog.Complete(t.Context(), wrongWork); err == nil {
 		t.Fatal("result for different work was accepted")
 	}
@@ -77,7 +76,7 @@ func TestExecutionMongoStoreReplayAndImmutableResult(t *testing.T) {
 	for _, change := range []func(*messages.Message){
 		func(m *messages.Message) { m.ID = fixtures.ExecutionResult(fixtures.ExecutionCommand(2)).ID },
 		func(m *messages.Message) { m.Type = messages.CommandFailed },
-		func(m *messages.Message) { m.Work.OperationID = "30000000-0000-4000-8000-000000000099" },
+		func(m *messages.Message) { m.OperationID = "30000000-0000-4000-8000-000000000099" },
 		func(m *messages.Message) {
 			m.Payload = json.RawMessage(strings.ReplaceAll(string(m.Payload), "9007199254740993", "9007199254740992"))
 		},
@@ -239,7 +238,7 @@ func TestExecutionMongoStoreRejectsMissingInvalidAndCancelledWrites(t *testing.T
 		func(m *messages.Message) { m.ID = "invalid" },
 		func(m *messages.Message) { m.AgentID = "invalid" },
 		func(m *messages.Message) { m.Type = messages.StopAgent },
-		func(m *messages.Message) { m.Work.TaskID = "" },
+		func(m *messages.Message) { m.TaskID = "" },
 		func(m *messages.Message) { m.Payload = json.RawMessage(`[]`) },
 	} {
 		invalid := command

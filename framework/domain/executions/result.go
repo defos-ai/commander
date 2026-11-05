@@ -14,7 +14,7 @@ func DecodeActionResult(message messages.Message, agentID, commandID string, cal
 	if err := message.Validate(); err != nil {
 		return actionmodel.ActionOutput{}, err
 	}
-	if message.AgentID != agentID || message.CorrelationID != commandID || message.Work != call.Work {
+	if message.AgentID != agentID || message.CorrelationID != commandID || (message.OperationID != call.OperationID || message.TaskID != call.TaskID) {
 		return actionmodel.ActionOutput{}, errors.New("action result does not match the requested command")
 	}
 	if message.Type == messages.CommandFailed {

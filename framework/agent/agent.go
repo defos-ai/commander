@@ -255,15 +255,15 @@ func (a *Agent) work(ctx context.Context, call ActionCall, commandID string, fro
 	if err := call.Validate(); err != nil {
 		return ActionOutput{}, err
 	}
-	executionContext := action.WithExecution(ctx, action.Execution{CommandID: commandID, Work: call.Work})
+	executionContext := action.WithExecution(ctx, action.Execution{CommandID: commandID, OperationID: call.OperationID, TaskID: call.TaskID})
 	executionContext, cancelExecution := context.WithCancel(executionContext)
-	var contextProvider action.ContextProvider
-	var inbox *executionContextInbox
-	if fromServer && call.Work.OperationID != "" {
-		if client, ok := ctx.Value(sharedContextClientKey{}).(*sharedContextClient); ok && client != nil {
+	var sharedDataProvider action.SharedDataProvider
+	var inbox *executionDataInbox
+	if fromServer && call.OperationID != "" {
+		if client, ok := ctx.Value(sharedDataClientKey{}).(*sharedDataClient); ok && client != nil {
 			// Bind before announcing work so the controller can deliver immediately.
-			inbox = client.bind(executionContext, commandID, call.Work)
-			contextProvider = inbox
+			inbox = client.bind(executionContext, commandID, call.OperationID, call.TaskID)
+			sharedDataProvider = inbox
 		}
 	}
 	endContext := func() {
@@ -273,14 +273,14 @@ func (a *Agent) work(ctx context.Context, call ActionCall, commandID string, fro
 		}
 	}
 	defer endContext()
-	executionContext = action.WithContextUpdates(executionContext, contextProvider)
+	executionContext = action.WithSharedData(executionContext, sharedDataProvider)
 	started := false
 	workErr = a.stateChange(ctx, func(next *agentState) error {
 		if next.status != AgentReady || next.serving && !fromServer {
 			return errors.New("agent must be ready and available before working")
 		}
 		next.status = AgentWorking
-		next.work = &Work{OperationID: call.Work.OperationID, TaskID: call.Work.TaskID,
+		next.work = &Work{OperationID: call.OperationID, TaskID: call.TaskID,
 			ActionName: call.ActionName, CommandID: commandID}
 		started = true
 		return nil
@@ -317,14 +317,14 @@ func (a *Agent) work(ctx context.Context, call ActionCall, commandID string, fro
 			var logs action.LogProvider
 			if fromServer {
 				if client, ok := ctx.Value(checkpointClientKey{}).(*checkpointClient); ok && client != nil {
-					checkpoints = &executionCheckpoints{client: client, lifetime: executionContext, commandID: commandID, work: call.Work}
+					checkpoints = &executionCheckpoints{client: client, lifetime: executionContext, commandID: commandID, operationID: call.OperationID, taskID: call.TaskID}
 				}
 				if client, ok := ctx.Value(questionClientKey{}).(*questionClient); ok && client != nil {
-					questions = &executionQuestions{client: client, lifetime: executionContext, commandID: commandID, work: call.Work,
+					questions = &executionQuestions{client: client, lifetime: executionContext, commandID: commandID, operationID: call.OperationID, taskID: call.TaskID,
 						deadline: consumers.CommandDeadline(executionContext)}
 				}
 				if client, ok := ctx.Value(logClientKey{}).(*logClient); ok && client != nil {
-					logs = &executionLogs{client: client, lifetime: executionContext, commandID: commandID, work: call.Work, actionName: description.Name}
+					logs = &executionLogs{client: client, lifetime: executionContext, commandID: commandID, operationID: call.OperationID, taskID: call.TaskID, actionName: description.Name}
 				}
 			}
 			executionContext = action.WithCheckpoints(executionContext, checkpoints)

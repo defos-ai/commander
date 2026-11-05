@@ -36,7 +36,7 @@ func (a *Agent) serveSessions(ctx context.Context, bus comms.Bus, publisher even
 			if err := consumer.Consume(ctx, func(ctx context.Context, message messages.Message) error {
 				var request sessions.Control
 				err := message.Validate()
-				if err == nil && (message.AgentID != a.ID() || message.Type != agentcommands.ControlSession || message.Work != (messages.WorkContext{})) {
+				if err == nil && (message.AgentID != a.ID() || message.Type != agentcommands.ControlSession || (message.OperationID != "" || message.TaskID != "")) {
 					err = errors.New("invalid session control envelope")
 				}
 				if err == nil {
@@ -127,7 +127,7 @@ func (a *Agent) prepareSession(ctx context.Context, call ActionCall, commandID s
 		return errors.New("session binding disagrees with accepted action input")
 	}
 	if binding.Mode == sessions.Create {
-		if binding.Creation.CommandID != commandID || binding.Creation.TaskID != call.Work.TaskID || binding.Creation.OperationID != call.Work.OperationID {
+		if binding.Creation.CommandID != commandID || binding.Creation.TaskID != call.TaskID || binding.Creation.OperationID != call.OperationID {
 			return errors.New("session creation does not belong to this execution")
 		}
 		return a.config.Sessions.Prepare(ctx, binding.Claim())

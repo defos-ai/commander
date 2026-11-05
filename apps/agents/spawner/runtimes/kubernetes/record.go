@@ -12,6 +12,7 @@ import (
 
 	"github.com/defos-ai/commander/apps/agents/spawner/runtimes"
 	"github.com/defos-ai/commander/framework/agent/action"
+	"github.com/defos-ai/commander/framework/id"
 )
 
 // The intent is immutable and contains the complete desired body, never provider
@@ -42,7 +43,7 @@ func (m *Manager) readRecord(ctx context.Context, requestID, reference string) (
 	execution, active := action.ExecutionFromContext(ctx)
 	if decodeCheckpoint(data, &saved) != nil || saved.Runtime != runtimes.RuntimeKubernetes ||
 		saved.RequestID != requestID || !active || requestID != "command:"+execution.CommandID ||
-		execution.Work.Validate() != nil || validatePodLaunch(saved.spec()) != nil {
+		(execution.OperationID != "" || execution.TaskID != "") && (!id.Valid(execution.OperationID) || !id.Valid(execution.TaskID)) || validatePodLaunch(saved.spec()) != nil {
 		return record{}, true, invalid
 	}
 	if saved.Package != reference {

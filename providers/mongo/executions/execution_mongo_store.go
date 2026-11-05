@@ -177,7 +177,7 @@ func compareResult(record executions.Execution, result messages.Message) error {
 }
 
 func sameExecutionMessage(a, b messages.Message) bool {
-	if a.ID != b.ID || a.Type != b.Type || a.AgentID != b.AgentID || a.CorrelationID != b.CorrelationID || a.Work != b.Work {
+	if a.ID != b.ID || a.Type != b.Type || a.AgentID != b.AgentID || a.CorrelationID != b.CorrelationID || a.OperationID != b.OperationID || a.TaskID != b.TaskID {
 		return false
 	}
 	var first, second any

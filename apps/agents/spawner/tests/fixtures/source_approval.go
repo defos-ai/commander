@@ -7,7 +7,6 @@ import (
 	"github.com/defos-ai/commander/apps/agents/spawner/packages"
 	"github.com/defos-ai/commander/apps/agents/spawner/tests/fakes"
 	"github.com/defos-ai/commander/framework/agent/action"
-	"github.com/defos-ai/commander/framework/comms/messages"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/id"
 )
@@ -16,7 +15,7 @@ const SourceApprovalQuestion = "Install agent from github.com/other/worker-agent
 const PrivateSourceApprovalQuestion = "Install agent from github.com/other/worker-agent@stable (repository visibility: private)?"
 
 func SourceApprovalExecution() action.Execution {
-	return action.Execution{CommandID: id.MessageID(), Work: messages.WorkContext{OperationID: id.OperationID(), TaskID: id.TaskID()}}
+	return action.Execution{CommandID: id.MessageID(), OperationID: id.OperationID(), TaskID: id.TaskID()}
 }
 
 func SourceApprovalAnswer(answer string, origin operations.AnswerOrigin) operations.Question {

@@ -80,7 +80,7 @@ func NewSecretSyncRequested(request secretmodel.Request, defaults ...[]byte) (me
 	message.ID, message.CreatedAt, message.ExpiresAt = request.ID, request.RequestedAt, request.ExpiresAt
 	if request.EffectiveType() == secretmodel.SecretTransient {
 		message.CorrelationID = request.CommandID
-		message.Work = messages.WorkContext{OperationID: request.OperationID, TaskID: request.TaskID}
+		message.OperationID, message.TaskID = request.OperationID, request.TaskID
 	}
 	decoded, err := DecodeSecretSyncRequested(message)
 	clear(decoded.Default)
@@ -107,11 +107,11 @@ func DecodeSecretSyncRequested(message messages.Message) (SecretSyncRequest, err
 		return SecretSyncRequest{}, errors.New("invalid secret synchronization request")
 	}
 	request := sync.Request
-	work, commandID := messages.WorkContext{}, ""
+	operationID, taskID, commandID := "", "", ""
 	if request.EffectiveType() == secretmodel.SecretTransient {
-		work, commandID = messages.WorkContext{OperationID: request.OperationID, TaskID: request.TaskID}, request.CommandID
+		operationID, taskID, commandID = request.OperationID, request.TaskID, request.CommandID
 	}
-	if message.Work != work || message.CorrelationID != commandID {
+	if message.OperationID != operationID || message.TaskID != taskID || message.CorrelationID != commandID {
 		clear(sync.Default)
 		return SecretSyncRequest{}, errors.New("secret synchronization context must match its request")
 	}
@@ -149,7 +149,7 @@ func DecodeSecretInstalled(message messages.Message) (SecretInstallation, error)
 	if err := message.Validate(); err != nil {
 		return SecretInstallation{}, err
 	}
-	if message.Type != SecretInstalled || message.Work != (messages.WorkContext{}) || !id.Valid(message.CorrelationID) || !message.ExpiresAt.IsZero() {
+	if message.Type != SecretInstalled || message.OperationID != "" || message.TaskID != "" || !id.Valid(message.CorrelationID) || !message.ExpiresAt.IsZero() {
 		return SecretInstallation{}, errors.New("secret installation requires its delivery correlation and no work or expiry context")
 	}
 	var installation SecretInstallation

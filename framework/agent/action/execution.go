@@ -1,16 +1,13 @@
 package action
 
-import (
-	"context"
-
-	"github.com/defos-ai/commander/framework/comms/messages"
-)
+import "context"
 
 // Execution identifies the current dispatch independently of action input.
 // It correlates retries; it does not establish authorization or process ownership.
 type Execution struct {
-	CommandID string
-	Work      messages.WorkContext
+	CommandID   string
+	OperationID string
+	TaskID      string
 }
 
 type executionContextKey struct{}

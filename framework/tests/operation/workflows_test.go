@@ -28,7 +28,7 @@ func TestContinuationDefaultRunsEveryProposedTaskIndependently(t *testing.T) {
 	}
 	fixtures.Receive(t, calls).Reply <- fixtures.Output("discover", proposals...)
 	first, second := fixtures.Receive(t, calls), fixtures.Receive(t, calls)
-	if first.Call.Work.TaskID == second.Call.Work.TaskID {
+	if first.Call.TaskID == second.Call.TaskID {
 		t.Fatal("repeated action names must create separate tasks")
 	}
 	inputs := map[string]bool{string(first.Call.Input): true, string(second.Call.Input): true}
@@ -40,7 +40,7 @@ func TestContinuationDefaultRunsEveryProposedTaskIndependently(t *testing.T) {
 	first.Reply <- fixtures.Output("inspect")
 	partial := fixtures.AwaitOperation(t, r, op.ID, func(op operations.Operation) bool {
 		for _, task := range op.Tasks {
-			if task.ID == first.Call.Work.TaskID {
+			if task.ID == first.Call.TaskID {
 				return task.Status == operations.TaskSucceeded
 			}
 		}
@@ -53,7 +53,7 @@ func TestContinuationDefaultRunsEveryProposedTaskIndependently(t *testing.T) {
 		if child.ParentTaskID != parent.ID || child.ActionName != "inspect" {
 			t.Fatalf("generated task lost its action or parent: %+v", child)
 		}
-		if child.ID == first.Call.Work.TaskID && (child.Continuation == nil || child.Continuation.DecisionBy != operations.DecisionModel || child.Continuation.Status != operations.ContinuationPending) {
+		if child.ID == first.Call.TaskID && (child.Continuation == nil || child.Continuation.DecisionBy != operations.DecisionModel || child.Continuation.Status != operations.ContinuationPending) {
 			t.Fatalf("first child waited for its sibling without an aggregation policy: %+v", child)
 		}
 	}
@@ -153,7 +153,7 @@ func TestContinuationModelDecisionsCollectOnlyTheirOwnChildren(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := current.Tasks[0].Continuation
-	if len(current.Tasks) != 4 || c.Status != operations.ContinuationWaiting || !reflect.DeepEqual(c.CreatedTaskIDs, []string{third.Call.Work.TaskID}) {
+	if len(current.Tasks) != 4 || c.Status != operations.ContinuationWaiting || !reflect.DeepEqual(c.CreatedTaskIDs, []string{third.Call.TaskID}) {
 		t.Fatalf("new model decision reused an earlier aggregation group: %+v", current)
 	}
 	secondBatch := current.Tasks[3].BatchID
@@ -311,7 +311,7 @@ func TestConcurrentContinuationResolutionCommitsOneBranch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(current.Tasks) != 2 || current.Tasks[1].ID != child.Call.Work.TaskID || current.Tasks[1].ParentTaskID != task.ID {
+	if len(current.Tasks) != 2 || current.Tasks[1].ID != child.Call.TaskID || current.Tasks[1].ParentTaskID != task.ID {
 		t.Fatalf("duplicate child or missing parent link: %+v", current.Tasks)
 	}
 }

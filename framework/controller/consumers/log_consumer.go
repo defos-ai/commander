@@ -37,11 +37,11 @@ func (c LogConsumer) Consume(ctx context.Context, message messages.Message) erro
 		return fmt.Errorf("invalid logged execution claim: %w", err)
 	}
 	command := record.Command
-	if command.AgentID != log.AgentID || command.ID != log.CommandID || command.Work != log.Work {
+	if command.AgentID != log.AgentID || command.ID != log.CommandID || (command.OperationID != log.OperationID || command.TaskID != log.TaskID) {
 		return InvalidMessage(errors.New("execution log does not match its execution claim"))
 	}
 	var call actions.ActionCall
-	if err := domain.Decode(command.Payload, &call); err != nil || call.Work != command.Work {
+	if err := domain.Decode(command.Payload, &call); err != nil || (call.OperationID != command.OperationID || call.TaskID != command.TaskID) {
 		return errors.New("invalid claimed action request for execution log")
 	}
 	if call.ActionName != log.ActionName {

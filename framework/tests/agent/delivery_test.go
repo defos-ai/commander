@@ -31,7 +31,7 @@ func TestDuplicateCommandAndMissingReceiptDoNotRepeatExecution(t *testing.T) {
 	consumer := consumers.ActionConsumer{Runtime: runtime, AgentID: "fixture-agent-12345678", Outcomes: outcomes,
 		Events: controllerevents.Client{Bus: bus}, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
 	command, err := agentcommands.NewRunAction(consumer.AgentID, actions.ActionCall{ActionName: "inspect", Input: []byte(`{"page":1}`),
-		Work: messages.WorkContext{OperationID: id.New(), TaskID: id.New()}})
+		OperationID: id.New(), TaskID: id.New()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,7 +69,7 @@ func TestDuplicateCommandAndMissingReceiptDoNotRepeatExecution(t *testing.T) {
 	})
 	retry := next()
 
-	if runtime.Calls() != 1 || !reflect.DeepEqual(first, replay) || !reflect.DeepEqual(first, retry) || first.CorrelationID != command.ID || first.Work != command.Work {
+	if runtime.Calls() != 1 || !reflect.DeepEqual(first, replay) || !reflect.DeepEqual(first, retry) || first.CorrelationID != command.ID || (first.OperationID != command.OperationID || first.TaskID != command.TaskID) {
 		t.Fatalf("execution repeated or result changed: calls=%d first=%+v replay=%+v retry=%+v", runtime.Calls(), first, replay, retry)
 	}
 	conflict := command

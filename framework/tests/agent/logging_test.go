@@ -14,12 +14,13 @@ import (
 )
 
 func TestAgentLogsBindTheDispatchedExecution(t *testing.T) {
-	for _, work := range []messages.WorkContext{
+	for _, assignment := range []struct{ OperationID, TaskID string }{
 		{OperationID: id.OperationID(), TaskID: id.TaskID()},
 		{},
 	} {
+		operationID, taskID := assignment.OperationID, assignment.TaskID
 		name := "standalone"
-		if work.OperationID != "" {
+		if operationID != "" {
 			name = "operation"
 		}
 		t.Run(name, func(t *testing.T) {
@@ -28,7 +29,7 @@ func TestAgentLogsBindTheDispatchedExecution(t *testing.T) {
 			parent := action.WithLogs(t.Context(), inherited)
 			executor := fixtures.LoggingAction(t, func(ctx context.Context) error {
 				ctx = action.WithExecution(context.WithoutCancel(ctx), action.Execution{CommandID: id.MessageID(),
-					Work: messages.WorkContext{OperationID: id.OperationID(), TaskID: id.TaskID()}})
+					OperationID: id.OperationID(), TaskID: id.TaskID()})
 				if err := action.Log(ctx, text); err != nil {
 					return err
 				}
@@ -36,7 +37,7 @@ func TestAgentLogsBindTheDispatchedExecution(t *testing.T) {
 			})
 			fixture := fixtures.StartLoggingAgent(t, parent, executor, fakes.LogBusConfig{})
 
-			command := fixture.Command(t, work)
+			command := fixture.Command(t, operationID, taskID)
 			first, second := fixture.Attempt(t), fixture.Attempt(t)
 			outcome := fixture.Outcome(t, command.ID)
 
@@ -52,7 +53,7 @@ func TestAgentLogsBindTheDispatchedExecution(t *testing.T) {
 					t.Fatal(err)
 				}
 				if publication.Topic != messages.ControllerEvents(messages.DefaultControllerType) ||
-					log.AgentID != fixture.Runtime.ID() || log.CommandID != command.ID || log.Work != work ||
+					log.AgentID != fixture.Runtime.ID() || log.CommandID != command.ID || (log.OperationID != operationID || log.TaskID != taskID) ||
 					log.ActionName != fixtures.LoggingActionName || log.Message != text || log.CreatedAt.IsZero() ||
 					!publication.Message.ExpiresAt.IsZero() {
 					t.Fatalf("log lost its original dispatch identity or text: %+v", log)
@@ -75,7 +76,7 @@ func TestAgentLogPublicationEndsWhenItsActionReturns(t *testing.T) {
 		}
 	})
 	fixture := fixtures.StartLoggingAgent(t, t.Context(), executor, fakes.LogBusConfig{Block: true})
-	command := fixture.Command(t, messages.WorkContext{})
+	command := fixture.Command(t, "", "")
 	fixture.Attempt(t)
 
 	close(releaseAction)
@@ -98,7 +99,7 @@ func TestAgentLogPublicationEndsOnCallerCancellation(t *testing.T) {
 		return nil
 	})
 	fixture := fixtures.StartLoggingAgent(t, t.Context(), executor, fakes.LogBusConfig{Block: true})
-	command := fixture.Command(t, messages.WorkContext{})
+	command := fixture.Command(t, "", "")
 	fixture.Attempt(t)
 	cancel := <-cancelCall
 
@@ -121,7 +122,7 @@ func TestAgentLogPublicationEndsOnServiceCancellation(t *testing.T) {
 		return nil
 	})
 	fixture := fixtures.StartLoggingAgent(t, t.Context(), executor, fakes.LogBusConfig{Block: true})
-	fixture.Command(t, messages.WorkContext{})
+	fixture.Command(t, "", "")
 	fixture.Attempt(t)
 	scope := <-retained
 
@@ -149,7 +150,7 @@ func TestAgentLogPublicationFailureIsNotRetried(t *testing.T) {
 	})
 	fixture := fixtures.StartLoggingAgent(t, t.Context(), executor, fakes.LogBusConfig{Failure: want})
 
-	command := fixture.Command(t, messages.WorkContext{})
+	command := fixture.Command(t, "", "")
 	fixture.Attempt(t)
 	err := <-finished
 	outcome := fixture.Outcome(t, command.ID)

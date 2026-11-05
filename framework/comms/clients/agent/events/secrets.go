@@ -56,7 +56,7 @@ func DecodeSecretDelivery(message messages.Message) (SecretDelivery, error) {
 	if err := message.Validate(); err != nil {
 		return SecretDelivery{}, err
 	}
-	if message.Type != SecretDelivered || message.Work != (messages.WorkContext{}) || !id.Valid(message.CorrelationID) {
+	if message.Type != SecretDelivered || message.OperationID != "" || message.TaskID != "" || !id.Valid(message.CorrelationID) {
 		return SecretDelivery{}, errors.New("secret delivery requires its request correlation and no work context")
 	}
 	if message.ExpiresAt.IsZero() || !message.ExpiresAt.After(message.CreatedAt) {

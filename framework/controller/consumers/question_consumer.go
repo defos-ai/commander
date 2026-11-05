@@ -58,7 +58,7 @@ func (c QuestionConsumer) question(ctx context.Context, message messages.Message
 	if record.Result != nil || c.Operations == nil {
 		return operations.Question{}, agentevents.QuestionInactive, nil
 	}
-	op, err := c.Operations.Get(ctx, message.Work.OperationID)
+	op, err := c.Operations.Get(ctx, message.OperationID)
 	if errors.Is(err, operations.ErrUnknownOperation) {
 		return operations.Question{}, agentevents.QuestionInactive, nil
 	}
@@ -80,7 +80,7 @@ func (c QuestionConsumer) question(ctx context.Context, message messages.Message
 	// save confirms persistence without changing its answer or waiting window.
 	now := time.Now().UTC()
 	question := operations.Question{ID: id.QuestionID(), Status: operations.QuestionPending,
-		TaskID: message.Work.TaskID, CommandID: request.CommandID, Key: request.Key,
+		TaskID: message.TaskID, CommandID: request.CommandID, Key: request.Key,
 		Text: request.Text, Options: slices.Clone(request.Options), AskedAt: now, FallbackAt: now.Add(operations.DefaultQuestionTimeout)}
 	op, err = c.Operations.AskQuestion(ctx, op.ID, question, 0)
 	if errors.Is(err, operations.ErrFinished) || errors.Is(err, operations.ErrUnknownTask) {
@@ -102,11 +102,11 @@ func (c QuestionConsumer) question(ctx context.Context, message messages.Message
 }
 
 func questionExecutionActive(op operations.Operation, message messages.Message, now time.Time) bool {
-	if op.ID != message.Work.OperationID || op.Status.Terminal() {
+	if op.ID != message.OperationID || op.Status.Terminal() {
 		return false
 	}
 	for _, task := range op.Tasks {
-		if task.ID == message.Work.TaskID {
+		if task.ID == message.TaskID {
 			return task.Status == operations.TaskRunning && task.AgentID == message.AgentID && task.CommandID == message.CorrelationID &&
 				task.DeadlineAt != nil && now.Before(*task.DeadlineAt)
 		}
@@ -124,5 +124,5 @@ func findExecutionQuestion(op operations.Operation, request controllerevents.Que
 }
 
 func questionMatches(question operations.Question, message messages.Message, request controllerevents.QuestionRequest) bool {
-	return question.TaskID == message.Work.TaskID && question.Text == request.Text && slices.Equal(question.Options, request.Options)
+	return question.TaskID == message.TaskID && question.Text == request.Text && slices.Equal(question.Options, request.Options)
 }

@@ -66,7 +66,8 @@ func NewCheckpointResponse(request messages.Message, response CheckpointResponse
 	if err != nil {
 		return messages.Message{}, err
 	}
-	message.CorrelationID, message.Work = request.ID, request.Work
+	message.CorrelationID = request.ID
+	message.OperationID, message.TaskID = request.OperationID, request.TaskID
 	if _, err := DecodeCheckpointResponse(message); err != nil {
 		return messages.Message{}, err
 	}

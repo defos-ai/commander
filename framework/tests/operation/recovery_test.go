@@ -59,7 +59,7 @@ func TestRecoveryObservesSavedResultWithoutNewExecution(t *testing.T) {
 			recovered := fixtures.Receive(t, observed)
 			settled := fixtures.AwaitOperation(t, restarted, op.ID, func(op operations.Operation) bool { return op.Tasks[0].Status == operations.TaskSucceeded })
 
-			if dispatches.Load() != 1 || recovered.Agent != original.Agent || recovered.Call.Work != original.Call.Work {
+			if dispatches.Load() != 1 || recovered.Agent != original.Agent || (recovered.Call.OperationID != original.Call.OperationID || recovered.Call.TaskID != original.Call.TaskID) {
 				t.Fatalf("recovery repeated or changed work: dispatches=%d, recovered=%+v", dispatches.Load(), recovered)
 			}
 			got := settled.Tasks[0]
@@ -117,7 +117,7 @@ func TestUncertainAssignmentWriteSuspendsUntilRecovery(t *testing.T) {
 
 	restarted := fixtures.NewWorker(t, config, exec)
 	call := fixtures.Receive(t, calls)
-	if call.Agent != fixtures.AgentID || saved.AgentID != "" || call.Call.Work.TaskID != saved.ID || call.Call.Work.OperationID != op.ID || call.Call.ActionName != saved.ActionName || !reflect.DeepEqual(call.Call.Input, saved.Input) {
+	if call.Agent != fixtures.AgentID || saved.AgentID != "" || call.Call.TaskID != saved.ID || call.Call.OperationID != op.ID || call.Call.ActionName != saved.ActionName || !reflect.DeepEqual(call.Call.Input, saved.Input) {
 		t.Fatalf("recovery changed the saved assignment: %+v", call)
 	}
 	call.Reply <- fixtures.Output("inspect")
@@ -195,7 +195,7 @@ func TestUncertainDispatchWriteSuspendsUntilRecovery(t *testing.T) {
 	fixtures.StartWorker(t, restarted)
 	t.Cleanup(func() { fixtures.CloseWorker(t, restarted) })
 	recovered := fixtures.Receive(t, calls)
-	if recovered.Agent != fixtures.AgentID || recovered.Call.Work.TaskID != task.ID || recovered.Call.Work.OperationID != op.ID {
+	if recovered.Agent != fixtures.AgentID || recovered.Call.TaskID != task.ID || recovered.Call.OperationID != op.ID {
 		t.Fatalf("recovery changed the reserved work: %+v", recovered)
 	}
 	recovered.Reply <- fixtures.Output("inspect")
@@ -277,7 +277,7 @@ func TestUncertainDispatchWithoutCommitSuspendsUntilRecovery(t *testing.T) {
 
 	restarted := fixtures.NewWorker(t, config, exec)
 	recovered := fixtures.Receive(t, calls)
-	if recovered.Agent != fixtures.AgentID || task.AgentID != "" || recovered.Call.Work.TaskID != task.ID || recovered.Call.Work.OperationID != op.ID {
+	if recovered.Agent != fixtures.AgentID || task.AgentID != "" || recovered.Call.TaskID != task.ID || recovered.Call.OperationID != op.ID {
 		t.Fatalf("recovery changed the queued assignment: %+v", recovered)
 	}
 	recovered.Reply <- fixtures.Output("inspect")
@@ -375,8 +375,8 @@ func TestUncertainResultWritePreservesAutomaticChildrenUntilRecovery(t *testing.
 	restarted := fixtures.NewWorker(t, config, exec)
 	for range 2 {
 		call := fixtures.Receive(t, calls)
-		child, exists := savedChildren[call.Call.Work.TaskID]
-		if !exists || call.Call.Work.OperationID != op.ID || call.Agent != fixtures.AgentID || child.AgentID != "" || call.Call.ActionName != child.ActionName || !reflect.DeepEqual(call.Call.Input, child.Input) {
+		child, exists := savedChildren[call.Call.TaskID]
+		if !exists || call.Call.OperationID != op.ID || call.Agent != fixtures.AgentID || child.AgentID != "" || call.Call.ActionName != child.ActionName || !reflect.DeepEqual(call.Call.Input, child.Input) {
 			t.Fatalf("recovery repeated the parent or changed an automatic child: %+v", call)
 		}
 		delete(savedChildren, child.ID)
@@ -488,8 +488,8 @@ func TestUncertainResolutionWritePreservesChildrenUntilRecovery(t *testing.T) {
 	restarted := fixtures.NewWorker(t, config, exec)
 	for range 2 {
 		call := fixtures.Receive(t, calls)
-		child, exists := savedChildren[call.Call.Work.TaskID]
-		if !exists || call.Call.Work.OperationID != op.ID || call.Agent != fixtures.AgentID || child.AgentID != "" || call.Call.ActionName != child.ActionName || !reflect.DeepEqual(call.Call.Input, child.Input) {
+		child, exists := savedChildren[call.Call.TaskID]
+		if !exists || call.Call.OperationID != op.ID || call.Agent != fixtures.AgentID || child.AgentID != "" || call.Call.ActionName != child.ActionName || !reflect.DeepEqual(call.Call.Input, child.Input) {
 			t.Fatalf("recovery repeated the parent or changed a resolved child: %+v", call)
 		}
 		delete(savedChildren, child.ID)

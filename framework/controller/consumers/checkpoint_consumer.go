@@ -77,11 +77,11 @@ func checkpointOwner(record executions.Execution, request messages.Message) erro
 		return fmt.Errorf("invalid checkpoint execution claim: %w", err)
 	}
 	command := record.Command
-	if command.AgentID != request.AgentID || command.ID != request.CorrelationID || command.Work != request.Work {
+	if command.AgentID != request.AgentID || command.ID != request.CorrelationID || (command.OperationID != request.OperationID || command.TaskID != request.TaskID) {
 		return InvalidMessage(errors.New("checkpoint request does not match its execution claim"))
 	}
 	var call actions.ActionCall
-	if err := domain.Decode(command.Payload, &call); err != nil || call.Work != command.Work {
+	if err := domain.Decode(command.Payload, &call); err != nil || (call.OperationID != command.OperationID || call.TaskID != command.TaskID) {
 		return errors.New("invalid claimed checkpoint action request")
 	}
 	return nil

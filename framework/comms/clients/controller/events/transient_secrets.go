@@ -39,7 +39,8 @@ func NewTransientSecretReceived(delivery messages.Message) (messages.Message, er
 	if err != nil {
 		return messages.Message{}, err
 	}
-	message.CorrelationID, message.Work = delivery.ID, delivery.Work
+	message.CorrelationID = delivery.ID
+	message.OperationID, message.TaskID = delivery.OperationID, delivery.TaskID
 	if err := ValidateTransientSecretReceivedDelivery(message, delivery); err != nil {
 		return messages.Message{}, err
 	}
@@ -53,7 +54,7 @@ func DecodeTransientSecretReceived(message messages.Message) (TransientSecretRec
 	if err := message.Validate(); err != nil {
 		return TransientSecretReceipt{}, err
 	}
-	if message.Type != SecretTransientReceived || !id.Valid(message.CorrelationID) || message.Work.OperationID == "" || !message.ExpiresAt.IsZero() {
+	if message.Type != SecretTransientReceived || !id.Valid(message.CorrelationID) || message.OperationID == "" || !message.ExpiresAt.IsZero() {
 		return TransientSecretReceipt{}, errors.New("transient secret receipt requires delivery correlation, execution work and no expiry")
 	}
 	var receipt TransientSecretReceipt
@@ -74,7 +75,7 @@ func ValidateTransientSecretReceivedDelivery(message, delivery messages.Message)
 	}
 	defer clear(payload.Value)
 	if payload.Error != "" || receipt.RequestID != delivery.CorrelationID || message.CorrelationID != delivery.ID ||
-		message.AgentID != delivery.AgentID || message.Work != delivery.Work || message.CreatedAt.Before(delivery.CreatedAt) ||
+		message.AgentID != delivery.AgentID || message.OperationID != delivery.OperationID || message.TaskID != delivery.TaskID || message.CreatedAt.Before(delivery.CreatedAt) ||
 		!message.CreatedAt.Before(delivery.ExpiresAt) {
 		return errors.New("transient secret receipt must match its exact valid delivery")
 	}
@@ -101,7 +102,7 @@ func NewSecretRequestCanceled(request secrets.Request) (messages.Message, error)
 		return messages.Message{}, err
 	}
 	message.CorrelationID, message.ExpiresAt = request.ID, request.ExpiresAt
-	message.Work = messages.WorkContext{OperationID: request.OperationID, TaskID: request.TaskID}
+	message.OperationID, message.TaskID = request.OperationID, request.TaskID
 	if _, err := DecodeSecretRequestCanceled(message); err != nil {
 		return messages.Message{}, err
 	}
@@ -124,7 +125,7 @@ func DecodeSecretRequestCanceled(message messages.Message) (SecretRequestCancell
 	}
 	request := cancellation.Request
 	if message.AgentID != request.AgentID || message.CorrelationID != request.ID ||
-		message.Work != (messages.WorkContext{OperationID: request.OperationID, TaskID: request.TaskID}) ||
+		message.OperationID != request.OperationID || message.TaskID != request.TaskID ||
 		!message.ExpiresAt.Equal(request.ExpiresAt) || message.CreatedAt.Before(request.RequestedAt) {
 		return SecretRequestCancellation{}, errors.New("secret cancellation must match its original request")
 	}

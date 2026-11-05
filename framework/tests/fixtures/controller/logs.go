@@ -33,7 +33,7 @@ func NewLogConsumer(t *testing.T) LogConsumer {
 		Consumer:   consumers.EventConsumer{Executions: stored, State: state.New(t.Context(), time.Hour)},
 		Executions: stored, Command: command, Result: result,
 		Log: executions.Log{ID: id.New(), AgentID: command.AgentID, CommandID: command.ID, ActionName: output.ActionName,
-			Work: command.Work, Message: "  Preparing source\n", CreatedAt: time.Now().UTC()},
+			OperationID: command.OperationID, TaskID: command.TaskID, Message: "  Preparing source\n", CreatedAt: time.Now().UTC()},
 	}
 }
 

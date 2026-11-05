@@ -36,10 +36,11 @@ type checkpointWait struct {
 }
 
 type executionCheckpoints struct {
-	client    *checkpointClient
-	lifetime  context.Context
-	commandID string
-	work      messages.WorkContext
+	client      *checkpointClient
+	lifetime    context.Context
+	commandID   string
+	operationID string
+	taskID      string
 }
 
 func (r *executionCheckpoints) LoadCheckpoint(ctx context.Context, name string) (json.RawMessage, bool, error) {
@@ -77,7 +78,7 @@ func (r *executionCheckpoints) request(ctx context.Context, name, operation stri
 	request := controllerevents.CheckpointRequest{
 		CommandID: r.commandID, Name: name, Operation: operation, Data: bytes.Clone(data),
 	}
-	message, err := controllerevents.NewCheckpointRequest(r.client.agentID, r.work, request)
+	message, err := controllerevents.NewCheckpointRequest(r.client.agentID, r.operationID, r.taskID, request)
 	if err != nil {
 		return agentevents.CheckpointResponse{}, err
 	}
@@ -138,7 +139,7 @@ func (c *checkpointClient) receive(message messages.Message) {
 	defer c.mu.Unlock()
 	wait, exists := c.pending[message.CorrelationID]
 	if !exists || response.CommandID != wait.request.CommandID || response.Name != wait.request.Name ||
-		message.Work != wait.message.Work {
+		(message.OperationID != wait.message.OperationID || message.TaskID != wait.message.TaskID) {
 		return
 	}
 	if wait.request.Operation == controllerevents.CheckpointSave {

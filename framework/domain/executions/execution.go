@@ -53,7 +53,7 @@ func (r Execution) Validate() error {
 	if r.Result.Type != messages.ActionSucceeded && r.Result.Type != messages.CommandFailed {
 		return errors.New("execution result must indicate success or failure")
 	}
-	if r.Result.AgentID != r.Command.AgentID || r.Result.CorrelationID != r.Command.ID || r.Result.Work != r.Command.Work {
+	if r.Result.AgentID != r.Command.AgentID || r.Result.CorrelationID != r.Command.ID || (r.Result.OperationID != r.Command.OperationID || r.Result.TaskID != r.Command.TaskID) {
 		return errors.New("execution result does not belong to its command")
 	}
 	if r.CompletedAt.IsZero() {

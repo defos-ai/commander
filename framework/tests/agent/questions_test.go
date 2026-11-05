@@ -24,21 +24,21 @@ func TestActionQuestionWaitsForItsSavedAnswerAndKeepsRequestIdentity(t *testing.
 	detached := make(chan context.Context, 1)
 	fixture := fixtures.StartQuestionAgent(t, func(ctx context.Context) error {
 		detached <- context.WithoutCancel(ctx)
-		ctx = action.WithExecution(ctx, action.Execution{CommandID: id.MessageID(), Work: messages.WorkContext{OperationID: id.OperationID(), TaskID: id.TaskID()}})
+		ctx = action.WithExecution(ctx, action.Execution{CommandID: id.MessageID(), OperationID: id.OperationID(), TaskID: id.TaskID()})
 		question, err := action.Question(ctx, "install-source", "Install this agent?", "Yes", "No")
 		if err == nil {
 			returned <- question
 		}
 		return err
 	})
-	work := messages.WorkContext{OperationID: id.OperationID(), TaskID: id.TaskID()}
-	commandID := fixture.Command(t, "question", `{}`, work)
+	operationID, taskID := id.OperationID(), id.TaskID()
+	commandID := fixture.Command(t, "question", `{}`, operationID, taskID)
 	request := fixture.Next(t, controllerevents.QuestionRequested)
 	payload, err := controllerevents.DecodeQuestionRequest(request)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if request.CorrelationID != commandID || payload.CommandID != commandID || request.Work != work {
+	if request.CorrelationID != commandID || payload.CommandID != commandID || (request.OperationID != operationID || request.TaskID != taskID) {
 		t.Fatal("question used public caller metadata instead of its serving execution")
 	}
 	question := fixtures.PendingExecutionQuestion(t, request)
@@ -56,7 +56,7 @@ func TestActionQuestionWaitsForItsSavedAnswerAndKeepsRequestIdentity(t *testing.
 	for _, mutate := range []func(*messages.Message, *agentevents.QuestionResponse){
 		func(m *messages.Message, _ *agentevents.QuestionResponse) { m.AgentID = "other-12345678" },
 		func(m *messages.Message, _ *agentevents.QuestionResponse) { m.CorrelationID = id.MessageID() },
-		func(m *messages.Message, _ *agentevents.QuestionResponse) { m.Work.TaskID = id.TaskID() },
+		func(m *messages.Message, _ *agentevents.QuestionResponse) { m.TaskID = id.TaskID() },
 		func(_ *messages.Message, r *agentevents.QuestionResponse) { r.CommandID = id.MessageID() },
 		func(_ *messages.Message, r *agentevents.QuestionResponse) { r.Question.CommandID = id.MessageID() },
 		func(_ *messages.Message, r *agentevents.QuestionResponse) { r.Question.Key = "another-question" },
@@ -113,7 +113,7 @@ func TestActionQuestionWaitEndsWithServingInstance(t *testing.T) {
 		returned <- err
 		return err
 	})
-	fixture.Command(t, "question", `{}`, messages.WorkContext{OperationID: id.OperationID(), TaskID: id.TaskID()})
+	fixture.Command(t, "question", `{}`, id.OperationID(), id.TaskID())
 	fixture.Next(t, controllerevents.QuestionRequested)
 
 	fixture.Stop(t)

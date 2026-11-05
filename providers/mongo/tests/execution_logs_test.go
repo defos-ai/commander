@@ -100,8 +100,8 @@ func TestExecutionMongoStoreLogsRejectsConflictingContent(t *testing.T) {
 		{"agent", func(log *executions.Log) { log.AgentID = "builder-agent-89abcdef" }},
 		{"command", func(log *executions.Log) { log.CommandID = id.New() }},
 		{"action", func(log *executions.Log) { log.ActionName = "other-action" }},
-		{"operation", func(log *executions.Log) { log.Work.OperationID = id.New() }},
-		{"task", func(log *executions.Log) { log.Work.TaskID = id.New() }},
+		{"operation", func(log *executions.Log) { log.OperationID = id.New() }},
+		{"task", func(log *executions.Log) { log.TaskID = id.New() }},
 		{"message", func(log *executions.Log) { log.Message += "changed" }},
 		{"timestamp", func(log *executions.Log) { log.CreatedAt = log.CreatedAt.Add(time.Nanosecond) }},
 	} {

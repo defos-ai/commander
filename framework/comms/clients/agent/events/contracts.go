@@ -38,6 +38,7 @@ func NewResultAccepted(result messages.Message) (messages.Message, error) {
 	if err != nil {
 		return messages.Message{}, err
 	}
-	receipt.CorrelationID, receipt.Work = result.CorrelationID, result.Work
+	receipt.CorrelationID = result.CorrelationID
+	receipt.OperationID, receipt.TaskID = result.OperationID, result.TaskID
 	return receipt, nil
 }

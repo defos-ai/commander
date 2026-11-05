@@ -6,7 +6,6 @@ import (
 
 	"github.com/defos-ai/commander/framework/agent/action"
 	controllerevents "github.com/defos-ai/commander/framework/comms/clients/controller/events"
-	"github.com/defos-ai/commander/framework/comms/messages"
 	"github.com/defos-ai/commander/framework/domain/executions"
 	"github.com/defos-ai/commander/framework/id"
 )
@@ -22,11 +21,12 @@ type logClient struct {
 }
 
 type executionLogs struct {
-	client     *logClient
-	lifetime   context.Context
-	commandID  string
-	work       messages.WorkContext
-	actionName string
+	client      *logClient
+	lifetime    context.Context
+	commandID   string
+	operationID string
+	taskID      string
+	actionName  string
 }
 
 func (r *executionLogs) Log(ctx context.Context, text string) error {
@@ -39,7 +39,7 @@ func (r *executionLogs) Log(ctx context.Context, text string) error {
 	defer func() { stopExecution(); stopService(); cancel() }()
 	message, err := controllerevents.NewExecutionLog(executions.Log{
 		ID: id.New(), AgentID: r.client.agentID, CommandID: r.commandID,
-		ActionName: r.actionName, Work: r.work, Message: text, CreatedAt: time.Now().UTC(),
+		ActionName: r.actionName, OperationID: r.operationID, TaskID: r.taskID, Message: text, CreatedAt: time.Now().UTC(),
 	})
 	if err != nil {
 		return err

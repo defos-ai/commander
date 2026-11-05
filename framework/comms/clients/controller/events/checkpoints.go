@@ -42,12 +42,13 @@ func (request CheckpointRequest) Validate() error {
 	}
 }
 
-func NewCheckpointRequest(agentID string, work messages.WorkContext, request CheckpointRequest) (messages.Message, error) {
+func NewCheckpointRequest(agentID, operationID, taskID string, request CheckpointRequest) (messages.Message, error) {
 	message, err := messages.NewMessage(CheckpointRequested, agentID, request)
 	if err != nil {
 		return messages.Message{}, err
 	}
-	message.CorrelationID, message.Work = request.CommandID, work
+	message.CorrelationID = request.CommandID
+	message.OperationID, message.TaskID = operationID, taskID
 	if _, err := DecodeCheckpointRequest(message); err != nil {
 		return messages.Message{}, err
 	}

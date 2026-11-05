@@ -199,7 +199,7 @@ func TestPreflightWriteFailureKeepsSavedTaskQueued(t *testing.T) {
 				blocked.Allow()
 			}
 			call := fixtures.Receive(t, calls)
-			if call.Agent != fixtures.AgentID || task.AgentID != "" || call.Call.Work.TaskID != task.ID || call.Call.Work.OperationID != op.ID || !reflect.DeepEqual(call.Call.Input, task.Input) {
+			if call.Agent != fixtures.AgentID || task.AgentID != "" || call.Call.TaskID != task.ID || call.Call.OperationID != op.ID || !reflect.DeepEqual(call.Call.Input, task.Input) {
 				t.Fatalf("preflight retry replaced the saved assignment: %+v", call)
 			}
 			call.Reply <- fixtures.Output("inspect")

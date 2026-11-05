@@ -32,11 +32,12 @@ type questionWait struct {
 }
 
 type executionQuestions struct {
-	client    *questionClient
-	lifetime  context.Context
-	commandID string
-	work      messages.WorkContext
-	deadline  time.Time
+	client      *questionClient
+	lifetime    context.Context
+	commandID   string
+	operationID string
+	taskID      string
+	deadline    time.Time
 }
 
 func (r *executionQuestions) Question(ctx context.Context, key, text string, options []string) (operations.Question, error) {
@@ -54,7 +55,7 @@ func (r *executionQuestions) Question(ctx context.Context, key, text string, opt
 	stopService := context.AfterFunc(r.client.service, cancel)
 	defer func() { stopExecution(); stopService(); cancel() }()
 	request := controllerevents.QuestionRequest{CommandID: r.commandID, Key: key, Text: text, Options: slices.Clone(options)}
-	message, err := controllerevents.NewQuestionRequest(r.client.agentID, r.work, request)
+	message, err := controllerevents.NewQuestionRequest(r.client.agentID, r.operationID, r.taskID, request)
 	if err != nil {
 		return operations.Question{}, action.ErrQuestionsUnavailable
 	}
@@ -132,7 +133,7 @@ func (c *questionClient) receive(message messages.Message) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	wait, exists := c.pending[message.CorrelationID]
-	if !exists || response.CommandID != wait.request.CommandID || response.Key != wait.request.Key || message.Work != wait.message.Work {
+	if !exists || response.CommandID != wait.request.CommandID || response.Key != wait.request.Key || (message.OperationID != wait.message.OperationID || message.TaskID != wait.message.TaskID) {
 		return
 	}
 	if response.Question != nil {

@@ -6,7 +6,6 @@ import (
 	"slices"
 	"time"
 
-	"github.com/defos-ai/commander/framework/comms/messages"
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	runtimeSessions "github.com/defos-ai/commander/framework/sessions"
@@ -70,7 +69,7 @@ func (r *Worker) recoverTask(task operations.Task, allowDispatch bool) {
 	ctx, cancel := context.WithDeadline(r.ctx, deadline)
 	defer cancel()
 	call := actionmodel.ActionCall{ActionName: task.ActionName, Input: task.Input,
-		Work: messages.WorkContext{OperationID: task.OperationID, TaskID: task.ID}}
+		OperationID: task.OperationID, TaskID: task.ID}
 	if allowDispatch && r.sessions != nil {
 		prepared, err := r.sessions.Prepare(ctx, runtimeSessions.Assignment{OperationID: task.OperationID, TaskID: task.ID, Candidate: task.AgentID, Timeout: r.taskTimeout})
 		if err != nil {

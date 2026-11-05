@@ -57,14 +57,14 @@ func (c CommandResultConsumer) acceptActionResult(ctx context.Context, message m
 		return fmt.Errorf("invalid execution claim: %w", err)
 	}
 	command := stored.Command
-	if command.AgentID != message.AgentID || command.ID != message.CorrelationID || command.Work != message.Work {
+	if command.AgentID != message.AgentID || command.ID != message.CorrelationID || (command.OperationID != message.OperationID || command.TaskID != message.TaskID) {
 		return InvalidMessage(errors.New("action result does not match its execution claim"))
 	}
 	var call actionmodel.ActionCall
 	if err := domain.Decode(command.Payload, &call); err != nil {
 		return fmt.Errorf("decode claimed action request: %w", err)
 	}
-	if err := call.Validate(); err != nil || call.Work != command.Work {
+	if err := call.Validate(); err != nil || (call.OperationID != command.OperationID || call.TaskID != command.TaskID) {
 		return errors.New("invalid claimed action request")
 	}
 	_, resultErr := executions.DecodeActionResult(message, command.AgentID, command.ID, call)
@@ -99,7 +99,7 @@ func (c CommandResultConsumer) acceptActionResult(ctx context.Context, message m
 	if err := c.State.CheckOpen(); err != nil {
 		return err
 	}
-	if pending, ok := c.State.Pending[command.ID]; ok && pending.AgentID == command.AgentID && pending.Work == command.Work && pending.Expected == controllerevents.ActionSucceeded {
+	if pending, ok := c.State.Pending[command.ID]; ok && pending.AgentID == command.AgentID && (pending.OperationID == command.OperationID && pending.TaskID == command.TaskID) && pending.Expected == controllerevents.ActionSucceeded {
 		delete(c.State.Pending, command.ID)
 		pending.Reply <- state.CommandReply{Message: message, Err: resultErr}
 	}

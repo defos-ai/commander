@@ -25,7 +25,8 @@ type messageDocument struct {
 	AgentID       string               `bson:"agent_id"`
 	AdapterID     string               `bson:"adapter_id,omitempty"`
 	CorrelationID string               `bson:"correlation_id,omitempty"`
-	Work          messages.WorkContext `bson:"work"`
+	OperationID   string               `bson:"operation_id,omitempty"`
+	TaskID        string               `bson:"task_id,omitempty"`
 	Payload       json.RawMessage      `bson:"payload"`
 	CreatedAt     bsonvalue.Timestamp  `bson:"created_at"`
 	ExpiresAt     bsonvalue.Timestamp  `bson:"expires_at"`
@@ -34,7 +35,7 @@ type messageDocument struct {
 func encodeMessage(message messages.Message) messageDocument {
 	return messageDocument{
 		ID: message.ID, Type: message.Type, AgentID: message.AgentID, AdapterID: message.AdapterID,
-		CorrelationID: message.CorrelationID, Work: message.Work, Payload: bytes.Clone(message.Payload),
+		CorrelationID: message.CorrelationID, OperationID: message.OperationID, TaskID: message.TaskID, Payload: bytes.Clone(message.Payload),
 		CreatedAt: bsonvalue.NewTimestamp(message.CreatedAt), ExpiresAt: bsonvalue.NewTimestamp(message.ExpiresAt),
 	}
 }
@@ -50,7 +51,7 @@ func (d messageDocument) decode() (messages.Message, error) {
 	}
 	return messages.Message{
 		ID: d.ID, Type: d.Type, AgentID: d.AgentID, AdapterID: d.AdapterID,
-		CorrelationID: d.CorrelationID, Work: d.Work, Payload: bytes.Clone(d.Payload), CreatedAt: createdAt, ExpiresAt: expiresAt,
+		CorrelationID: d.CorrelationID, OperationID: d.OperationID, TaskID: d.TaskID, Payload: bytes.Clone(d.Payload), CreatedAt: createdAt, ExpiresAt: expiresAt,
 	}, nil
 }
 

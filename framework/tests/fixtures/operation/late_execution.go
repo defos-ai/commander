@@ -39,7 +39,7 @@ func ObserveLate(t *testing.T, e *fakes.LateExecution) fakes.LateObservation {
 func LateArtifactOutput(original fakes.Invocation) actions.ActionOutput {
 	result := Output(original.Call.ActionName)
 	result.Artifacts = []artifacts.Artifact{{ID: id.New(), Name: "Agent source", AgentID: original.Agent,
-		ActionName: original.Call.ActionName, CommandID: original.Call.Work.TaskID, CreatedAt: time.Now().UTC(),
+		ActionName: original.Call.ActionName, CommandID: original.Call.TaskID, CreatedAt: time.Now().UTC(),
 		Files: []artifacts.ArtifactFile{{ID: id.New(), Name: "source.tar.gz", MediaType: "application/gzip", Size: 7, SHA256: strings.Repeat("a", 64)}}}}
 	return result
 }

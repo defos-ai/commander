@@ -12,13 +12,13 @@ import (
 )
 
 func ExecutionCommand(index int) messages.Message {
-	work := messages.WorkContext{OperationID: "10000000-0000-4000-8000-000000000001", TaskID: "20000000-0000-4000-8000-000000000001"}
-	payload, _ := json.Marshal(actions.ActionCall{ActionName: "check", Work: work, Input: json.RawMessage(`{"serial":9007199254740993,"site":"example.test"}`)})
-	return messages.Message{ID: fmt.Sprintf("00000000-0000-4000-8000-%012x", index), Type: messages.RunAction, AgentID: "browser-agent-00000001", Work: work, Payload: payload, CreatedAt: time.Date(2026, 9, 30, 12, 0, 0, 123456789, time.UTC)}
+	operationID, taskID := "10000000-0000-4000-8000-000000000001", "20000000-0000-4000-8000-000000000001"
+	payload, _ := json.Marshal(actions.ActionCall{ActionName: "check", OperationID: operationID, TaskID: taskID, Input: json.RawMessage(`{"serial":9007199254740993,"site":"example.test"}`)})
+	return messages.Message{ID: fmt.Sprintf("00000000-0000-4000-8000-%012x", index), Type: messages.RunAction, AgentID: "browser-agent-00000001", OperationID: operationID, TaskID: taskID, Payload: payload, CreatedAt: time.Date(2026, 9, 30, 12, 0, 0, 123456789, time.UTC)}
 }
 
 func ExecutionResult(command messages.Message) messages.Message {
-	return messages.Message{ID: "30000000" + command.ID[8:], Type: messages.ActionSucceeded, AgentID: command.AgentID, CorrelationID: command.ID, Work: command.Work, Payload: json.RawMessage(`{"action_name":"check","output":{"serial":9007199254740993}}`), CreatedAt: command.CreatedAt.Add(time.Nanosecond)}
+	return messages.Message{ID: "30000000" + command.ID[8:], Type: messages.ActionSucceeded, AgentID: command.AgentID, CorrelationID: command.ID, OperationID: command.OperationID, TaskID: command.TaskID, Payload: json.RawMessage(`{"action_name":"check","output":{"serial":9007199254740993}}`), CreatedAt: command.CreatedAt.Add(time.Nanosecond)}
 }
 
 func ExecutionArtifact(command messages.Message, index int) artifacts.Artifact {

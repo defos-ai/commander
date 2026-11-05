@@ -7,7 +7,6 @@ import (
 	"time"
 
 	agentevents "github.com/defos-ai/commander/framework/comms/clients/agent/events"
-	"github.com/defos-ai/commander/framework/comms/messages"
 	"github.com/defos-ai/commander/framework/domain"
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/executions"
@@ -16,17 +15,17 @@ import (
 )
 
 func (w *Worker) forwardSharedDecision(ctx context.Context, source sharedData) error {
-	if w.operationStore == nil || source.Work.OperationID == "" || source.QuestionID == "" {
+	if w.operationStore == nil || source.OperationID == "" || source.QuestionID == "" {
 		return nil
 	}
-	op, err := w.operationStore.Get(ctx, source.Work.OperationID)
+	op, err := w.operationStore.Get(ctx, source.OperationID)
 	if errors.Is(err, operations.ErrUnknownOperation) {
 		return nil
 	}
 	if err != nil {
 		return err
 	}
-	if op.ID != source.Work.OperationID {
+	if op.ID != source.OperationID {
 		return errors.New("shared decision operation does not match its saved scope")
 	}
 	if op.Status.Terminal() || op.Mission.Policies == nil || len(op.Mission.Policies.Sharing) == 0 {
@@ -68,9 +67,9 @@ func (w *Worker) forwardSharedDecision(ctx context.Context, source sharedData) e
 	if !sharedTaskMatches(task, claim.Command, call) {
 		return errors.New("shared decision does not match its saved execution")
 	}
-	update := agentevents.ContextUpdate{Source: agentevents.ContextSource{
+	update := agentevents.SharedData{BatchID: task.BatchID, Source: agentevents.SharedDataSource{
 		AgentID: task.AgentID, CommandID: task.CommandID, ActionName: task.ActionName,
-		Work: messages.WorkContext{OperationID: op.ID, TaskID: task.ID},
+		OperationID: op.ID, TaskID: task.ID,
 	}, Decision: &question}
 	if err := update.Validate(); err != nil {
 		return err

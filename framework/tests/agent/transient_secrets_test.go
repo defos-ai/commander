@@ -14,7 +14,6 @@ import (
 	"github.com/defos-ai/commander/framework/agent/action"
 	agentevents "github.com/defos-ai/commander/framework/comms/clients/agent/events"
 	controllerevents "github.com/defos-ai/commander/framework/comms/clients/controller/events"
-	"github.com/defos-ai/commander/framework/comms/messages"
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/secrets"
 	"github.com/defos-ai/commander/framework/id"
@@ -57,10 +56,10 @@ func TestAgentTransientSecretsRetryWithoutCachingOrRepeatingHandoff(t *testing.T
 		t.Fatal(err)
 	}
 	fixture := fixtures.StartSecretAgentActions(t, 2*time.Second, time.Second, executor)
-	work := messages.WorkContext{OperationID: id.New(), TaskID: id.New()}
-	command := fixture.Command(t, "verify", `{}`, work)
+	operationID, taskID := id.New(), id.New()
+	command := fixture.Command(t, "verify", `{}`, operationID, taskID)
 	request := fixture.Request(t, "")
-	if request.Type != secrets.SecretTransient || request.OperationID != work.OperationID || request.TaskID != work.TaskID || request.CommandID != command {
+	if request.Type != secrets.SecretTransient || request.OperationID != operationID || request.TaskID != taskID || request.CommandID != command {
 		t.Fatal("transient request lost its execution identity")
 	}
 	firstRequest, err := controllerevents.NewSecretSyncRequested(request)
@@ -75,7 +74,7 @@ func TestAgentTransientSecretsRetryWithoutCachingOrRepeatingHandoff(t *testing.T
 		t.Fatal(err)
 	}
 	wrongWork := delivery
-	wrongWork.Work.TaskID = id.New()
+	wrongWork.TaskID = id.New()
 	fixture.Deliver(t, wrongWork)
 	assertSecretWorkRequirements(t, fixture, command, "CODE")
 	select {
@@ -156,7 +155,7 @@ func TestAgentTransientWaitEndsWithoutRenewal(t *testing.T) {
 				t.Fatal(err)
 			}
 			fixture := fixtures.StartSecretAgentActions(t, 250*time.Millisecond, 50*time.Millisecond, executor)
-			command := fixture.Command(t, "verify", `{}`, messages.WorkContext{OperationID: id.New(), TaskID: id.New()})
+			command := fixture.Command(t, "verify", `{}`, id.New(), id.New())
 			request := fixture.Request(t, "")
 			switch stop {
 			case "cancel":

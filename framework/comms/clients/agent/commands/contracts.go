@@ -31,9 +31,9 @@ func NewRunAction(agentID string, call ActionCall) (messages.Message, error) {
 	if err != nil {
 		return messages.Message{}, err
 	}
-	command.Work = call.Work
-	if call.Work.TaskID != "" {
-		command.ID = call.Work.TaskID
+	command.OperationID, command.TaskID = call.OperationID, call.TaskID
+	if call.TaskID != "" {
+		command.ID = call.TaskID
 	}
 	return command, nil
 }

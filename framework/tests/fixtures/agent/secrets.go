@@ -20,11 +20,13 @@ import (
 	fakes "github.com/defos-ai/commander/framework/tests/fakes/agent"
 )
 
-func (f *SecretAgent) Command(t *testing.T, name, input string, work ...messages.WorkContext) string {
+func (f *SecretAgent) Command(t *testing.T, name, input string, executionIDs ...string) string {
 	t.Helper()
 	call := actions.ActionCall{ActionName: name, Input: json.RawMessage(input)}
-	if len(work) > 0 {
-		call.Work = work[0]
+	if len(executionIDs) == 2 {
+		call.OperationID, call.TaskID = executionIDs[0], executionIDs[1]
+	} else if len(executionIDs) != 0 {
+		t.Fatal("command requires both operation and task IDs")
 	}
 	message, err := agentcommands.NewRunAction(f.runtime.ID(), call)
 	if err != nil {

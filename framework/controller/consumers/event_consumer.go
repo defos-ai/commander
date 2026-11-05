@@ -43,7 +43,7 @@ func (c EventConsumer) Consume(ctx context.Context, message messages.Message) er
 	if err := message.Validate(); err != nil {
 		return InvalidMessage(err)
 	}
-	if pending, exists := c.State.Pending[message.CorrelationID]; exists && pending.Work != message.Work {
+	if pending, exists := c.State.Pending[message.CorrelationID]; exists && (pending.OperationID != message.OperationID || pending.TaskID != message.TaskID) {
 		return InvalidMessage(errors.New("reply work does not match the pending command"))
 	}
 	if err := c.State.CheckOpen(); err != nil {

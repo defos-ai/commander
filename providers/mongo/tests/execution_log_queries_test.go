@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/defos-ai/commander/framework/comms/messages"
 	"github.com/defos-ai/commander/framework/domain"
 	"github.com/defos-ai/commander/framework/domain/executions"
 	mongoexecutions "github.com/defos-ai/commander/providers/mongo/executions"
@@ -95,11 +94,11 @@ func TestExecutionMongoStoreLogQueriesPageDescendingAndFollowNewest(t *testing.T
 	for index := range 4 {
 		logs[index].ID, logs[7-index].ID = logs[7-index].ID, logs[index].ID
 	}
-	logs[1].Work.TaskID = "40000000-0000-4000-8000-000000000002"
+	logs[1].TaskID = "40000000-0000-4000-8000-000000000002"
 	logs[2].AgentID = "builder-agent-89abcdef"
-	logs[3].Work.OperationID = "30000000-0000-4000-8000-000000000002"
+	logs[3].OperationID = "30000000-0000-4000-8000-000000000002"
 	logs[5].ActionName = "Build-Agent"
-	logs[7].Work = messages.WorkContext{}
+	logs[7].OperationID, logs[7].TaskID = "", ""
 
 	empty, err := catalog.ListLogs(t.Context(), executions.LogQuery{Order: executions.LogOrderDescending, Limit: 2})
 
@@ -109,7 +108,7 @@ func TestExecutionMongoStoreLogQueriesPageDescendingAndFollowNewest(t *testing.T
 			t.Fatal(err)
 		}
 	}
-	matching := executions.LogQuery{OperationID: logs[0].Work.OperationID, TaskID: logs[0].Work.TaskID,
+	matching := executions.LogQuery{OperationID: logs[0].OperationID, TaskID: logs[0].TaskID,
 		AgentID: logs[0].AgentID, ActionName: logs[0].ActionName, Order: executions.LogOrderDescending, Limit: 2}
 	descending := slices.Clone(logs[:8])
 	slices.Reverse(descending)
@@ -194,11 +193,11 @@ func TestExecutionMongoStoreLogQueriesIntersectExactFilters(t *testing.T) {
 	database := fixtures.OpenLogDatabase(t)
 	catalog := fixtures.OpenExecutionStore(t, database)
 	logs := fixtures.NumberedExecutionLogs(6)
-	logs[1].Work.TaskID = "40000000-0000-4000-8000-000000000002"
-	logs[2].Work.OperationID = "30000000-0000-4000-8000-000000000002"
+	logs[1].TaskID = "40000000-0000-4000-8000-000000000002"
+	logs[2].OperationID = "30000000-0000-4000-8000-000000000002"
 	logs[2].AgentID = "builder-agent-89abcdef"
 	logs[3].ActionName = "Build-Agent"
-	logs[4].Work = messages.WorkContext{}
+	logs[4].OperationID, logs[4].TaskID = "", ""
 	logs[5].ActionName = ` {"$ne":null} `
 	for _, log := range logs {
 		if err := catalog.AppendLog(t.Context(), log); err != nil {
@@ -211,14 +210,14 @@ func TestExecutionMongoStoreLogQueriesIntersectExactFilters(t *testing.T) {
 		want  []executions.Log
 	}{
 		{"unfiltered includes unscoped", executions.LogQuery{}, logs},
-		{"operation", executions.LogQuery{OperationID: logs[0].Work.OperationID}, []executions.Log{logs[0], logs[1], logs[3], logs[5]}},
-		{"task", executions.LogQuery{TaskID: logs[0].Work.TaskID}, []executions.Log{logs[0], logs[2], logs[3], logs[5]}},
+		{"operation", executions.LogQuery{OperationID: logs[0].OperationID}, []executions.Log{logs[0], logs[1], logs[3], logs[5]}},
+		{"task", executions.LogQuery{TaskID: logs[0].TaskID}, []executions.Log{logs[0], logs[2], logs[3], logs[5]}},
 		{"agent", executions.LogQuery{AgentID: logs[2].AgentID}, []executions.Log{logs[2]}},
 		{"action case sensitive", executions.LogQuery{ActionName: "Build-Agent"}, []executions.Log{logs[3]}},
 		{"action literal", executions.LogQuery{ActionName: logs[5].ActionName}, []executions.Log{logs[5]}},
-		{"all filters", executions.LogQuery{OperationID: logs[0].Work.OperationID, TaskID: logs[0].Work.TaskID,
+		{"all filters", executions.LogQuery{OperationID: logs[0].OperationID, TaskID: logs[0].TaskID,
 			AgentID: logs[0].AgentID, ActionName: logs[0].ActionName}, []executions.Log{logs[0]}},
-		{"negative intersection", executions.LogQuery{OperationID: logs[0].Work.OperationID, AgentID: logs[2].AgentID}, nil},
+		{"negative intersection", executions.LogQuery{OperationID: logs[0].OperationID, AgentID: logs[2].AgentID}, nil},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			query := test.query

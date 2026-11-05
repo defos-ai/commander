@@ -30,7 +30,7 @@ func (s *LifecycleExecutions) Claim(ctx context.Context, command messages.Messag
 		return cloneLifecycleExecution(next), true, nil
 	}
 	previous := s.record.Load()
-	if previous.Command.ID != command.ID || previous.Command.AgentID != command.AgentID || previous.Command.Type != command.Type || previous.Command.Work != command.Work || !bytes.Equal(previous.Command.Payload, command.Payload) {
+	if previous.Command.ID != command.ID || previous.Command.AgentID != command.AgentID || previous.Command.Type != command.Type || (previous.Command.OperationID != command.OperationID || previous.Command.TaskID != command.TaskID) || !bytes.Equal(previous.Command.Payload, command.Payload) {
 		return executions.Execution{}, false, executions.ErrExecutionConflict
 	}
 	return cloneLifecycleExecution(*previous), false, nil

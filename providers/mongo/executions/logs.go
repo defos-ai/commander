@@ -124,7 +124,7 @@ func (document logDocument) decode() (executions.Log, error) {
 		return executions.Log{}, errors.New("stored execution log has no valid ingestion position")
 	}
 	if log.ID != document.ID || log.AgentID != document.AgentID || log.ActionName != document.ActionName ||
-		log.Work.OperationID != document.OperationID || log.Work.TaskID != document.TaskID {
+		log.OperationID != document.OperationID || log.TaskID != document.TaskID {
 		return executions.Log{}, errors.New("stored execution log does not match its indexed metadata")
 	}
 	return log, nil
@@ -132,7 +132,7 @@ func (document logDocument) decode() (executions.Log, error) {
 
 func newLogDocument(log executions.Log, position int64, data json.RawMessage) logDocument {
 	return logDocument{ID: log.ID, Position: position, AgentID: log.AgentID, ActionName: log.ActionName,
-		OperationID: log.Work.OperationID, TaskID: log.Work.TaskID, Data: data}
+		OperationID: log.OperationID, TaskID: log.TaskID, Data: data}
 }
 
 func checkLogContext(ctx context.Context) error {

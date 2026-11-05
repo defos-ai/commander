@@ -37,7 +37,7 @@ func (r *secretRuntime) requestTransient(ctx context.Context, waits *workSecretW
 		return nil, action.ErrSecretUnavailable
 	}
 	execution, ok := action.ExecutionFromContext(waits.context)
-	if !ok || execution.CommandID != waits.commandID || execution.Work.OperationID == "" {
+	if !ok || execution.CommandID != waits.commandID || execution.OperationID == "" {
 		return nil, action.ErrSecretUnavailable
 	}
 	now := time.Now().UTC()
@@ -52,8 +52,8 @@ func (r *secretRuntime) requestTransient(ctx context.Context, waits *workSecretW
 	}
 	request := secrets.Request{
 		ID: id.New(), Type: secrets.SecretTransient, Key: secrets.Key{Name: name},
-		AgentID: r.agentID, AgentType: r.typeName, OperationID: execution.Work.OperationID,
-		TaskID: execution.Work.TaskID, CommandID: execution.CommandID,
+		AgentID: r.agentID, AgentType: r.typeName, OperationID: execution.OperationID,
+		TaskID: execution.TaskID, CommandID: execution.CommandID,
 		Status: secrets.Pending, RequestedAt: now, ExpiresAt: deadline,
 	}
 	message, err := controllerevents.NewSecretSyncRequested(request)

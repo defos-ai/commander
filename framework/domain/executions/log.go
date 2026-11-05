@@ -7,7 +7,6 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/defos-ai/commander/framework/comms/messages"
 	"github.com/defos-ai/commander/framework/id"
 )
 
@@ -16,13 +15,14 @@ const MaxLogMessageSize = 2048
 // Log is a progress observation within a dispatched execution. Its identity is
 // bound by the runtime; it does not authorize retries or change execution state.
 type Log struct {
-	ID         string               `json:"id"`
-	AgentID    string               `json:"agent_id"`
-	CommandID  string               `json:"command_id"`
-	ActionName string               `json:"action_name"`
-	Work       messages.WorkContext `json:"work"`
-	Message    string               `json:"message"`
-	CreatedAt  time.Time            `json:"created_at"`
+	ID          string    `json:"id"`
+	AgentID     string    `json:"agent_id"`
+	CommandID   string    `json:"command_id"`
+	ActionName  string    `json:"action_name"`
+	OperationID string    `json:"operation_id,omitempty"`
+	TaskID      string    `json:"task_id,omitempty"`
+	Message     string    `json:"message"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 func (l Log) Validate() error {
@@ -38,8 +38,8 @@ func (l Log) Validate() error {
 	if strings.TrimSpace(l.ActionName) == "" || !utf8.ValidString(l.ActionName) {
 		return errors.New("execution log action name must contain nonblank UTF-8 text")
 	}
-	if err := l.Work.Validate(); err != nil {
-		return fmt.Errorf("execution log work: %w", err)
+	if (l.OperationID != "" || l.TaskID != "") && (!id.Valid(l.OperationID) || !id.Valid(l.TaskID)) {
+		return errors.New("execution log requires both operation and task UUIDs, or neither")
 	}
 	if l.CreatedAt.IsZero() {
 		return errors.New("execution log timestamp must be set")
@@ -49,7 +49,7 @@ func (l Log) Validate() error {
 
 func (l Log) Equal(other Log) bool {
 	return l.ID == other.ID && l.AgentID == other.AgentID && l.CommandID == other.CommandID &&
-		l.ActionName == other.ActionName && l.Work == other.Work && l.Message == other.Message &&
+		l.ActionName == other.ActionName && l.OperationID == other.OperationID && l.TaskID == other.TaskID && l.Message == other.Message &&
 		l.CreatedAt.Equal(other.CreatedAt)
 }
 

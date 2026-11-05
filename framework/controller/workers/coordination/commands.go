@@ -142,7 +142,7 @@ func (c *Worker) dispatchCommand(ctx, waiting context.Context, message messages.
 			return commandDispatch{stored: &stored}, nil
 		}
 	}
-	pending := &state.PendingCommand{Context: waiting, AgentID: agentID, Work: message.Work, Expected: expected, Reply: make(chan state.CommandReply, 1)}
+	pending := &state.PendingCommand{Context: waiting, AgentID: agentID, OperationID: message.OperationID, TaskID: message.TaskID, Expected: expected, Reply: make(chan state.CommandReply, 1)}
 	c.state.Pending[message.ID] = pending
 	if err := (agentcommands.Client{Bus: c.bus}).Publish(ctx, message); err != nil {
 		delete(c.state.Pending, message.ID)
@@ -165,8 +165,8 @@ func (c *Worker) awaitClaimedAction(ctx context.Context, stored executions.Execu
 	if err := domain.Decode(stored.Command.Payload, &original); err != nil {
 		return state.CommandReply{}, recoveryOutcomeError(err)
 	}
-	if stored.Command.ID != requested.ID || stored.Command.AgentID != requested.AgentID || stored.Command.Work != requested.Work ||
-		original.ActionName != call.ActionName || original.Work != call.Work || !sameActionInput(original.Input, call.Input) {
+	if stored.Command.ID != requested.ID || stored.Command.AgentID != requested.AgentID || (stored.Command.OperationID != requested.OperationID || stored.Command.TaskID != requested.TaskID) ||
+		original.ActionName != call.ActionName || (original.OperationID != call.OperationID || original.TaskID != call.TaskID) || !sameActionInput(original.Input, call.Input) {
 		return state.CommandReply{}, executions.ErrExecutionConflict
 	}
 	if stored.Result == nil {

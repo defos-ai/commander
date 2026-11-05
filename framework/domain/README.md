@@ -149,6 +149,9 @@ ownership. Only one active controller per database is currently supported.
 | [`Store`](sessions/lifecycle.go), [`QueryStore`](sessions/query.go) | Apply session-scope transitions atomically and query retained resource views. |
 | [`ControllerStore`](controllers/controller_store.go) | Retain heartbeat-ordered controller registrations. |
 
+Action calls, execution logs and messages identify their operation and task
+directly. Both IDs are absent for work outside an operation.
+
 Providers implement these contracts; host factories inject them into runtimes and
 query services. Store comments specify concurrency, replay and uncertain-write
 behavior. Shared [validation](validation.go), [errors](errors.go) and
