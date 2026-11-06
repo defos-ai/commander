@@ -129,9 +129,9 @@ func (a *Action) Run(ctx context.Context, raw json.RawMessage) (action.Result, e
 			{ActionName: "connect-resource", Input: raw},
 		}}, nil
 	}
-	binding, ok := action.SessionFromContext(ctx)
-	if !ok {
-		return action.Result{}, errors.New("missing framework binding")
+	binding, err := action.OpenSession(ctx)
+	if err != nil {
+		return action.Result{}, err
 	}
 	execution, ok := action.ExecutionFromContext(ctx)
 	if !ok {

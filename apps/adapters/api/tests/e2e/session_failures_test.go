@@ -10,7 +10,6 @@ import (
 
 	e2efixtures "github.com/defos-ai/commander/apps/adapters/api/tests/fixtures/e2e"
 	"github.com/defos-ai/commander/framework/domain/operations"
-	"github.com/defos-ai/commander/framework/id"
 )
 
 func TestE2EAcceptedSessionCommandsSurviveReconciliationFailure(t *testing.T) {
@@ -41,7 +40,7 @@ func TestE2EAcceptedSessionCommandsSurviveReconciliationFailure(t *testing.T) {
 			unavailable.Store(true)
 			t.Cleanup(func() { unavailable.Store(false) })
 			var child operations.Task
-			input := map[string]string{"session_scope": id.New()}
+			input := map[string]any{}
 			if continuation {
 				var accepted operations.Operation
 				s.Request("POST", "/api/v1/operations/"+op+"/tasks/"+parent.ID+"/continuation/resolve", map[string]any{"version": parent.Continuation.Version, "actions": []any{map[string]any{"action_name": "connect-resource", "input": input}}}, 200, &accepted)
@@ -53,7 +52,7 @@ func TestE2EAcceptedSessionCommandsSurviveReconciliationFailure(t *testing.T) {
 			} else {
 				child = s.Assign(op, "connect-resource", input)
 			}
-			if child.ID == "" {
+			if child.ID == "" || child.SessionIntent == nil {
 				t.Fatal("accepted command did not return its task")
 			}
 			if name == "cancel" || name == "fail" {
@@ -63,10 +62,10 @@ func TestE2EAcceptedSessionCommandsSurviveReconciliationFailure(t *testing.T) {
 				}
 				s.Request("POST", "/api/v1/operations/"+op+"/"+name, body, 200, nil)
 				unavailable.Store(false)
-				// Terminal operations must still reconcile and release a creation
-				// that was cancelled before dispatch, allowing fresh work in its scope.
+				// Terminal operations still release an undispatched reservation,
+				// retaining it as history independently of fresh root work.
 				e2efixtures.WaitUntil(t, 5*time.Second, func() bool {
-					for _, item := range s.List(input["session_scope"]) {
+					for _, item := range s.List(child.SessionIntent.ScopeID) {
 						if item.ID == child.ID && item.Disposition == "released" {
 							return true
 						}
@@ -76,12 +75,15 @@ func TestE2EAcceptedSessionCommandsSurviveReconciliationFailure(t *testing.T) {
 				fresh := s.Start("accepted-session")
 				replacement := s.Assign(fresh, "connect-resource", input)
 				s.Finished(fresh, replacement.ID)
+				if replacement.SessionIntent == nil || replacement.SessionIntent.ScopeID == child.SessionIntent.ScopeID {
+					t.Fatal("fresh root work reused the cancelled reservation")
+				}
 				return
 			}
 			unavailable.Store(false)
 			if name == "reuse" {
-				s.Finished(op, child.ID)
-				consumer := s.Assign(op, "use-resource", map[string]string{"session_scope": input["session_scope"], "session_id": child.ID})
+				child = s.Finished(op, child.ID)
+				consumer := s.Continue(child, "use-resource", map[string]any{})
 				if consumer.SessionIntent == nil || child.SessionIntent == nil || consumer.SessionIntent.ID != child.ID || consumer.SessionIntent.ScopeID != child.SessionIntent.ScopeID {
 					t.Fatalf("consumer lost the accepted creator during reconciliation: creator=%+v consumer=%+v", child, consumer)
 				}

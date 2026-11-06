@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -56,10 +55,7 @@ func run() error {
 		if name == "connect-resource" || name == "connect-secondary" {
 			mode = "open"
 		}
-		inputSchema := json.RawMessage(`{"type":"object","required":["session_scope"],"properties":{"session_scope":{"type":"string"}}}`)
-		if name == "propose-connections" && os.Getenv("FIXTURE_POLICY_ACTIONS") == "true" {
-			inputSchema = json.RawMessage(`{"type":"object"}`)
-		}
+		inputSchema := json.RawMessage(`{"type":"object","additionalProperties":false}`)
 		if name == "propose-work" {
 			inputSchema = json.RawMessage(`{"type":"object","required":["action_name"],"properties":{"action_name":{"type":"string"}}}`)
 		}
@@ -69,10 +65,7 @@ func run() error {
 			OutputSchema: json.RawMessage(`{"type":"object"}`),
 		}, owner, os.Getenv("FIXTURE_PEER"), resources))
 	}
-	type useInput struct {
-		Scope string `json:"session_scope"`
-		ID    string `json:"session_id"`
-	}
+	type useInput struct{}
 	type useOutput struct {
 		Owner        string `json:"owner"`
 		ID           string `json:"session_id"`
@@ -92,9 +85,9 @@ func run() error {
 	}
 	for _, name := range useActions {
 		use, err := action.NewFunc(action.FuncConfig[useInput, useOutput]{Action: actions.Action{Name: name, SessionMode: "use", RequiredSecrets: secrets}, Run: func(ctx context.Context, input useInput) (useOutput, error) {
-			binding, ok := action.SessionFromContext(ctx)
-			if !ok {
-				return useOutput{}, errors.New("missing binding")
+			binding, err := action.UseSession(ctx)
+			if err != nil {
+				return useOutput{}, err
 			}
 			_, found, err := action.LoadCheckpoint(ctx, "session_setup_intent")
 			if err != nil {

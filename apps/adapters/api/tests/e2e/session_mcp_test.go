@@ -52,9 +52,9 @@ func TestE2ESessionMCPDiscovery(t *testing.T) {
 
 	s.Worker(1, "FIXTURE_PARTITION_CHECK=true")
 	s.Mission("mcp-discovery", "connect-resource")
-	firstScope, secondScope := id.New(), id.New()
-	first := createSession(t, s, s.Start("mcp-discovery"), firstScope)
-	second := createSession(t, s, s.Start("mcp-discovery"), secondScope)
+	first := createSession(t, s, s.Start("mcp-discovery"))
+	second := createSession(t, s, s.Start("mcp-discovery"))
+	firstScope := first.ScopeID
 	assertSessions := func(arguments map[string]any, want ...sessions.Session) []sessions.Session {
 		t.Helper()
 		got := mcp.List(arguments)
@@ -87,8 +87,7 @@ func TestE2ESessionMCPDiscovery(t *testing.T) {
 		return len(items) == 2 && items[0].State == "lost" && items[1].State == "lost"
 	})
 	s.Worker(2)
-	thirdScope := id.New()
-	third := createSession(t, s, s.Start("mcp-discovery"), thirdScope)
+	third := createSession(t, s, s.Start("mcp-discovery"))
 	if third.OwnerAgentID == first.OwnerAgentID {
 		t.Fatal("new resource assigned to unavailable owner")
 	}

@@ -1,210 +1,131 @@
 package e2e_test
 
 import (
-	"bytes"
-	"encoding/json"
-	"fmt"
-	"io"
-	"net"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"os/exec"
-	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	e2efixtures "github.com/defos-ai/commander/apps/adapters/api/tests/fixtures/e2e"
 	"github.com/defos-ai/commander/framework/domain/operations"
-	"github.com/defos-ai/commander/framework/id"
+	"github.com/defos-ai/commander/framework/domain/sessions"
 )
 
-func TestE2EAutomaticSessionCreationReservesScope(t *testing.T) {
-	root, err := filepath.Abs("../../../../..")
-	if err != nil {
-		t.Fatal(err)
-	}
-	state := t.TempDir()
-	binaries := make(map[string]string)
-	for name, source := range map[string]string{
-		"api":        "./apps/adapters/api/cmd/commander-api",
-		"controller": "./apps/controllers/default/cmd",
-		"worker":     "./apps/adapters/api/tests/e2e/fixtures/sessionworker",
-	} {
-		binaries[name] = filepath.Join(state, name)
-		command := exec.Command("go", "build", "-o", binaries[name], source)
-		command.Dir = root
-		if output, err := command.CombinedOutput(); err != nil {
-			t.Fatalf("build %s: %v\n%s", name, err, output)
-		}
-	}
+func TestE2EAutomaticSessionBindingsSurviveRestartBeforeInventory(t *testing.T) {
 	entered := make(chan string, 8)
-	release := make(chan struct{})
-	publish := make(chan struct{})
-	var publishOnce sync.Once
-	publishInventory := func() { publishOnce.Do(func() { close(publish) }) }
-	var releaseOnce sync.Once
+	release, publish := make(chan struct{}), make(chan struct{})
+	var releaseOnce, publishOnce sync.Once
 	unblock := func() { releaseOnce.Do(func() { close(release) }) }
+	publishInventory := func() { publishOnce.Do(func() { close(publish) }) }
 	peer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/inventory" {
+		switch {
+		case r.URL.Path == "/inventory":
 			select {
 			case <-publish:
 				w.WriteHeader(http.StatusNoContent)
 			case <-r.Context().Done():
 			}
-			return
-		}
-		entered <- r.URL.Path
-		select {
-		case <-release:
+		case strings.HasPrefix(r.URL.Path, "/create/"):
+			entered <- r.URL.Path
+			select {
+			case <-release:
+				w.WriteHeader(http.StatusNoContent)
+			case <-r.Context().Done():
+			}
+		default:
 			w.WriteHeader(http.StatusNoContent)
-		case <-r.Context().Done():
 		}
 	}))
 	t.Cleanup(peer.Close)
 	t.Cleanup(unblock)
 	t.Cleanup(publishInventory)
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	address := listener.Addr().String()
-	listener.Close()
-	password := id.New()
-	env := append(os.Environ(), "BUS_URL="+filepath.Join(state, "bus"), "DATABASE_URL="+filepath.Join(state, "database"),
-		"STORAGE_URL="+filepath.Join(state, "storage"), "API_USERNAME=e2e", "API_PASSWORD="+password, "LOG_LEVEL=error")
-	e2efixtures.StartE2E(t, binaries["api"], []string{"--listen-address=" + address}, env)
-	var controllerArgs []string
-	stopController := e2efixtures.StartE2E(t, binaries["controller"], controllerArgs, env)
-	for i := range 2 {
-		workerEnv := append(append([]string{}, env...), fmt.Sprintf("FIXTURE_AGENT_ID=fixture-agent-%08x", i+1), "FIXTURE_PEER="+peer.URL)
-		e2efixtures.StartE2E(t, binaries["worker"], nil, workerEnv)
-	}
-	client := &http.Client{Timeout: 8 * time.Second, Transport: &http.Transport{Proxy: nil}}
-	t.Cleanup(client.CloseIdleConnections)
-	url := "http://" + address
-	e2efixtures.WaitUntil(t, 10*time.Second, func() bool {
-		response, err := client.Get(url + "/readyz")
-		if err != nil {
-			return false
-		}
-		response.Body.Close()
-		return response.StatusCode == 200
-	})
-	request := func(method, path string, body any, want int, result any) {
-		t.Helper()
-		raw, err := json.Marshal(body)
-		if err != nil {
-			t.Fatal(err)
-		}
-		req, err := http.NewRequest(method, url+path, bytes.NewReader(raw))
-		if err != nil {
-			t.Fatal(err)
-		}
-		req.SetBasicAuth("e2e", password)
-		req.Header.Set("Content-Type", "application/json")
-		response, err := client.Do(req)
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer response.Body.Close()
-		data, err := io.ReadAll(response.Body)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if response.StatusCode != want {
-			t.Fatalf("%s %s: %d %s", method, path, response.StatusCode, data)
-		}
-		if result != nil {
-			if err := json.Unmarshal(data, result); err != nil {
-				t.Fatal(err)
-			}
-		}
-	}
-	e2efixtures.WaitUntil(t, 10*time.Second, func() bool {
-		var catalog struct{ Items []struct{ Status string } }
-		request("GET", "/api/v1/agents", nil, 200, &catalog)
-		return len(catalog.Items) == 2 && catalog.Items[0].Status == "ready" && catalog.Items[1].Status == "ready"
-	})
-	request("POST", "/api/v1/missions", map[string]any{"name": "session-e2e", "objectives": []string{"Connect one owned resource"}, "required_actions": []string{"propose-connections", "connect-resource"}, "starting_actions": []string{"propose-connections"}, "input_schema": map[string]any{"type": "object"}, "output_schema": map[string]any{"type": "object"}}, 201, nil)
-	input := map[string]any{"session_scope": id.New()}
-	start := func() string {
-		var operation operations.Operation
-		request("POST", "/api/v1/operations", map[string]any{"mission_name": "session-e2e", "input": input}, 201, &operation)
-		path := "/api/v1/operations/" + operation.ID
-		request("POST", path+"/tasks", map[string]any{"action_name": "propose-connections", "input": input}, 201, nil)
-		return path
-	}
-	first := start()
-	select {
-	case <-entered:
-	case <-time.After(10 * time.Second):
-		t.Fatal("automatic proposal never reached a worker")
-	}
-	assertReserved := func(duration time.Duration) {
-		t.Helper()
+	s := e2efixtures.NewSessionStack(t, peer.URL)
+	s.Worker(1)
+	s.Worker(2)
+	s.Mission("automatic-sessions", "propose-connections", "connect-resource")
+	op := s.Start("automatic-sessions")
+
+	parent := s.Assign(op, "propose-connections", map[string]any{})
+	paths := map[string]bool{}
+	for range 2 {
 		select {
-		case extra := <-entered:
-			t.Fatalf("second connection escaped scope reservation: %s", extra)
-		case <-time.After(duration):
+		case path := <-entered:
+			if paths[path] {
+				t.Fatalf("session effect repeated before restart: %s", path)
+			}
+			paths[path] = true
+		case <-time.After(10 * time.Second):
+			t.Fatal("automatic sibling did not open its own resource")
 		}
 	}
-	assertReserved(time.Second)
-	second := start()
-	assertReserved(time.Second)
-	request("POST", second+"/tasks", map[string]any{"action_name": "connect-resource", "input": input}, 422, nil)
-	// Durable admission survives controller restart before the first observation.
-	stopController()
-	stopController = e2efixtures.StartE2E(t, binaries["controller"], controllerArgs, env)
-	assertReserved(time.Second)
-	unblock()
-	e2efixtures.WaitUntil(t, 10*time.Second, func() bool {
-		var operation operations.Operation
-		request("GET", first, nil, 200, &operation)
-		for _, task := range operation.Tasks {
-			if task.ActionName == "connect-resource" && task.Status == operations.TaskSucceeded {
-				return true
-			}
+	accepted := map[string]operations.Task{}
+	scopes, owners := map[string]bool{}, map[string]bool{}
+	for _, task := range s.Operation(op).Tasks {
+		if task.ParentTaskID != parent.ID {
+			continue
 		}
-		return false
-	})
-	// Accepted results retain ownership before the first inventory snapshot.
-	assertReserved(time.Second)
-	request("POST", first+"/cancel", map[string]any{}, 200, nil)
-	stopController()
-	e2efixtures.StartE2E(t, binaries["controller"], controllerArgs, env)
-	assertReserved(time.Second)
+		intent := task.SessionIntent
+		if intent == nil || intent.Mode != sessions.Open || intent.ID != task.CommandID || intent.ScopeID != task.CommandID {
+			t.Fatalf("automatic child lacks its controller-assigned identity: %+v", task)
+		}
+		if scopes[intent.ScopeID] {
+			t.Fatalf("sibling openings share a scope: %+v", task)
+		}
+		if !paths["/create/"+task.AgentID+"/"+intent.ID] {
+			t.Fatalf("resource effect does not match its accepted binding: %+v", task)
+		}
+		scopes[intent.ScopeID], owners[task.AgentID] = true, true
+		accepted[task.ID] = task
+	}
+	if len(accepted) != 2 || len(owners) != 2 {
+		t.Fatalf("siblings did not acquire independent sessions and owners: %+v", accepted)
+	}
+	s.Restart()
+
+	for taskID, original := range accepted {
+		task := s.Task(op, taskID)
+		if task.SessionIntent == nil || task.CommandID != original.CommandID || task.AgentID != original.AgentID || *task.SessionIntent != *original.SessionIntent {
+			t.Fatalf("restart changed an accepted session binding: before=%+v after=%+v", original, task)
+		}
+	}
+	unblock()
+	for taskID := range accepted {
+		task := s.Finished(op, taskID)
+		if task.Result == nil || task.Result.Session == nil || task.Result.Session.ID != task.SessionIntent.ID {
+			t.Fatalf("accepted session result lost its assigned identity: %+v", task)
+		}
+	}
+	s.Restart()
+	for taskID, original := range accepted {
+		task := s.Task(op, taskID)
+		if task.SessionIntent == nil || task.CommandID != original.CommandID || task.AgentID != original.AgentID || *task.SessionIntent != *original.SessionIntent {
+			t.Fatalf("result recovery changed an accepted binding: before=%+v after=%+v", original, task)
+		}
+		items := s.List(task.SessionIntent.ScopeID)
+		if len(items) != 1 || items[0].ID != task.SessionIntent.ID || items[0].OwnerAgentID != task.AgentID {
+			t.Fatalf("accepted result did not retain ownership before inventory: %+v", items)
+		}
+	}
 	publishInventory()
 	e2efixtures.WaitUntil(t, 5*time.Second, func() bool {
 		var catalog struct {
-			Items []struct{ Sessions []json.RawMessage }
+			Items []struct{ Sessions []sessions.Session }
 		}
-		request("GET", "/api/v1/agents", nil, 200, &catalog)
+		s.Request("GET", "/api/v1/agents", nil, 200, &catalog)
 		count := 0
 		for _, worker := range catalog.Items {
 			count += len(worker.Sessions)
 		}
-		return count == 1
+		return count == 2
 	})
-	assertReserved(time.Second)
-	for _, path := range []string{first, second} {
-		var operation operations.Operation
-		request("GET", path, nil, 200, &operation)
-		queued, succeeded := 0, 0
-		for _, task := range operation.Tasks {
-			if task.ActionName != "connect-resource" {
-				continue
-			}
-			if task.Status == operations.TaskQueued {
-				queued++
-			}
-			if task.Status == operations.TaskSucceeded {
-				succeeded++
-			}
-		}
-		if path == first && (queued != 0 || succeeded != 1) || path == second && (queued != 2 || succeeded != 0) {
-			t.Fatalf("unexpected proposed connection outcomes: %+v", operation.Tasks)
-		}
+	select {
+	case repeated := <-entered:
+		t.Fatalf("recovery repeated a resource effect: %s", repeated)
+	default:
+	}
+	if len(s.Operation(op).Tasks) != 3 {
+		t.Fatal("recovery duplicated the automatic sibling tasks")
 	}
 }

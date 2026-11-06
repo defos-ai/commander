@@ -9,9 +9,9 @@ import (
 	"github.com/defos-ai/commander/framework/domain/sessions"
 )
 
-func createSession(t *testing.T, s *e2efixtures.SessionStack, op, scope string) sessions.Session {
+func createSession(t *testing.T, s *e2efixtures.SessionStack, op string) sessions.Session {
 	t.Helper()
-	task := s.Assign(op, "connect-resource", map[string]string{"session_scope": scope})
+	task := s.Assign(op, "connect-resource", map[string]any{})
 	task = s.Finished(op, task.ID)
 	if task.Result == nil || task.Result.Session == nil {
 		t.Fatalf("missing session result: %+v", task)
@@ -24,7 +24,7 @@ func createSession(t *testing.T, s *e2efixtures.SessionStack, op, scope string) 
 	}
 	ref := *task.Result.Session
 	e2efixtures.WaitUntil(t, 5*time.Second, func() bool {
-		for _, item := range s.List(scope) {
+		for _, item := range s.List(ref.ScopeID) {
 			if item.ID == ref.ID && item.State == "connected" {
 				return true
 			}

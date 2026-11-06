@@ -247,6 +247,31 @@ func (s *SessionStack) Assign(op, action string, input any) operations.Task {
 	return task
 }
 
+func (s *SessionStack) Continue(parent operations.Task, action string, input any) operations.Task {
+	s.t.Helper()
+	parent = s.Task(parent.OperationID, parent.ID)
+	if parent.Continuation == nil {
+		s.t.Fatal("parent has no saved continuation")
+	}
+	var result operations.Operation
+	s.Request("POST", "/api/v1/operations/"+parent.OperationID+"/tasks/"+parent.ID+"/continuation/resolve", map[string]any{
+		"version": parent.Continuation.Version,
+		"actions": []any{map[string]any{"action_name": action, "input": input}},
+	}, 200, &result)
+	for _, task := range result.Tasks {
+		if task.ID != parent.ID || task.Continuation == nil || len(task.Continuation.CreatedTaskIDs) != 1 {
+			continue
+		}
+		for _, child := range result.Tasks {
+			if child.ID == task.Continuation.CreatedTaskIDs[0] {
+				return child
+			}
+		}
+	}
+	s.t.Fatal("continuation did not return one saved child")
+	return operations.Task{}
+}
+
 func (s *SessionStack) Operation(op string) operations.Operation {
 	var result operations.Operation
 	s.Request("GET", "/api/v1/operations/"+op, nil, 200, &result)

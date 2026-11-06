@@ -163,8 +163,11 @@ Mongo's document limit); archival must preserve release and identity evidence.
 
 Run from the repository root; these tests launch real hosts and a resource fixture
 and assert public HTTP outcomes. Use only E2E checks for session changes.
-The existing HTTP session scenarios still need adaptation from input routing to
-the planned trusted task-attachment contract; they do not validate the new flow yet.
+These scenarios acquire controller-owned identities and consume them through
+direct-parent continuations. Root `use` calls, including those supplying IDs in
+business input, are rejected. Builder's
+[workspace E2Es](../../apps/agents/builder/tests/e2e/workspaces_test.go) cover trusted
+standalone binding reuse beyond operation tasks.
 
 ```sh
 go test -count=1 -timeout=6m ./apps/adapters/api/tests/e2e -run '^TestE2E'
@@ -182,12 +185,13 @@ broker's authenticated URL on its published port `5673` before running:
 ```sh
 COMMANDER_SESSION_E2E_DATABASE_URL='mongodb://127.0.0.1:27017/{database}?replicaSet=rs0&directConnection=true' \
 COMMANDER_SESSION_E2E_BUS_URL="${COMMANDER_TEST_RABBITMQ_URL:?Set the disposable test broker URL}" \
-  go test -count=1 -timeout=6m ./apps/adapters/api/tests/e2e -run '^TestE2ESession'
+  go test -count=1 -timeout=6m ./apps/adapters/api/tests/e2e -run '^TestE2E'
 ```
 
-Coverage includes automatic competing creations and restart, cross-operation use,
-owner loss/abandonment without rebinding queued use, independent session
-owners, owner-specific secrets, queued cancellation, close during creation,
+Coverage includes independent automatic sibling sessions and restart before
+inventory, operation-completion survival, owner loss/abandonment without rebinding
+queued use, separate continuation branches and exact owners, stateless children,
+owner-specific secrets, queued cancellation, close during creation,
 failed-close reconciliation, reuse before verification, checkpoint immutability
 and isolation, and intent accepted before executor registration. Real shell
 transport behavior belongs to the external agent's E2E suite.
