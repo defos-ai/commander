@@ -281,7 +281,7 @@ func missionDefinitionSchema() string {
 		"description": "Locally resolvable JSON Schema explicitly declaring root type=object. External references are rejected.",
 	}
 	definition := objectSchema(map[string]any{
-		"session_mode": map[string]any{"type": "string", "enum": []string{"", "create", "use"}},
+		"session_mode": map[string]any{"type": "string", "enum": []string{"", "open", "use"}},
 		"name":         actionName,
 		"description":  map[string]any{"type": []string{"string", "null"}},
 		"required_secrets": map[string]any{

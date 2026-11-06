@@ -35,7 +35,7 @@ export function TaskSessions({ task, placement, onOpenSession }: {
   return <section className="operation-nested"><h3>{t($ => $.operations.session)}</h3>
     {intent?.error && <p className="notice" role="status">{intent.error}</p>}
     <dl className="detail-list">
-      {mode && <div><dt>{t($ => $.operations.sessionMode)}</dt><dd>{mode === 'create' || mode === 'reuse' || mode === 'use'
+      {mode && <div><dt>{t($ => $.operations.sessionMode)}</dt><dd>{mode === 'open' || mode === 'use'
         ? t($ => $.operations.sessionModes[mode]) : mode}</dd></div>}
       {target?.id && <div><dt>{t($ => $.operations.sessionId)}</dt><dd><code>{target.id}</code></dd></div>}
       {target?.scope_id && <div><dt>{t($ => $.operations.sessionScope)}</dt><dd><code>{target.scope_id}</code></dd></div>}

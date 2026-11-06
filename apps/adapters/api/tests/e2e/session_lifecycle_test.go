@@ -428,7 +428,7 @@ func TestE2ESessionReuseBeforeVerification(t *testing.T) {
 	})
 	reuse := s.Assign(op2, "connect-resource", input)
 	reused := s.Finished(op2, reuse.ID)
-	if reused.SessionIntent.Mode != sessions.Reuse || reused.AgentID != ref.OwnerAgentID || reused.Result.Session.Reference != ref || creations.Load() != 1 {
+	if reused.SessionIntent.Mode != sessions.Open || reused.AgentID != ref.OwnerAgentID || reused.Result.Session.Reference != ref || creations.Load() != 1 {
 		t.Fatalf("explicit reuse opened a replacement: %+v", reused)
 	}
 	s.Control(ref, "verify")
@@ -474,7 +474,7 @@ func TestE2ESessionCloseReceiptRecovery(t *testing.T) {
 func TestE2ESessionIntentBeforeRegistration(t *testing.T) {
 	peer := e2efixtures.ImmediateSessionPeer(t)
 	s := e2efixtures.NewSessionStack(t, peer.URL)
-	contract := map[string]any{"name": "connect-resource", "session_mode": "create", "input_schema": map[string]any{"type": "object"}, "output_schema": map[string]any{"type": "object"}}
+	contract := map[string]any{"name": "connect-resource", "session_mode": "open", "input_schema": map[string]any{"type": "object"}, "output_schema": map[string]any{"type": "object"}}
 	s.Request("POST", "/api/v1/missions", map[string]any{"name": "before-registration", "objectives": []string{"Accept a session contract before its executor arrives"}, "required_actions": []string{"connect-resource"}, "starting_actions": []string{"connect-resource"}, "action_definitions": []any{contract}, "input_schema": map[string]any{"type": "object"}, "output_schema": map[string]any{"type": "object"}}, 201, nil)
 	op, scope := s.Start("before-registration"), id.New()
 	task := s.Assign(op, "connect-resource", map[string]string{"session_scope": scope})
@@ -485,7 +485,7 @@ func TestE2ESessionIntentBeforeRegistration(t *testing.T) {
 	s.Restart()
 	s.Worker(1)
 	finished := s.Finished(op, task.ID)
-	if finished.SessionIntent.Mode != sessions.Create || finished.Result.Session.ID != task.ID {
+	if finished.SessionIntent.Mode != sessions.Open || finished.Result.Session.ID != task.ID {
 		t.Fatalf("registration reinterpreted accepted session intent: %+v", finished)
 	}
 }

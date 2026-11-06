@@ -16,11 +16,12 @@ type TaskPlacement struct {
 	Reason              string                `json:"reason,omitempty"`
 }
 
-func findSession(scopes []sessions.Scope, intent *sessions.Intent) (sessions.Record, error) {
+func findSession(scopes []sessions.Scope, task Task) (sessions.Record, error) {
+	intent := task.SessionIntent
 	for _, scope := range scopes {
 		if scope.ID == intent.ScopeID {
 			record, err := scope.Find(intent.ID)
-			if err != nil && intent.Mode == sessions.Create && scope.Current != "" {
+			if err != nil && intent.Mode == sessions.Open && intent.ID == task.CommandID && scope.Current != "" {
 				return record, sessions.ErrScopeReserved
 			}
 			return record, err
@@ -90,10 +91,7 @@ func (t Task) MatchesSessionMode(mode string) bool {
 	if t.SessionIntent.Error != "" {
 		return false
 	}
-	if t.SessionIntent.Mode == sessions.Use {
-		return mode == "use"
-	}
-	return mode == "create"
+	return mode == string(t.SessionIntent.Mode)
 }
 
 func sessionConstraint(task Task, scopes []sessions.Scope, check bool) (string, error) {
@@ -104,7 +102,7 @@ func sessionConstraint(task Task, scopes []sessions.Scope, check bool) (string, 
 	if err := intent.Validate(); err != nil {
 		return "", err
 	}
-	record, err := findSession(scopes, intent)
+	record, err := findSession(scopes, task)
 	if err != nil {
 		return "", err
 	}
@@ -112,14 +110,11 @@ func sessionConstraint(task Task, scopes []sessions.Scope, check bool) (string, 
 	if !check {
 		return owner, nil
 	}
-	if intent.Mode == sessions.Create {
-		if err := record.Available(); err != nil {
-			return owner, err
-		}
-		if record.CommandID != task.CommandID || record.OperationID != task.OperationID || record.TaskID != task.ID {
+	if record.CommandID == task.CommandID {
+		if intent.Mode != sessions.Open || !record.CreatedBy(task.CommandID, task.OperationID, task.ID) {
 			return owner, sessions.ErrConflict
 		}
-		return owner, nil
+		return owner, record.Available()
 	}
 	return owner, record.Usable(intent.Mode)
 }

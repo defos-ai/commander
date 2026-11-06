@@ -111,7 +111,7 @@ Secret values stay outside operation questions, logs and model context.
 | --- | --- | --- |
 | [`Reference`](sessions/session.go) | Identifies the resource, scope and exact owner process. | Session coordinator, agent resource providers, bindings and controls. |
 | [`Session`](sessions/session.go) | Presents an observed/query view of the resource's connectivity, revision and lifecycle disposition. | Agent observations, Session coordinator, Queries and Adapters. |
-| [`Intent`](sessions/lifecycle.go) | Retains the requested create/reuse/use behavior resolved from an action contract and target. | Task admission, Operation worker placement/preflight, Session coordinator. |
+| [`Intent`](sessions/lifecycle.go) | Retains the requested open/use behavior resolved from an action contract and target. | Task admission, Operation worker placement/preflight, Session coordinator. |
 | [`Binding`](sessions/lifecycle.go) | Places the exact owner, resource, creation identity and mode in the saved dispatch. | Session coordinator, Controller replay, agent session context and resource providers. |
 | [`CreationClaim`](sessions/lifecycle.go) | Registers an unstarted identity so a prior close can prevent a delayed start. | Agent session preparation/control, `Provider`. |
 | [`Scope`](sessions/lifecycle.go) | Atomically groups a scope's current reservation and retained resource identities. | Session coordinator, session-store providers. |

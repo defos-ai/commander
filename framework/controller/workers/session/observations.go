@@ -24,13 +24,14 @@ func (w *Worker) Observe(ctx context.Context, e runtimeSessions.Evidence) error 
 			if task.SessionIntent == nil || task.SessionIntent.Error != "" {
 				continue
 			}
-			if task.SessionIntent.Mode == model.Create {
-				if err := w.admit(ctx, task); err != nil {
-					if errors.Is(err, model.ErrScopeReserved) {
-						continue
-					}
-					return err
+			creator, err := w.admit(ctx, task)
+			if err != nil {
+				if errors.Is(err, model.ErrScopeReserved) {
+					continue
 				}
+				return err
+			}
+			if creator {
 				intent := task.SessionIntent
 				if task.AgentID != "" && w.bound[task.ID] != task.AgentID {
 					_, err := w.apply(ctx, model.Change{Kind: model.Bind, ScopeID: intent.ScopeID, ID: intent.ID, OwnerAgentID: task.AgentID,

@@ -114,7 +114,7 @@ func (p *Provider) changed(item *record) {
 }
 
 func (p *Provider) Checkout(ctx context.Context, binding sessions.Binding, clone func(context.Context, string) (string, error)) (workspace Workspace, observed sessions.Session, err error) {
-	if binding.Mode != sessions.Create && binding.Mode != sessions.Reuse {
+	if binding.Mode != sessions.Open {
 		return Workspace{}, sessions.Session{}, sessions.ErrConflict
 	}
 	ctx, item, release, err := p.acquire(ctx, binding, false)

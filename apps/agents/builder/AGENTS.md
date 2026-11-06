@@ -20,7 +20,7 @@ Read the [agent guide](../AGENTS.md) and [root guide](../../../AGENTS.md) first.
   type and never accept full IDs or a caller-supplied type prefix.
 - `cli.Run` enables managed-secret delivery without an encryption key. The host
   must not read, validate, generate or distribute `SECRETS_ENCRYPTION_KEY`.
-- [checkout-template](actions/checkout_template.go) declares `session_mode=create`
+- [checkout-template](actions/checkout_template.go) declares `session_mode=open`
   and accepts `session_scope`, plus an optional `session_id` for explicit reuse.
   Clients supply the scope, such as the operation ID, and any explicit reuse ID.
   Its source URL is fixed; do not expose

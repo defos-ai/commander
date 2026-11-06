@@ -25,14 +25,14 @@ func taskIndex(op *operations.Operation, taskID string) int {
 	return -1
 }
 
-func (r *Worker) normalize(ctx context.Context, op operations.Operation, next []actionmodel.NextAction, records []agents.Agent) ([]actionmodel.NextAction, error) {
+func (r *Worker) normalize(ctx context.Context, op operations.Operation, parent *operations.Task, next []actionmodel.NextAction, records []agents.Agent) ([]actionmodel.NextAction, error) {
 	if len(next) == 0 {
 		return next, nil
 	}
 	if r.sessions != nil {
-		return r.sessions.Normalize(ctx, op, next, records)
+		return r.sessions.Normalize(ctx, op, parent, next, records)
 	}
-	return runtimeSessions.Normalize(next, records, op.Mission.ActionDefinitions...)
+	return runtimeSessions.Normalize(parent, next, records, op.Mission.ActionDefinitions...)
 }
 
 func (r *Worker) Resolve(ctx context.Context, command commands.ResolveContinuationCommand) (operations.Operation, error) {
@@ -45,12 +45,16 @@ func (r *Worker) Resolve(ctx context.Context, command commands.ResolveContinuati
 		if err != nil {
 			return operations.Operation{}, err
 		}
+		parentIndex := taskIndex(&s.operation, command.TaskID)
+		if parentIndex < 0 {
+			return operations.Operation{}, operations.ErrUnknownTask
+		}
 		records, err := r.catalog.Agents(ctx)
 		if err != nil {
 			return operations.Operation{}, err
 		}
 
-		command.Actions, err = r.normalize(ctx, s.operation, command.Actions, records)
+		command.Actions, err = r.normalize(ctx, s.operation, &s.operation.Tasks[parentIndex], command.Actions, records)
 		if err != nil {
 			return operations.Operation{}, err
 		}
@@ -60,7 +64,7 @@ func (r *Worker) Resolve(ctx context.Context, command commands.ResolveContinuati
 			if task.SessionIntent == nil {
 				continue
 			}
-			if task.SessionIntent.Mode == "create" {
+			if task.SessionIntent.Mode == "open" && task.SessionIntent.ID == task.CommandID {
 				if scopes[task.SessionIntent.ScopeID] {
 					return operations.Operation{}, fmt.Errorf("%w: multiple creations in one scope", domain.ErrInvalidInput)
 				}

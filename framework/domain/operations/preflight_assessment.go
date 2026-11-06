@@ -45,7 +45,7 @@ func (o Operation) AssessPreflight(records []agents.Agent, sessionScopes ...[]se
 	for _, name := range names {
 		owners := map[string]bool{}
 		for _, task := range o.Tasks {
-			if task.Status == TaskQueued && task.ActionName == name && task.SessionIntent != nil && task.SessionIntent.Mode != sessions.Create {
+			if task.Status == TaskQueued && task.ActionName == name && task.SessionIntent != nil {
 				owner, _ := sessionConstraint(task, scopes, false)
 				if owner != "" {
 					owners[owner] = true

@@ -48,25 +48,41 @@ limits, see [Sessions](../../docs/features/sessions.md).
   running agent instance (the **owner**); an agent type cannot inherit ownership.
 - **Scope**: the context controlling replacement, sometimes provided by a chat;
   its **reservation** blocks competing creation while the outcome is unresolved.
-- **Intent**: a saved request to create, reuse or use a session. Reuse can continue
-  establishment; use requires connected state. Intent supplies no readiness.
+- **Intent**: a saved request to open or use a session. Open can establish a new
+  resource or continue setup of the assigned one; use requires connected state.
+  Intent supplies no readiness or creation ownership.
 - **Binding**: dispatched work's immutable session identity and exact owner.
 - **Abandonment**: explicitly releasing a lost/failed session for replacement
   while preserving uncertain history; it is not proof of closure.
 - **Execution checkpoint**: an immutable execution fact, not session state or
   permission to repeat an effect or transfer ownership.
 
-## Explicit session bindings
+## Session bindings
 
 - The session worker normalizes direct assignments, model resolutions and automatic
-  proposals using accepted action contracts and explicit input references. Mission
-  policies do not create session bindings or inject routing fields.
-- A `create` action receives `session_scope`; its accepted task ID becomes the
+  proposals using accepted action contracts. Mission policies do not create
+  session bindings or inject routing fields.
+- Root assignments use explicit input references: an `open` action receives
+  `session_scope`; its accepted task ID becomes the
   session ID. Supplying an existing `session_id` requests reuse. A `use` action
   requires both references and a usable resource on its exact owner.
+- Session-aware continuations inherit their direct parent's saved session identity.
+  The child's contract selects `open` or `use`. Explicit input
+  references, if present, must match that identity. Stateless children remain
+  unbound. Without a parent binding, consumers cannot use or reuse an unrelated
+  session; openers may create a new one through the explicit creation path.
+  Do not search ancestors, aggregate children or the latest session for a binding.
+- `open` never identifies creation ownership by itself. A new target receives the
+  original command ID as its session ID before reservation. Retained records
+  keep their original command/operation/task IDs; `Record.CreatedBy` compares
+  those three fields. Only that execution reserves/binds its creation claim or
+  prepares the provider. Subsequent openers use the retained owner and claim,
+  without overwriting them or cancelling the original reservation.
 - Persist the resolved intent without rewriting business input. Semantic errors
   remain visible on invalid automatic children without losing their parent's result.
   Recovery uses the accepted intent rather than resolving it from later inventory.
+- Agent validation and existing action schemas still require explicit references;
+  parameter-free acquisition helpers and schema adoption are a separate increment.
 - Active or unresolved claims prevent competing creation in the same scope.
   Confirmed release permits replacement; accepted consumers retain the original
   identity. Stateless work gains no binding or owner constraint.
@@ -129,8 +145,8 @@ For direct calls, coordination prepares the original envelope through the sessio
 worker, then claims it and publishes through the same lifecycle guard. Existing
 execution claims bypass new preparation: completed outcomes remain readable after
 closure or owner loss, and pending direct work is observed without redelivery.
-An explicitly requested binding must match the saved one. Session routing still
-follows the advertised explicit inputs until acquisition/inheritance is adopted.
+An explicitly requested binding must match the saved one. Direct calls retain
+explicit input routing until acquisition helpers are adopted.
 
 One active controller per database is supported. FS stores scope aggregates in
 `runtime-sessions.json`; Mongo stores one aggregate per scope in `runtime_sessions`

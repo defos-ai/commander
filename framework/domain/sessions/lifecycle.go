@@ -13,9 +13,8 @@ import (
 type Mode string
 
 const (
-	Create Mode = "create"
-	Reuse  Mode = "reuse"
-	Use    Mode = "use"
+	Open Mode = "open"
+	Use  Mode = "use"
 )
 
 // Intent is resolved once from an accepted action contract, never from later inventory.
@@ -42,13 +41,10 @@ func ResolveIntent(mode string, input json.RawMessage) (*Intent, error) {
 		return nil, errors.New("session action requires canonical session_scope and session_id")
 	}
 	intent := &Intent{Mode: Mode(mode), ScopeID: target.Scope, ID: target.ID}
-	if mode == "create" && target.ID != "" {
-		intent.Mode = Reuse
-	}
 	if mode == "use" && target.ID == "" {
 		return nil, errors.New("session_id is required")
 	}
-	if intent.Mode != Create && intent.Mode != Reuse && intent.Mode != Use {
+	if intent.Mode != Open && intent.Mode != Use {
 		return nil, errors.New("invalid session mode")
 	}
 	return intent, nil
@@ -68,7 +64,7 @@ func (i Intent) Validate() error {
 	if !id.Valid(i.ScopeID) || !id.Valid(i.ID) {
 		return errors.New("session intent requires canonical scope and session IDs")
 	}
-	if i.Mode != Create && i.Mode != Reuse && i.Mode != Use {
+	if i.Mode != Open && i.Mode != Use {
 		return errors.New("invalid session intent mode")
 	}
 	return nil
@@ -156,7 +152,7 @@ func (r Record) Claim() CreationClaim {
 	return CreationClaim{Reference: r.Reference, CommandID: r.CommandID,
 		OperationID: r.OperationID, TaskID: r.TaskID}
 }
-func (r Record) matchesCreation(commandID, operationID, taskID string) bool {
+func (r Record) CreatedBy(commandID, operationID, taskID string) bool {
 	return r.CommandID == commandID && r.OperationID == operationID && r.TaskID == taskID
 }
 func (r Record) Clone() Record {
@@ -362,7 +358,7 @@ func (s *Scope) Apply(c Change) error {
 			return err
 		}
 		if index >= 0 {
-			if !s.Records[index].matchesCreation(c.CommandID, c.OperationID, c.TaskID) {
+			if !s.Records[index].CreatedBy(c.CommandID, c.OperationID, c.TaskID) {
 				return ErrConflict
 			}
 			return nil
@@ -385,7 +381,7 @@ func (s *Scope) Apply(c Change) error {
 		if err := r.Available(); err != nil {
 			return err
 		}
-		if !id.ValidAgent(c.OwnerAgentID) || r.OwnerAgentID != "" && r.OwnerAgentID != c.OwnerAgentID || !r.matchesCreation(c.CommandID, c.OperationID, c.TaskID) {
+		if !id.ValidAgent(c.OwnerAgentID) || r.OwnerAgentID != "" && r.OwnerAgentID != c.OwnerAgentID || !r.CreatedBy(c.CommandID, c.OperationID, c.TaskID) {
 			return ErrConflict
 		}
 		r.OwnerAgentID = c.OwnerAgentID

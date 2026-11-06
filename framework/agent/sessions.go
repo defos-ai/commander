@@ -126,8 +126,8 @@ func (a *Agent) prepareSession(ctx context.Context, call ActionCall, commandID s
 	if intent.Mode != binding.Mode || intent.ScopeID != binding.ScopeID || intent.ID != "" && intent.ID != binding.ID {
 		return errors.New("session binding disagrees with accepted action input")
 	}
-	if binding.Mode == sessions.Create {
-		if binding.CommandID != commandID || binding.TaskID != call.TaskID || binding.OperationID != call.OperationID {
+	if binding.CommandID == commandID {
+		if binding.Mode != sessions.Open || binding.TaskID != call.TaskID || binding.OperationID != call.OperationID {
 			return errors.New("session creation does not belong to this execution")
 		}
 		return a.config.Sessions.Prepare(ctx, binding.Claim())

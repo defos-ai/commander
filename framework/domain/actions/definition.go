@@ -48,8 +48,8 @@ func (d Definition) Validate() error {
 }
 
 func (d Definition) ValidateSessionMode() error {
-	if d.SessionMode != "" && d.SessionMode != "create" && d.SessionMode != "use" {
-		return errors.New("session_mode must be create or use")
+	if d.SessionMode != "" && d.SessionMode != "open" && d.SessionMode != "use" {
+		return errors.New("session_mode must be open or use")
 	}
 	return nil
 }

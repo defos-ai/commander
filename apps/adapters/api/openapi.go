@@ -122,7 +122,7 @@ func openAPIDocument() ([]byte, error) {
 			schema.Properties["name"].Description = "Requirement identifier, never its value. Managed secret names match [A-Za-z0-9_][A-Za-z0-9_.-]{0,127}."
 			schema.Properties["sensitive"].Description = "Marks sensitive host configuration only; it does not identify a Commander-managed secret. Managed secrets use kind=secret without this flag."
 		case "Action":
-			schema.Properties["session_mode"].Enum = []any{"", "create", "use"}
+			schema.Properties["session_mode"].Enum = []any{"", "open", "use"}
 			schema.Properties["status"].Description = "Discovered readiness, normally unknown, ready or unavailable. Check the selected agent's action state before dispatch."
 		case "RuntimeSession":
 			schema.Properties["disposition"].Enum = []any{"reserved", "active", "closing", "released"}
@@ -230,7 +230,7 @@ func openAPIDocument() ([]byte, error) {
 func constrainMissionRequestSchema(schema *jsonschema.Schema, model string) {
 	switch model {
 	case "ActionDefinition", "ActionDefinitionRequest":
-		schema.Properties["session_mode"].Enum = []any{"", "create", "use"}
+		schema.Properties["session_mode"].Enum = []any{"", "open", "use"}
 		schema.Properties["name"].Pattern = `^\S(?:[\s\S]*\S)?$`
 		if model == "ActionDefinitionRequest" {
 			schema.Properties["description"].Type, schema.Properties["description"].Types = "", []string{"string", "null"}

@@ -96,7 +96,7 @@ func TestE2EBuilderSuccessfulBuildPublishesItsSessionSourceArtifact(t *testing.T
 	if finished.Status != operations.TaskSucceeded || finished.AgentID != owner.ID || finished.Result == nil {
 		t.Fatalf("successful build did not retain its owner/output: %+v", finished)
 	}
-	if created.SessionIntent == nil || created.SessionIntent.Mode != sessions.Create || finished.SessionIntent == nil ||
+	if created.SessionIntent == nil || created.SessionIntent.Mode != sessions.Open || finished.SessionIntent == nil ||
 		finished.SessionIntent.Mode != sessions.Use || finished.SessionIntent.ID != created.ID || finished.SessionIntent.ScopeID != created.SessionIntent.ScopeID {
 		t.Fatalf("build did not use the saved checkout binding: checkout=%+v build=%+v", created.SessionIntent, finished.SessionIntent)
 	}

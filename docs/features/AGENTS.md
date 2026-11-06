@@ -9,8 +9,9 @@ operators use Commander; [README.md](README.md) is the feature index.
   inspecting and settling work in `operations.md`. Questions, secrets, sessions
   and data sharing have their own guides. Avoid repeating their full workflows.
 - Use current `policies.continuation`, `policies.completion` and
-  `policies.sharing` shapes. Session-aware actions use explicit session references,
-  including reuse across operations; mission policies do not supply bindings.
+  `policies.sharing` shapes. Session-aware actions declare `open` or `use`.
+  Root calls use explicit session references, including reuse across operations;
+  continuations inherit their direct parent's binding. Mission policies do not supply bindings.
   Mission edits affect future operations only.
 - Keep component setup, flags and command references in component READMEs.
   Link implementation contracts, provider interfaces and checks in the relevant

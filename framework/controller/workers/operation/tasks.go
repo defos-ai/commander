@@ -30,14 +30,14 @@ func (r *Worker) Assign(ctx context.Context, command commands.AssignTaskCommand)
 			return operations.Task{}, err
 		}
 
-		resolved, err := r.normalize(ctx, s.operation, []actionmodel.NextAction{{ActionName: task.ActionName, Input: task.Input}}, records)
+		resolved, err := r.normalize(ctx, s.operation, nil, []actionmodel.NextAction{{ActionName: task.ActionName, Input: task.Input}}, records)
 		if err != nil {
 			return operations.Task{}, err
 		}
 		normalized := resolved[0]
 		task.Input = normalized.Input
 		task.SessionIntent = normalized.SessionIntent.Clone()
-		if task.SessionIntent != nil && task.SessionIntent.Mode == "create" {
+		if task.SessionIntent != nil && task.SessionIntent.Mode == "open" && task.SessionIntent.ID == "" {
 			task.SessionIntent.ID = task.ID
 		}
 		if r.sessions != nil {
@@ -85,7 +85,7 @@ func (r *Worker) finishTask(s *operationState, task operations.Task, result acti
 		records, err := r.catalog.Agents(ctx)
 		var resolved []actionmodel.NextAction
 		if err == nil {
-			resolved, err = r.normalize(ctx, s.operation, result.NextActions, records)
+			resolved, err = r.normalize(ctx, s.operation, &task, result.NextActions, records)
 		}
 		cancel()
 		if err != nil {

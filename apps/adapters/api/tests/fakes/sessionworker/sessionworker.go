@@ -133,7 +133,11 @@ func (a *Action) Run(ctx context.Context, raw json.RawMessage) (action.Result, e
 	if !ok {
 		return action.Result{}, errors.New("missing framework binding")
 	}
-	if binding.Mode == sessions.Reuse {
+	execution, ok := action.ExecutionFromContext(ctx)
+	if !ok {
+		return action.Result{}, errors.New("missing framework execution")
+	}
+	if binding.Mode == sessions.Open && binding.CommandID != execution.CommandID {
 		for _, item := range a.resources.Snapshot() {
 			if item.Reference == binding.Reference {
 				return action.Result{Output: json.RawMessage(`{"reused":true}`), Session: &item}, nil

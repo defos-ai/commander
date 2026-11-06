@@ -53,7 +53,7 @@ func NewCheckoutTemplate(provider *workspaces.Provider) (*CheckoutTemplate, erro
 	}
 	return &CheckoutTemplate{
 		Base: action.NewBase(actionmodel.Action{
-			SessionMode: string(sessions.Create),
+			SessionMode: string(sessions.Open),
 			Name:        CheckoutTemplateName,
 			Description: CheckoutTemplateDescription,
 			InputSchema: json.RawMessage(`{"type":"object","properties":{
@@ -104,7 +104,7 @@ func (a *CheckoutTemplate) Run(ctx context.Context, raw json.RawMessage) (action
 	if err := action.DecodeInput(raw, &input); err != nil {
 		return action.Result{}, err
 	}
-	intent, err := sessions.ResolveIntent(string(sessions.Create), raw)
+	intent, err := sessions.ResolveIntent(string(sessions.Open), raw)
 	if err != nil {
 		return action.Result{}, err
 	}

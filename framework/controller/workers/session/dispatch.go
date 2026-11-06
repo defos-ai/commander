@@ -28,7 +28,7 @@ func (w *Worker) Prepare(ctx context.Context, a runtimeSessions.Assignment) (run
 	if err != nil {
 		return runtimeSessions.PreparedDispatch{}, err
 	}
-	if err := w.admit(ctx, task); err != nil {
+	if _, err := w.admit(ctx, task); err != nil {
 		return runtimeSessions.PreparedDispatch{}, err
 	}
 	scopes, err := w.store.List(ctx)

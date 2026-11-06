@@ -124,7 +124,7 @@ export default {
   sessionScope: 'Session scope',
   sessionOwner: 'Session owner',
   sessionMode: 'Session mode',
-  sessionModes: { create: 'Create', reuse: 'Reuse', use: 'Use' },
+  sessionModes: { open: 'Open', use: 'Use' },
   sessionPlacementReason: 'Placement status',
   sessionObservationNote: 'This result records a session observation. Open the session to inspect its current saved lifecycle.',
   openSession: 'Open session',

@@ -107,7 +107,10 @@ applies to all domain packages below this directory.
   receipts against the in-memory exchange before persisting them.
 - Session [Scope and Record](sessions/lifecycle.go) own reservation and lifecycle;
   [Session](sessions/session.go) is an observed/query view. Preserve exact owner
-  and original creation command identity. Records, bindings and claims carry
+  and original creation command identity. Intent and binding modes are `open`
+  and `use`; creation belongs to the retained command identity, not a separate
+  mode. Open may continue setup; use requires connected state. Records, bindings
+  and claims carry
   `CommandID`, `OperationID` and `TaskID` directly. The
   command ID is required; operation/task provenance is an optional paired set
   of UUIDs and need not equal the command ID. Compare all retained creation IDs

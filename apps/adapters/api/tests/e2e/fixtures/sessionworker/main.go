@@ -54,7 +54,7 @@ func run() error {
 	for _, name := range creationActions {
 		mode := ""
 		if name == "connect-resource" || name == "connect-secondary" {
-			mode = "create"
+			mode = "open"
 		}
 		inputSchema := json.RawMessage(`{"type":"object","required":["session_scope"],"properties":{"session_scope":{"type":"string"}}}`)
 		if name == "propose-connections" && os.Getenv("FIXTURE_POLICY_ACTIONS") == "true" {

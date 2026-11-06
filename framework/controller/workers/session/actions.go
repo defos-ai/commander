@@ -85,22 +85,31 @@ func (w *Worker) prepareBinding(ctx context.Context, agentID, commandID string, 
 		return nil, nil
 	}
 	resolved := *intent
-	if resolved.Mode == model.Create && resolved.ID == "" {
+	if resolved.Mode == model.Open && resolved.ID == "" {
 		resolved.ID = commandID
 	}
 	if err := resolved.Validate(); err != nil {
 		return nil, err
 	}
-	if resolved.Mode == model.Create {
+	scope, err := w.store.Get(ctx, resolved.ScopeID)
+	if errors.Is(err, model.ErrUnknownSession) && resolved.Mode == model.Open && resolved.ID == commandID {
 		return w.bindCreation(ctx, agentID, commandID, call, resolved)
 	}
-	scope, err := w.store.Get(ctx, resolved.ScopeID)
 	if err != nil {
 		return nil, err
 	}
 	record, err := scope.Find(resolved.ID)
+	if errors.Is(err, model.ErrUnknownSession) && resolved.Mode == model.Open && resolved.ID == commandID {
+		return w.bindCreation(ctx, agentID, commandID, call, resolved)
+	}
 	if err != nil {
 		return nil, err
+	}
+	if record.CommandID == commandID {
+		if resolved.Mode != model.Open || !record.CreatedBy(commandID, call.OperationID, call.TaskID) {
+			return nil, model.ErrConflict
+		}
+		return w.bindCreation(ctx, agentID, commandID, call, resolved)
 	}
 	if record.OwnerAgentID != agentID {
 		return nil, model.ErrConflict
@@ -117,7 +126,7 @@ func (w *Worker) prepareBinding(ctx context.Context, agentID, commandID string, 
 
 func (w *Worker) bindCreation(ctx context.Context, agentID, commandID string, call actions.ActionCall, intent model.Intent) (*model.Binding, error) {
 	binding := model.Binding{
-		Reference: model.Reference{ID: intent.ID, ScopeID: intent.ScopeID, OwnerAgentID: agentID}, Mode: model.Create,
+		Reference: model.Reference{ID: intent.ID, ScopeID: intent.ScopeID, OwnerAgentID: agentID}, Mode: model.Open,
 		CommandID: commandID, OperationID: call.OperationID, TaskID: call.TaskID,
 	}
 	if call.Session != nil && *call.Session != binding {
@@ -133,6 +142,6 @@ func (w *Worker) bindCreation(ctx context.Context, agentID, commandID string, ca
 	if err != nil {
 		return nil, err
 	}
-	bound := record.Binding(model.Create)
+	bound := record.Binding(model.Open)
 	return &bound, nil
 }

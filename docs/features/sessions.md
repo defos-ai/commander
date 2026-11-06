@@ -5,20 +5,20 @@ actions and operations. Open **Admin → Sessions** to inspect resources and the
 owners, or use [Admin commands](../../apps/admin/README.md#sessions), also
 available in Playground through `/admin sessions`.
 
-## Create and reuse
+## Open and use
 
 Supply session references explicitly when assigning session-aware actions.
 For Builder, assign checkout with `session_scope` (for example, the operation ID),
 then build with the returned scope and session ID, instructions and action contracts.
 Reuse those saved references to continue on the same resource across operations.
-Mission policies do not supply session bindings.
+Session-aware continuations retain their direct parent's session; any supplied
+references must match. Mission policies do not supply session bindings.
 
 Session-capable actions declare `session_mode` in their definition:
 
 | Action mode | Input | Behavior |
 | --- | --- | --- |
-| `create` | `session_scope` | Reserve the scope and create a session on the selected agent. |
-| `create` | `session_scope`, `session_id` | Reuse the exact session, including continuing setup or verification. |
+| `open` | `session_scope`, optional `session_id` | Open a new session or continue setup of the exact existing session on its owner. |
 | `use` | `session_scope`, `session_id` | Use an existing connected session on its owner. |
 
 Scope and session IDs are canonical UUIDs. A scope permits one current reservation;
@@ -37,7 +37,7 @@ sequenceDiagram
     participant Client
     participant Controller
     participant Owner as Owning agent
-    Client->>Controller: Create a session in a scope
+    Client->>Controller: Open a session in a scope
     Controller->>Owner: Bound creation task
     Note over Controller,Owner: Session survives task and operation completion
     Client->>Controller: Use the session in a later operation

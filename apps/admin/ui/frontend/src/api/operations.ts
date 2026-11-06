@@ -122,7 +122,7 @@ function isSessionIntent(value: unknown): value is OperationSessionIntent {
     !isOptionalString(value.id) || !isOptionalString(value.error)) return false;
   // Admission retains failed automatic proposals as an error with empty identity fields.
   if (value.error) return true;
-  return ['create', 'reuse', 'use'].includes(value.mode) && isUUID(value.scope_id) &&
+  return ['open', 'use'].includes(value.mode) && isUUID(value.scope_id) &&
     (value.id === undefined || isUUID(value.id));
 }
 

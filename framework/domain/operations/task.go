@@ -44,7 +44,7 @@ type Task struct {
 func NewTask(operationID, parentID string, action actionmodel.NextAction) Task {
 	taskID := id.TaskID()
 	intent := action.SessionIntent.Clone()
-	if intent != nil && intent.Mode == sessions.Create && intent.ID == "" {
+	if intent != nil && intent.Mode == sessions.Open && intent.ID == "" {
 		intent.ID = taskID
 	}
 	return Task{SessionIntent: intent, ID: taskID, CommandID: taskID, OperationID: operationID, ParentTaskID: parentID,
