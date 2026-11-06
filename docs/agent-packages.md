@@ -94,7 +94,7 @@ use a module-prefixed tag. Both publish an asset named `agent.yaml`:
 | Package reference | GitHub release tag |
 | --- | --- |
 | `github.com/defos-ai/commander-web-agent@v0.2.0` | `v0.2.0` |
-| `github.com/defos-ai/commander/apps/agents/builder@v0.4.0` | `apps/agents/builder/v0.4.0` |
+| `github.com/defos-ai/commander/apps/agents/builder@v0.4.1` | `apps/agents/builder/v0.4.1` |
 
 Module `@stable` references use the repository's root Latest version to choose the
 corresponding module release. Publication is required; a version in `go.mod` or

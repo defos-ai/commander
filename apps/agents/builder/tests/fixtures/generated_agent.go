@@ -34,7 +34,7 @@ func generatedBuild(t *testing.T, config *fakes.GitConfig) {
 	config.RealGo, config.ModuleCache, config.GoCache = tool, paths["GOMODCACHE"], paths["GOCACHE"]
 	config.BuildSource = t.TempDir()
 	for name, data := range map[string]string{
-		"go.mod":   "module example.invalid/workspace-demo-agent\n\ngo 1.26.7\n\nrequire github.com/defos-ai/commander/framework v0.4.0\n",
+		"go.mod":   "module example.invalid/workspace-demo-agent\n\ngo 1.26.7\n\nrequire github.com/defos-ai/commander/framework v0.4.1\n",
 		"agent.go": generatedAgent, "agent_test.go": generatedAgentTest,
 		"cmd/main.go": "package main\nimport generated \"example.invalid/workspace-demo-agent\"\nfunc main() { _ = generated.AgentType }\n",
 		"LICENSE":     "Synthetic local build fixture.\n", "AGENTS.md": "Local agent fixture for the Builder serving flow.\n",

@@ -1,13 +1,14 @@
 # Release Commander
 
 Use one stable `v0.X.Y` or `v1.X.Y` version for Commander and every module in
-[go.work](../../go.work). The prepared version is `v0.4.0`; the examples below use it.
+[go.work](../../go.work). The prepared version is `v0.4.1`; the examples below use it.
 
-Read the [v0.4.0 notes](note-v0.4.0.md) for Commander and standalone
+Read the [v0.4.1 notes](note-v0.4.1.md) for Commander and standalone
 agent changes, or choose an earlier version below.
 
 ## Release notes
 
+- [v0.4.1](note-v0.4.1.md)
 - [v0.4.0](note-v0.4.0.md)
 - [v0.3.0](note-v0.3.0.md)
 - [v0.2.0](note-v0.2.0.md)
@@ -27,7 +28,7 @@ agent changes, or choose an earlier version below.
    publication. For the local module readiness check, run:
 
 ```sh
-RELEASE_VERSION=v0.4.0 go test -count=1 -failfast -timeout=10m -v ./.github/tests/release_test.go
+RELEASE_VERSION=v0.4.1 go test -count=1 -failfast -timeout=10m -v ./.github/tests/release_test.go
 ```
 
 The local check does not replace the full CI pipeline. Review the
@@ -74,8 +75,8 @@ The publication workflow also creates separate builder and spawner package relea
 
 | Package reference | Release tag |
 | --- | --- |
-| `github.com/defos-ai/commander/apps/agents/builder@v0.4.0` | `apps/agents/builder/v0.4.0` |
-| `github.com/defos-ai/commander/apps/agents/spawner@v0.4.0` | `apps/agents/spawner/v0.4.0` |
+| `github.com/defos-ai/commander/apps/agents/builder@v0.4.1` | `apps/agents/builder/v0.4.1` |
+| `github.com/defos-ai/commander/apps/agents/spawner@v0.4.1` | `apps/agents/spawner/v0.4.1` |
 
 Each contains its six native binaries, `agent.yaml`, `LICENSE` and `checksums.txt`.
 Both support Docker on `linux/amd64`. These references become installable after
