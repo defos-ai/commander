@@ -33,7 +33,6 @@ func SharingMission() missions.Mission {
 		OutputSchema: json.RawMessage(`{}`),
 		Policies: &policies.MissionPolicies{
 			Completion: &policies.CompletionPolicy{DecisionBy: policies.Operator},
-			Session:    []policies.SessionPolicy{{CreateAction: "open-assessment", UseActions: []string{"analyze-vulnerabilities"}}},
 			Continuation: &policies.ContinuationPolicy{
 				AggregateResults: []string{"find-vulnerabilities"},
 				ModelReview:      []string{"find-vulnerabilities", "analyze-vulnerabilities"},
@@ -71,28 +70,5 @@ func InvalidCompletionPolicies() []any {
 		Object{"decision_by": 1},
 		Object{"decision_by": "operator", "fallback_at": "later"},
 		"operator",
-	}
-}
-
-func InvalidSessionPolicies() []any {
-	return []any{
-		Object{"create_action": "open-assessment", "use_actions": []string{"analyze-vulnerabilities"}},
-		[]any{nil},
-		[]Object{{"use_actions": []string{"analyze-vulnerabilities"}}},
-		[]Object{{"create_action": "open-assessment", "use_actions": []string{}}},
-		[]Object{{"create_action": "open-assessment", "use_actions": nil}},
-		[]Object{{"create_action": " open-assessment", "use_actions": []string{"analyze-vulnerabilities"}}},
-		[]Object{{"create_action": "open-assessment", "use_actions": []string{"analyze-vulnerabilities "}}},
-		[]Object{{"create_action": "open-assessment", "use_actions": []string{"analyze-vulnerabilities", "analyze-vulnerabilities"}}},
-		[]Object{{"create_action": "open-assessment", "use_actions": []string{"open-assessment"}}},
-		[]Object{{"create_action": "open-assessment", "use_actions": []string{"analyze-vulnerabilities"}, "scope": "operation"}},
-		[]Object{
-			{"create_action": "open-assessment", "use_actions": []string{"analyze-vulnerabilities"}},
-			{"create_action": "open-assessment", "use_actions": []string{"review-vulnerabilities"}},
-		},
-		[]Object{
-			{"create_action": "open-assessment", "use_actions": []string{"analyze-vulnerabilities"}},
-			{"create_action": "analyze-vulnerabilities", "use_actions": []string{"review-vulnerabilities"}},
-		},
 	}
 }

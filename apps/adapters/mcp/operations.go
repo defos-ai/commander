@@ -84,7 +84,7 @@ type OperationTasksResult struct {
 	NextCursor string        `json:"next_cursor"`
 }
 
-const sessionPolicyGuidance = "For actions mapped by policies.session, omit session_scope and session_id; the controller supplies the binding. Submit the creator first and consumers in a separate submission. Inspect registered session modes and readiness. Conflicting routing fields are rejected, and replacing an active session requires explicit close or abandon. Unmapped session actions keep explicit references."
+const sessionGuidance = "Session actions use explicit routing fields from their advertised input schema: creation requires session_scope; reuse and use also require the saved session_id. Inspect runtime session state, ownership and readiness before reuse. Close or abandon an existing claim before replacement; never invent session IDs or silently rebind accepted work."
 
 func addOperationTools(server *mcp.Server, config Config) {
 	execution := config.Operations
@@ -103,7 +103,7 @@ func addOperationTools(server *mcp.Server, config Config) {
 				Missions []missionListItem `json:"missions"`
 			}{summaries}, err
 		})
-	addTool(server, "describe_mission", "Read one mission's required and optional actions, desired action_definitions, policies and input/output schemas. Definitions are contracts, not installed capabilities or readiness evidence. Unscheduled optional actions do not block mission preflight; queued optional actions participate in readiness checks. Valid proposals run automatically; policies.continuation.aggregate_results groups direct child results; policies.continuation.model_review requests model review. Does not execute work. "+sessionPolicyGuidance, objectSchema(map[string]any{"mission_name": stringProperty}, "mission_name"),
+	addTool(server, "describe_mission", "Read one mission's required and optional actions, desired action_definitions, policies and input/output schemas. Definitions are contracts, not installed capabilities or readiness evidence. Unscheduled optional actions do not block mission preflight; queued optional actions participate in readiness checks. Valid proposals run automatically; policies.continuation.aggregate_results groups direct child results; policies.continuation.model_review requests model review. Does not execute work. "+sessionGuidance, objectSchema(map[string]any{"mission_name": stringProperty}, "mission_name"),
 		func(ctx context.Context, request MissionRequest) (missions.Mission, error) {
 			return config.MissionStore.Get(ctx, request.MissionName)
 		})
@@ -188,7 +188,7 @@ func addOperationTools(server *mcp.Server, config Config) {
 		func(ctx context.Context, request OperationRequest) (reports.Report, error) {
 			return query.GetReport(ctx, request.OperationID)
 		})
-	addTool(server, "assign_task", "Queue an action task; the controller selects a ready agent with available capacity and routes session work to its recorded owner. Clients do not select or rebind agents. Returns immediately; inspect operation events for completion. Action input must match its advertised schema after controller-supplied session fields are attached. "+sessionPolicyGuidance, objectSchema(map[string]any{
+	addTool(server, "assign_task", "Queue an action task; the controller selects a ready agent with available capacity and routes session work to its recorded owner. Clients do not select or rebind agents. Returns immediately; inspect operation events for completion. Action input must match its advertised schema. "+sessionGuidance, objectSchema(map[string]any{
 		"operation_id": stringProperty,
 		"action_name":  map[string]any{"type": "string", "minLength": 1, "description": "Action to execute, such as discover-pages."},
 		"input":        map[string]any{"type": "object"},
@@ -196,7 +196,7 @@ func addOperationTools(server *mcp.Server, config Config) {
 		func(ctx context.Context, request AssignTaskRequest) (operations.Task, error) {
 			return execution.Assign(ctx, commands.AssignTaskCommand(request))
 		})
-	addTool(server, "resolve_continuation", "Resolve a pending model continuation using its current version from get_task or get_operation. Supply the chosen actions, or an empty array to finish the branch. Records the decision and queues all child tasks atomically; repeated or stale decisions are rejected. The controller selects agents. After an operator answer, review their guidance before resolving. "+sessionPolicyGuidance, objectSchema(map[string]any{
+	addTool(server, "resolve_continuation", "Resolve a pending model continuation using its current version from get_task or get_operation. Supply the chosen actions, or an empty array to finish the branch. Records the decision and queues all child tasks atomically; repeated or stale decisions are rejected. The controller selects agents. After an operator answer, review their guidance before resolving. "+sessionGuidance, objectSchema(map[string]any{
 		"operation_id": stringProperty, "task_id": stringProperty, "version": map[string]any{"type": "integer", "minimum": 1},
 		"actions": map[string]any{"type": "array", "items": map[string]any{"type": "object", "additionalProperties": false, "properties": map[string]any{"action_name": stringProperty, "input": map[string]any{"type": "object"}, "reason": stringProperty}, "required": []string{"action_name"}}},
 	}, "operation_id", "task_id", "version", "actions"), func(ctx context.Context, request ResolveContinuationRequest) (operationResult, error) {
@@ -300,12 +300,6 @@ func missionDefinitionSchema() string {
 			"items": map[string]any{"type": "string", "enum": []string{"results", "artifacts", "decisions"}},
 		},
 	}, "from_actions", "to_actions", "include")
-	session := objectSchema(map[string]any{
-		"create_action": actionName,
-		"use_actions": map[string]any{
-			"type": "array", "minItems": 1, "uniqueItems": true, "items": actionName,
-		},
-	}, "create_action", "use_actions")
 	return objectSchema(map[string]any{
 		"name": map[string]any{
 			"type": "string", "pattern": `\S`, "not": map[string]any{"enum": []string{".", ".."}},
@@ -329,12 +323,8 @@ func missionDefinitionSchema() string {
 					"type": []string{"array", "null"}, "items": json.RawMessage(sharing),
 					"description": "Optional action-based sharing routes retained in operation snapshots. Omitted, null or empty sharing declares no routes. Source and recipient action names need not appear in required_actions or optional_actions; they do not start work or change preflight readiness. The controller forwards accepted results, artifact metadata and saved task-scoped answered questions to matching active actions in the same operation. Shared answers preserve their original scope and operator/model origin; operation-wide questions are excluded.",
 				},
-				"session": map[string]any{
-					"type": []string{"array", "null"}, "items": json.RawMessage(session),
-					"description": "Optional independent session groups retained in operation snapshots. Each group names one create_action and a nonempty unique use_actions list; an action can appear in only one group and role. Omitted, null or empty session declares no managed groups. Names need not appear in action coverage lists or be installed when saving. " + sessionPolicyGuidance,
-				},
 			},
-			"description": "Optional continuation, completion, session and sharing policies. An empty object declares no policy overrides; completion defaults to model.",
+			"description": "Optional continuation, completion and sharing policies. An empty object declares no policy overrides; completion defaults to model.",
 		},
 		"objectives": map[string]any{"type": "array", "minItems": 1, "items": nonblank,
 			"description": "Ordered mission objectives; include at least one nonblank objective."},

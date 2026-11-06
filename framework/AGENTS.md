@@ -125,10 +125,9 @@
   each child's parentage, and fresh group membership on subsequent decisions.
 - Session-aware tasks remain bound to the exact resource owner recorded by their
   accepted session intent. Stateless tasks and creation intents without an owner
-  select ready eligible agents. Mission `policies.session` resolves managed resource
-  bindings before accepting work; creator candidates must declare their consumers,
-  without requiring those consumers to be ready. Follow the
-  [session guide](sessions/AGENTS.md#mission-managed-bindings). Reject removed `policies.placement`
+  select ready eligible agents. Resolve session intent from the accepted action
+  contract and explicit input references; missions do not supply bindings. Follow
+  the [session guide](sessions/AGENTS.md). Reject removed `policies.session`, `policies.placement`
   and root `rules` fields instead of silently dropping constraints on reads.
 - Operation startup validates the stored mission/input and clones the mission
   directly into its saved snapshot. Policy behavior belongs to that definition;

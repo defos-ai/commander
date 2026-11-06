@@ -7,12 +7,11 @@ available in Playground through `/admin sessions`.
 
 ## Create and reuse
 
-Use [`policies.session`](missions.md#resource-ownership) to bind create/use actions
-within a mission. The bundled Builder mission supplies routing IDs: assign
-checkout with `{}`, then build with instructions and action contracts after
-checkout finishes. The policy does not schedule work or close sessions.
-Without a mission binding, supply saved IDs explicitly, including for reuse
-across operations.
+Supply session references explicitly when assigning session-aware actions.
+For Builder, assign checkout with `session_scope` (for example, the operation ID),
+then build with the returned scope and session ID, instructions and action contracts.
+Reuse those saved references to continue on the same resource across operations.
+Mission policies do not supply session bindings.
 
 Session-capable actions declare `session_mode` in their definition:
 
@@ -54,8 +53,8 @@ sequenceDiagram
 | Session | Retains a resource and its owner across operations until release. |
 | Execution checkpoint | Records an immutable execution fact; it does not control session lifetime or authorize repeating an effect. |
 
-Builder checkout creates a workspace session; the bundled mission's session
-policy binds build to it. Closing the session stops access and active work
+Builder checkout creates a workspace session; build uses its returned references.
+Closing the session stops access and active work
 while retaining the workspace files. Different sessions can have different owners
 within the same operation.
 

@@ -14,12 +14,6 @@ export interface MissionPolicies {
   continuation?: ContinuationPolicy | null;
   completion?: CompletionPolicy | null;
   sharing?: SharingRoute[] | null;
-  session?: MissionSessionPolicy[] | null;
-}
-
-export interface MissionSessionPolicy {
-  create_action: string;
-  use_actions: string[];
 }
 
 export interface ContinuationPolicy {

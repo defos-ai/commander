@@ -25,7 +25,6 @@ func TestMissionMongoStore(t *testing.T) {
 		Name: "alpha", Objectives: []string{"Review a page", "Summarize findings"},
 		Policies: &policies.MissionPolicies{
 			Completion: &policies.CompletionPolicy{DecisionBy: policies.Operator},
-			Session:    []policies.SessionPolicy{{CreateAction: "discover", UseActions: []string{"check"}}},
 			Continuation: &policies.ContinuationPolicy{
 				AggregateResults: []string{"discover"}, ModelReview: []string{"check"},
 			},
@@ -72,15 +71,6 @@ func TestMissionMongoStore(t *testing.T) {
 	if _, err := document.LookupErr("completion"); err == nil {
 		t.Fatal("provider wrote an unsupported root completion setting")
 	}
-	sessionPolicies, err := document.Lookup("policies", "session").Array().Values()
-	if err != nil || len(sessionPolicies) != 1 {
-		t.Fatalf("stored session policies: %v, %v", sessionPolicies, err)
-	}
-	sessionPolicy := sessionPolicies[0].Document()
-	consumers, err := sessionPolicy.Lookup("use_actions").Array().Values()
-	if err != nil || sessionPolicy.Lookup("create_action").StringValue() != "discover" || len(consumers) != 1 || consumers[0].StringValue() != "check" {
-		t.Fatalf("provider changed session policy fields: %v, %v", sessionPolicy, err)
-	}
 	aggregation, err := document.Lookup("policies", "continuation", "aggregate_results").Array().Values()
 	if err != nil || len(aggregation) != 1 || aggregation[0].StringValue() != "discover" {
 		t.Fatalf("provider changed the aggregation policy or its stored field names: %v, %v", aggregation, err)
@@ -114,8 +104,6 @@ func TestMissionMongoStore(t *testing.T) {
 	stored.InputSchema[0] = '!'
 	stored.Policies.Continuation.AggregateResults[0] = "modified by reader"
 	stored.Policies.Continuation.ModelReview[0] = "modified by reader"
-	stored.Policies.Session[0].CreateAction = "modified by reader"
-	stored.Policies.Session[0].UseActions[0] = "modified by reader"
 	unchanged, err := catalog.Get(ctx, original.Name)
 	if err != nil || !reflect.DeepEqual(unchanged, original) {
 		t.Fatalf("caller changed persisted mission: %#v, error = %v", unchanged, err)
@@ -132,20 +120,7 @@ func TestMissionMongoStore(t *testing.T) {
 		t.Fatalf("duplicate create changed the original: %#v, error = %v", unchanged, err)
 	}
 
-	revised := original.Clone()
-	revised.Policies.Session = []policies.SessionPolicy{
-		{CreateAction: "discover", UseActions: []string{"publish"}},
-		{CreateAction: "open-browser", UseActions: []string{"browse"}},
-	}
-	if err := catalog.Upsert(ctx, revised); err != nil {
-		t.Fatal(err)
-	}
-	stored, err = catalog.Get(ctx, revised.Name)
-	if err != nil || !reflect.DeepEqual(stored, revised) {
-		t.Fatalf("session policy update did not replace the saved list: %#v, error = %v", stored, err)
-	}
-
-	updated := revised.Clone()
+	updated := original.Clone()
 	updated.Objectives = []string{"Review before release"}
 	updated.OptionalActions = nil
 	updated.ActionDefinitions = nil
@@ -172,9 +147,7 @@ func TestMissionMongoStore(t *testing.T) {
 	invalidCompletion.Policies = &policies.MissionPolicies{Completion: &policies.CompletionPolicy{DecisionBy: "unknown"}}
 	invalidContinuation := updated.Clone()
 	invalidContinuation.Policies = &policies.MissionPolicies{Continuation: &policies.ContinuationPolicy{ModelReview: []string{"check", "check"}}}
-	invalidSession := updated.Clone()
-	invalidSession.Policies = &policies.MissionPolicies{Session: []policies.SessionPolicy{{CreateAction: "discover", UseActions: []string{"discover"}}}}
-	for _, invalid := range []missions.Mission{invalidSchema, invalidCompletion, invalidContinuation, invalidSession} {
+	for _, invalid := range []missions.Mission{invalidSchema, invalidCompletion, invalidContinuation} {
 		if err := catalog.Upsert(ctx, invalid); err == nil {
 			t.Fatal("invalid mission replaced a valid one")
 		}
@@ -244,11 +217,9 @@ func TestMissionMongoStore(t *testing.T) {
 		{"continuation": bson.M{"aggregate_results": []string{"discover"}, "unexpected": true}},
 		{"completion": bson.M{"decision_by": "operator", "unexpected": true}},
 		{"sharing": []bson.M{{"from_actions": []string{"discover"}, "to_actions": []string{"check"}, "include": []string{"results"}, "unexpected": true}}},
-		{"session": []bson.M{{"create_action": "discover", "use_actions": []string{"check"}, "unexpected": true}}},
-		{"session": []bson.M{{"create_action": "", "use_actions": []string{"check"}}}},
-		{"session": []bson.M{{"create_action": "discover", "use_actions": []string{}}}},
-		{"session": []bson.M{{"create_action": "discover", "use_actions": []string{"check", "check"}}}},
-		{"session": []bson.M{{"create_action": "discover", "use_actions": []string{"check"}}, {"create_action": "check", "use_actions": []string{"publish"}}}},
+		{"session": []bson.M{{"create_action": "discover", "use_actions": []string{"check"}}}},
+		{"session": []bson.M{}},
+		{"session": nil},
 	} {
 		if _, err := database.Update(ctx, "missions", bson.M{"_id": updated.Name}, bson.M{"$set": bson.M{"policies": unsupported}}); err != nil {
 			t.Fatal(err)

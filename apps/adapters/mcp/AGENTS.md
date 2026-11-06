@@ -34,18 +34,6 @@ question, then await that task's result; do not ask a duplicate, resolve its
 continuation or queue replacement work while it runs. The action resumes after
 answer delivery and retains its execution deadline.
 
-Mission `policies.session` uses nullable arrays of strict `create_action` /
-`use_actions` entries. Keep the published schema and shared mission validator
-aligned: nonblank trimmed names, nonempty unique consumers and no action shared
-between roles or entries. Empty/null/omitted lists add no managed binding. Retain
-policies through create/update/detail and saved operation reads; authoring needs
-neither an installed agent nor a controller. Guidance for assignment and model
-continuations must explain that matching policies supply routing fields, so
-clients omit `session_scope` / `session_id` and submit creation before consumers
-in separate calls. Registered modes/providers remain required; unmatched session
-actions keep explicit references. Never add an adapter-side binding resolver or
-retry uncertain writes.
-
 Stack-test teardown answers leftover questions through the authenticated operator
 HTTP API before cancelling operations. Use the test API connection settings
 (`COMMANDER_TEST_API_*`), never relabel MCP submissions as operator answers or

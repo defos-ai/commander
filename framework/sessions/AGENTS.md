@@ -52,30 +52,20 @@ limits, see [Sessions](../../docs/features/sessions.md).
 - **Execution checkpoint**: an immutable execution fact, not session state or
   permission to repeat an effect or transfer ownership.
 
-## Mission-managed bindings
+## Explicit session bindings
 
-- `policies.session` groups one creator and its consumer actions. The session
-  worker normalizes direct assignments, model resolutions and automatic proposals
-  against the saved operation, live/learned contracts and retained scope records.
-  Reconcile earlier accepted claims before reading those records; failures remain
-  retryable rather than becoming permanent proposal errors.
-- Each operation/creator pair has a distinct stable scope. Creation receives only
-  `session_scope`; its task ID becomes the session ID in the saved intent and
-  dispatch. Supplying `session_id` would request reuse and is rejected for a managed
-  creator. Consumers receive the latest accepted creator's exact scope and ID.
-- Creation must be accepted before consumption; reject same-batch create/use and
-  duplicate creators. An active or unresolved claim prevents another creation.
-  Confirmed release permits replacement, while accepted consumers retain the old
-  identity. Never resolve them again from the current scope during dispatch/recovery.
-- Require matching action session modes. Creator selection also requires the
-  consumer declarations on that same agent, independently of their readiness or
-  secrets. Existing owner readiness and resource-state checks still gate use.
-- Persist injected input together with its intent. Patch only missing canonical
-  session fields, preserving business number tokens and escapes. Reject conflicting,
-  aliased or duplicate routing fields. Semantic errors remain visible on invalid
-  automatic children without losing their parent's accepted outcome.
-- Unmatched actions keep explicit session handling. Stateless work gains no binding;
-  policies do not sequence tasks, close resources or grant ownership through input.
+- The session worker normalizes direct assignments, model resolutions and automatic
+  proposals using accepted action contracts and explicit input references. Mission
+  policies do not create session bindings or inject routing fields.
+- A `create` action receives `session_scope`; its accepted task ID becomes the
+  session ID. Supplying an existing `session_id` requests reuse. A `use` action
+  requires both references and a usable resource on its exact owner.
+- Persist the resolved intent without rewriting business input. Semantic errors
+  remain visible on invalid automatic children without losing their parent's result.
+  Recovery uses the accepted intent rather than resolving it from later inventory.
+- Active or unresolved claims prevent competing creation in the same scope.
+  Confirmed release permits replacement; accepted consumers retain the original
+  identity. Stateless work gains no binding or owner constraint.
 
 ## Provider contract
 

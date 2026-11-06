@@ -9,7 +9,6 @@ import (
 	"time"
 
 	e2efixtures "github.com/defos-ai/commander/apps/adapters/api/tests/fixtures/e2e"
-	"github.com/defos-ai/commander/framework/domain/missions/policies"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/id"
 )
@@ -27,18 +26,13 @@ func TestE2EAcceptedSessionCommandsSurviveReconciliationFailure(t *testing.T) {
 	t.Cleanup(peer.Close)
 	s := e2efixtures.NewSessionStack(t, peer.URL, "./apps/adapters/api/tests/e2e/fixtures/faultcontroller")
 	s.Worker(1)
-	s.Mission("accepted-session", "connect-resource", "mark-owner")
-	s.SessionMission("accepted-policy-session", policies.SessionPolicy{CreateAction: "connect-resource", UseActions: []string{"use-resource"}})
-	for _, name := range []string{"assign", "resolve-continuation", "policy", "cancel", "fail"} {
+	s.Mission("accepted-session", "connect-resource", "mark-owner", "use-resource")
+	for _, name := range []string{"assign", "resolve-continuation", "reuse", "cancel", "fail"} {
 		t.Run(name, func(t *testing.T) {
 			continuation := name == "resolve-continuation"
 			restore := s.WithTest(t)
 			defer restore()
-			mission := "accepted-session"
-			if name == "policy" {
-				mission = "accepted-policy-session"
-			}
-			op := s.Start(mission)
+			op := s.Start("accepted-session")
 			var parent operations.Task
 			if continuation {
 				parent = s.Assign(op, "mark-owner", map[string]any{})
@@ -48,9 +42,6 @@ func TestE2EAcceptedSessionCommandsSurviveReconciliationFailure(t *testing.T) {
 			t.Cleanup(func() { unavailable.Store(false) })
 			var child operations.Task
 			input := map[string]string{"session_scope": id.New()}
-			if name == "policy" {
-				input = map[string]string{}
-			}
 			if continuation {
 				var accepted operations.Operation
 				s.Request("POST", "/api/v1/operations/"+op+"/tasks/"+parent.ID+"/continuation/resolve", map[string]any{"version": parent.Continuation.Version, "actions": []any{map[string]any{"action_name": "connect-resource", "input": input}}}, 200, &accepted)
@@ -88,8 +79,9 @@ func TestE2EAcceptedSessionCommandsSurviveReconciliationFailure(t *testing.T) {
 				return
 			}
 			unavailable.Store(false)
-			if name == "policy" {
-				consumer := s.Assign(op, "use-resource", map[string]string{})
+			if name == "reuse" {
+				s.Finished(op, child.ID)
+				consumer := s.Assign(op, "use-resource", map[string]string{"session_scope": input["session_scope"], "session_id": child.ID})
 				if consumer.SessionIntent == nil || child.SessionIntent == nil || consumer.SessionIntent.ID != child.ID || consumer.SessionIntent.ScopeID != child.SessionIntent.ScopeID {
 					t.Fatalf("consumer lost the accepted creator during reconciliation: creator=%+v consumer=%+v", child, consumer)
 				}

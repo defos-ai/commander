@@ -96,7 +96,7 @@
   Optional `policies.sharing` retains action-based routes for results, artifacts
   and decisions in mission/operation reads. Empty or omitted sharing declares no
   routes. Omitted/null `policies` and an empty object also declare no routes.
-  Continuation, completion, session and sharing are grouped under policies.
+  Continuation, completion and sharing are grouped under policies.
   `policies.continuation` contains
   independent `aggregate_results` and `model_review` action-name lists. They may
   overlap; omitted/null/empty fields or objects disable each override. Names are
@@ -124,18 +124,6 @@
   Preserve raw completion draft in responses. Saving it supplies no approval;
   clients should read saved state while awaiting review instead of submitting
   identical output repeatedly. Re-read after ambiguous writes, without automatic retry.
-- Optional `policies.session` is an array of creator/consumer groups with required
-  `create_action` and nonempty unique `use_actions`. Names are trimmed/nonblank,
-  and each action belongs to one entry and role. Omitted/null/empty lists add no
-  managed bindings; unknown fields and overlapping groups fail shared validation.
-  Preserve the policy through create/update/detail and operation snapshots, with
-  independent nested slices in HTTP mappings. Authoring requires no installed
-  agents; runtime contracts and readiness remain controller checks.
-  For mapped actions, callers omit session routing fields: the controller supplies
-  `session_scope` for creation and both scope and ID for use. Accept creation before
-  assigning consumers; never batch creation with use. Conflicting supplied IDs are
-  rejected. An existing claim needs confirmed release before replacement; accepted
-  tasks retain their original binding. Unmapped actions keep explicit session input.
 - `update_mission` accepts that same complete flat definition. Read
   `describe_mission` first and keep its unique name unchanged. Require the target
   through `MissionStore.Get` before `Upsert`; unknown names must not create a

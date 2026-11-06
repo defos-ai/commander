@@ -62,9 +62,10 @@ the [UI guide](ui/AGENTS.md) for UI changes.
   resolution belongs to the spawner, and visibility travels unchanged without
   tokens in mission input.
 - `build-agent` requires operator action contracts alongside instructions, checkout
-  before build, and `policies.session` binding `checkout-template` to `build-agent`.
-  Clients omit session routing fields; the controller supplies them and selects
-  the workspace's exact owner. Keep model review on their results. Publication/release stay optional and do not
+  before build, and explicit workspace session routing. Checkout uses the operation
+  ID as `session_scope` and omits `session_id` for creation; build uses the exact
+  returned scope and ID so the controller selects the workspace's owner.
+  Keep model review on their results. Publication/release stay optional and do not
   require that workspace session, so their secrets cannot block a build. Publication needs
   consent; release needs its own
   consent/version. Release polls continue automatically until terminal model review.

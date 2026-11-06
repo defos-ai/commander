@@ -26,7 +26,7 @@ artifact bytes and reports belong to the separate storage provider.
 - BSON ignores unknown fields. Mission reads explicitly reject stored root
   `rules` and `completion` fields, including null/empty values. Strictly decode
   the raw `policies` document before accepting the domain value, rejecting removed
-  `placement` and unknown nested fields so constraints cannot silently disappear.
+  `placement`, `session` and unknown nested fields so constraints cannot silently disappear.
   New documents omit removed fields; no conversion happens during reads.
   Completion belongs in `policies.completion`.
 - Operations span metadata, task, question and event collections. Initialize

@@ -88,9 +88,9 @@ func TestE2EBuilderSuccessfulBuildPublishesItsSessionSourceArtifact(t *testing.T
 	s := fixtures.NewSuccessfulBuild(t)
 	owner := s.Builder(t, "00000001", "", "success")
 	operation := s.Start(t)
-	created, checkout := s.Checkout(t, operation, "")
+	created, checkout := s.Checkout(t, operation, operation)
 
-	task := s.Assign(t, operation, builderactions.BuildAgentName, fixtures.ManagedWorkspaceBuildInput())
+	task := s.Assign(t, operation, builderactions.BuildAgentName, fixtures.WorkspaceBuildInput(checkout))
 	finished := s.Finished(t, operation, task.ID)
 
 	if finished.Status != operations.TaskSucceeded || finished.AgentID != owner.ID || finished.Result == nil {
@@ -98,7 +98,7 @@ func TestE2EBuilderSuccessfulBuildPublishesItsSessionSourceArtifact(t *testing.T
 	}
 	if created.SessionIntent == nil || created.SessionIntent.Mode != sessions.Create || finished.SessionIntent == nil ||
 		finished.SessionIntent.Mode != sessions.Use || finished.SessionIntent.ID != created.ID || finished.SessionIntent.ScopeID != created.SessionIntent.ScopeID {
-		t.Fatalf("build did not use the controller-managed checkout binding: checkout=%+v build=%+v", created.SessionIntent, finished.SessionIntent)
+		t.Fatalf("build did not use the saved checkout binding: checkout=%+v build=%+v", created.SessionIntent, finished.SessionIntent)
 	}
 	var output builderactions.BuildAgentOutput
 	if err := json.Unmarshal(finished.Result.Output, &output); err != nil {

@@ -21,9 +21,6 @@ func TestMissionCatalogAndRepeatedCleanup(t *testing.T) {
 	if buildIndex < 0 || !reflect.DeepEqual(catalog.Items[buildIndex], build) || !slices.Equal(build.RequiredActions, []string{"checkout-template", "build-agent"}) || !slices.Equal(build.OptionalActions, []string{"publish-agent", "release-agent"}) {
 		t.Fatalf("build mission lost its optional publication action: %+v", build)
 	}
-	if build.Policies == nil || len(build.Policies.Session) != 1 || build.Policies.Session[0].CreateAction != "checkout-template" || !slices.Equal(build.Policies.Session[0].UseActions, []string{"build-agent"}) {
-		t.Fatalf("build mission lost its checkout/build session binding: %+v", build.Policies)
-	}
 	assertSchema(t, a, "Mission", a.Request(http.MethodGet, "/api/v1/missions/build-agent", nil))
 	created := a.Request(http.MethodPost, "/api/v1/operations", fixtures.Object{"mission_name": "build-agent", "input": fixtures.Object{
 		"instructions": "Create a fixture agent",
@@ -31,7 +28,7 @@ func TestMissionCatalogAndRepeatedCleanup(t *testing.T) {
 	}})
 	buildOperation := fixtures.Decode[models.OperationResponse](t, created, http.StatusCreated)
 	if !reflect.DeepEqual(buildOperation.Mission.Policies, build.Policies) {
-		t.Fatal("build operation lost the bundled session policy")
+		t.Fatal("build operation lost the bundled policies")
 	}
 	if buildOperation.Preflight == nil || len(buildOperation.Preflight.Actions) != 2 {
 		t.Fatalf("build preflight included optional publication: %+v", buildOperation.Preflight)
@@ -88,10 +85,6 @@ func TestMissionSharingPolicy(t *testing.T) {
 	definition.Policies.Completion.DecisionBy = "model"
 	definition.Policies.Continuation.AggregateResults = []string{"review-vulnerabilities"}
 	definition.Policies.Continuation.ModelReview = []string{"review-vulnerabilities"}
-	definition.Policies.Session = []models.MissionSessionPolicyRequest{
-		{CreateAction: "connect-resource", UseActions: []string{"inspect-resource", "close-resource"}},
-		{CreateAction: "connect-secondary", UseActions: []string{"use-secondary"}},
-	}
 	definition.Policies.Sharing[0].ToActions[0] = "review-vulnerabilities"
 	definition.Policies.Sharing[0].Include = []string{"decisions"}
 	updated := fixtures.Decode[models.MissionResponse](t, a.Request(http.MethodPut, path, definition), http.StatusOK)
@@ -121,7 +114,7 @@ func TestMissionSharingPolicy(t *testing.T) {
 		candidate := fixtures.PoliciesDefinition(definition, fixtures.Object{"completion": completion})
 		fixtures.AssertError(t, a.Request(http.MethodPut, path, candidate), http.StatusBadRequest, "invalid_request")
 	}
-	for _, session := range fixtures.InvalidSessionPolicies() {
+	for _, session := range []any{nil, []fixtures.Object{}, []fixtures.Object{{"create_action": "connect-resource", "use_actions": []string{"use-resource"}}}} {
 		candidate := fixtures.PoliciesDefinition(definition, fixtures.Object{"session": session})
 		fixtures.AssertError(t, a.Request(http.MethodPost, "/api/v1/missions", candidate), http.StatusBadRequest, "invalid_request")
 		fixtures.AssertError(t, a.Request(http.MethodPut, path, candidate), http.StatusBadRequest, "invalid_request")
@@ -146,13 +139,13 @@ func TestMissionSharingPolicy(t *testing.T) {
 		}
 		fixtures.AssertError(t, a.Request(http.MethodPut, path, legacy), http.StatusBadRequest, "invalid_request")
 	}
-	for _, policies := range []any{fixtures.Object{"completion": nil}, fixtures.Object{"sharing": []fixtures.Object{}}, fixtures.Object{"sharing": nil}, fixtures.Object{"session": []fixtures.Object{}}, fixtures.Object{"session": nil}, fixtures.Object{"continuation": nil}, fixtures.Object{"continuation": fixtures.Object{}}, fixtures.Object{"continuation": fixtures.Object{"aggregate_results": nil, "model_review": nil}}, fixtures.Object{"continuation": fixtures.Object{"aggregate_results": []string{}, "model_review": []string{}}}, fixtures.Object{}, nil} {
+	for _, policies := range []any{fixtures.Object{"completion": nil}, fixtures.Object{"sharing": []fixtures.Object{}}, fixtures.Object{"sharing": nil}, fixtures.Object{"continuation": nil}, fixtures.Object{"continuation": fixtures.Object{}}, fixtures.Object{"continuation": fixtures.Object{"aggregate_results": nil, "model_review": nil}}, fixtures.Object{"continuation": fixtures.Object{"aggregate_results": []string{}, "model_review": []string{}}}, fixtures.Object{}, nil} {
 		disabled := fixtures.Decode[models.MissionResponse](t, a.Request(http.MethodPut, path, fixtures.PoliciesDefinition(definition, policies)), http.StatusOK)
 		if policies == nil {
 			if disabled.Policies != nil {
 				t.Fatal("null policies were not removed")
 			}
-		} else if disabled.Policies == nil || disabled.Policies.Completion != nil || len(disabled.Policies.Session) != 0 || len(disabled.Policies.Sharing) != 0 || disabled.Policies.Continuation != nil && (len(disabled.Policies.Continuation.AggregateResults) != 0 || len(disabled.Policies.Continuation.ModelReview) != 0) {
+		} else if disabled.Policies == nil || disabled.Policies.Completion != nil || len(disabled.Policies.Sharing) != 0 || disabled.Policies.Continuation != nil && (len(disabled.Policies.Continuation.AggregateResults) != 0 || len(disabled.Policies.Continuation.ModelReview) != 0) {
 			t.Fatal("empty policies should declare no overrides")
 		}
 	}
@@ -170,15 +163,6 @@ func assertMissionPolicies(t *testing.T, got *models.MissionPoliciesResponse, wa
 	t.Helper()
 	if got == nil || want == nil || len(got.Sharing) != len(want.Sharing) {
 		t.Fatalf("mission sharing differs: got %+v, want %+v", got, want)
-	}
-	if len(got.Session) != len(want.Session) {
-		t.Fatalf("mission session policies differ: got %+v, want %+v", got.Session, want.Session)
-	}
-	for i, policy := range got.Session {
-		expected := want.Session[i]
-		if policy.CreateAction != expected.CreateAction || !slices.Equal(policy.UseActions, expected.UseActions) {
-			t.Fatalf("mission session policy %d differs: got %+v, want %+v", i, policy, expected)
-		}
 	}
 	if (got.Completion == nil) != (want.Completion == nil) || got.Completion != nil && got.Completion.DecisionBy != want.Completion.DecisionBy {
 		t.Fatalf("mission completion differs: got %+v, want %+v", got.Completion, want.Completion)

@@ -1,14 +1,10 @@
 package policies
 
-import (
-	"fmt"
-	"slices"
-)
+import "fmt"
 
 type MissionPolicies struct {
 	Continuation *ContinuationPolicy `json:"continuation,omitempty"`
 	Completion   *CompletionPolicy   `json:"completion,omitempty"`
-	Session      []SessionPolicy     `json:"session,omitempty"`
 	Sharing      SharingPolicy       `json:"sharing,omitempty"`
 }
 
@@ -23,9 +19,6 @@ func (p MissionPolicies) Validate() error {
 			return err
 		}
 	}
-	if err := validateSessionPolicies(p.Session); err != nil {
-		return err
-	}
 	return p.Sharing.Validate()
 }
 
@@ -37,10 +30,6 @@ func (p MissionPolicies) Clone() MissionPolicies {
 	if p.Completion != nil {
 		completion := *p.Completion
 		p.Completion = &completion
-	}
-	p.Session = slices.Clone(p.Session)
-	for i := range p.Session {
-		p.Session[i] = p.Session[i].Clone()
 	}
 	p.Sharing = p.Sharing.Clone()
 	return p

@@ -22,8 +22,7 @@ Read the [agent guide](../AGENTS.md) and [root guide](../../../AGENTS.md) first.
   must not read, validate, generate or distribute `SECRETS_ENCRYPTION_KEY`.
 - [checkout-template](actions/checkout_template.go) declares `session_mode=create`
   and accepts `session_scope`, plus an optional `session_id` for explicit reuse.
-  The bundled mission's `policies.session` supplies routing fields; callers omit
-  them. Without a policy, clients supply the scope and any explicit reuse ID.
+  Clients supply the scope, such as the operation ID, and any explicit reuse ID.
   Its source URL is fixed; do not expose
   paths or arbitrary Git URLs through task input. Return the exact session binding,
   opaque workspace ID and revision; reuse never replaces existing source.
@@ -170,9 +169,9 @@ Read the [agent guide](../AGENTS.md) and [root guide](../../../AGENTS.md) first.
   Keep child output bounded to 1 MiB, inspection bounded to two minutes, diagnostics
   redacted and the probe out of artifacts. Failures preserve source and return no
   artifacts. Constructor inspection checks declarations, not implementation behavior.
-- Workspace storage is local to the exact builder process. The bundled
-  `build-agent` mission binds checkout to build through `policies.session`; the
-  controller injects routing IDs and session placement selects the owner. Do not duplicate placement in the action
+- Workspace storage is local to the exact builder process. Clients supply
+  checkout's saved scope and session ID to build; session placement selects the
+  owner. Do not duplicate placement in the action
   or attach old workspace directories to a replacement process by ID. Publication
   continues to use artifact storage independently of workspace/session ownership.
 

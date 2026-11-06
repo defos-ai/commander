@@ -6,7 +6,7 @@ import { connect, test } from '../fixtures/e2e';
 test('create and edit a reusable mission through Admin without installing actions or starting work', async ({ page, api }) => {
   const actionInputSchema = String.raw`{"type":"object","properties":{"exact":{"const":9007199254740993},"escaped":{"const":"\u0061\\path"}}}`;
   const missionInputSchema = String.raw`{"type":"object","properties":{"exact":{"const":9007199254740993},"escaped":{"const":"\u0061\\path"}}}`;
-  const missionPolicies = String.raw`{"completion":{"decision_by":"model"},"continuation":{"aggregate_results":["future-mission-\u0061ction"],"model_review":["future-mission-\u0061ction","rank-hn-stories"]},"sharing":[{"from_actions":["future-mission-action"],"to_actions":["rank-hn-stories"],"include":["results","artifacts"]}],"session":[{"\u0063reate_action":"future-mission-action","use_actions":["rank-hn-\u0073tories"]}]}`;
+  const missionPolicies = String.raw`{"completion":{"decision_by":"model"},"continuation":{"aggregate_results":["future-mission-\u0061ction"],"model_review":["future-mission-\u0061ction","rank-hn-stories"]},"sharing":[{"from_actions":["future-mission-action"],"to_actions":["rank-hn-stories"],"include":["results","artifacts"]}]}`;
   const mission = {
     name: `ui-mission-${randomUUID()}`,
     objectives: ['Review using an action that has not been installed yet.', 'Save findings for a later review.'],
@@ -95,8 +95,6 @@ test('create and edit a reusable mission through Admin without installing action
   expect(authoredJSON.match(/9007199254740993/g)).toHaveLength(2);
   expect(authoredJSON).toContain(String.raw`"\u0061\\path"`);
   expect(authoredJSON.match(/"future-mission-\\u0061ction"/g)).toHaveLength(2);
-  expect(authoredJSON).toContain(String.raw`"\u0063reate_action"`);
-  expect(authoredJSON).toContain(String.raw`"rank-hn-\u0073tories"`);
   await create.getByRole('button', { name: 'Form', exact: true }).click();
   await create.getByRole('button', { name: 'Create mission', exact: true }).click();
   await expect(create.getByRole('textbox', { name: 'Mission definition (JSON)', exact: true })).toHaveCount(0);
@@ -110,15 +108,10 @@ test('create and edit a reusable mission through Admin without installing action
   await expect(continuation.getByRole('rowheader')).toHaveText(['Aggregate results', 'Model review']);
   await expect(continuation.getByRole('row').filter({ has: page.getByRole('rowheader', { name: 'Model review', exact: true }) }).getByRole('listitem'))
     .toHaveText(['future-mission-action', 'rank-hn-stories']);
-  const sessionBindings = page.getByRole('table', { name: 'Session bindings', exact: true });
-  await expect(sessionBindings.getByRole('columnheader')).toHaveText(['Create action', 'Use actions']);
-  await expect(sessionBindings.getByRole('rowheader')).toHaveText('future-mission-action');
-  await expect(sessionBindings.getByRole('listitem')).toHaveText('rank-hn-stories');
   const missionURL = page.url();
   await page.reload();
   await expect(page).toHaveURL(missionURL);
   await expect(page.getByRole('heading', { name: mission.name, exact: true })).toBeVisible();
-  await expect(sessionBindings.getByRole('listitem')).toHaveText('rank-hn-stories');
   expect(await api.get<Mission>(`/missions/${mission.name}`)).toMatchObject(expectedMission);
   await page.getByRole('group', { name: 'Mission view', exact: true }).getByRole('button', { name: 'JSON', exact: true }).click();
   const jsonURL = `${missionURL}/json`;
@@ -163,7 +156,7 @@ test('create and edit a reusable mission through Admin without installing action
   await create.getByRole('combobox', { name: 'Role for rank-hn-stories', exact: true }).selectOption('required');
   await create.locator('summary').filter({ hasText: /^Advanced settings$/ }).click();
   const savedPolicies = JSON.parse(await create.getByRole('textbox', { name: 'Policies (JSON)', exact: true }).inputValue());
-  expect(savedPolicies.session).toEqual([{ create_action: 'future-mission-action', use_actions: ['rank-hn-stories'] }]);
+  expect(savedPolicies).toEqual({ ...expectedMission.policies, completion: { decision_by: 'model' } });
   await create.getByRole('textbox', { name: 'Output schema (JSON)', exact: true }).fill('{"type":"object","properties":{"summary":{"type":"string"}}}');
   await create.getByRole('button', { name: 'Save changes', exact: true }).click();
   await expect(page).toHaveURL(missionURL);

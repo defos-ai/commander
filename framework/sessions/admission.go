@@ -5,29 +5,18 @@ import (
 
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/agents"
-	"github.com/defos-ai/commander/framework/domain/operations"
 	model "github.com/defos-ai/commander/framework/domain/sessions"
 )
 
 // Normalize resolves proposals before the operation transition creates children.
 // An invalid automatic proposal remains visible and blocked; it cannot roll back
 // its parent's accepted execution result. Explicit callers reject Error instead.
-func Normalize(op operations.Operation, next []actions.NextAction, records []agents.Agent, scopes []model.Scope, definitions ...actions.Definition) ([]actions.NextAction, error) {
+func Normalize(next []actions.NextAction, records []agents.Agent, definitions ...actions.Definition) ([]actions.NextAction, error) {
 	result := actions.CloneNextActions(next)
 	for i := range result {
 		a := &result[i]
 		a.SessionIntent = nil
 		mode, err := sessionMode(a.ActionName, records, definitions)
-		if err == nil {
-			var input []byte
-			input, err = policyInput(op, next, *a, mode, scopes)
-			if errors.Is(err, errPolicyPending) {
-				return nil, err
-			}
-			if err == nil {
-				a.Input = input
-			}
-		}
 		if err == nil {
 			a.SessionIntent, err = model.ResolveIntent(mode, a.Input)
 		}

@@ -17,13 +17,7 @@ type CreateMissionRequest struct {
 type MissionPoliciesRequest struct {
 	Completion   *MissionCompletionPolicyRequest   `json:"completion,omitempty"`
 	Continuation *MissionContinuationPolicyRequest `json:"continuation,omitempty"`
-	Session      []MissionSessionPolicyRequest     `json:"session,omitempty"`
 	Sharing      []MissionSharingPolicyRequest     `json:"sharing,omitempty"`
-}
-
-type MissionSessionPolicyRequest struct {
-	CreateAction string   `json:"create_action"`
-	UseActions   []string `json:"use_actions"`
 }
 
 type MissionContinuationPolicyRequest struct {
@@ -56,13 +50,7 @@ type MissionResponse struct {
 type MissionPoliciesResponse struct {
 	Completion   *MissionCompletionPolicyResponse   `json:"completion,omitempty"`
 	Continuation *MissionContinuationPolicyResponse `json:"continuation,omitempty"`
-	Session      []MissionSessionPolicyResponse     `json:"session,omitempty"`
 	Sharing      []MissionSharingPolicyResponse     `json:"sharing,omitempty"`
-}
-
-type MissionSessionPolicyResponse struct {
-	CreateAction string   `json:"create_action"`
-	UseActions   []string `json:"use_actions"`
 }
 
 type MissionContinuationPolicyResponse struct {

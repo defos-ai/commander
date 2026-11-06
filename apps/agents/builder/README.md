@@ -46,10 +46,9 @@ the outcome.
 
 For direct MCP use, read `describe_mission` for `build-agent` and
 `describe_action` for each action's input schema. Checkout and build must run on
-the workspace's owning builder. The bundled mission creates a workspace session
-through `policies.session`: assign checkout with `{}`, then build with the requested
-instructions and actions. The controller supplies session routing IDs. Without a
-mission binding, supply checkout's saved scope and session ID explicitly.
+the workspace's owning builder. Assign checkout with `session_scope` set to the
+operation ID and omit `session_id` to create a workspace. Then build with checkout's
+returned scope and session ID, together with the requested instructions and actions.
 
 ## Publish source
 

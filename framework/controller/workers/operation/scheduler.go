@@ -119,7 +119,7 @@ func (r *Worker) selectAgent(ctx context.Context, operation operations.Operation
 		if owner != "" && record.ID != owner {
 			continue
 		}
-		if record.Stale || record.Status != agentmodel.AgentReady || used[record.ID] >= r.capacity || !operation.SessionPolicyCompatible(task, record) {
+		if record.Stale || record.Status != agentmodel.AgentReady || used[record.ID] >= r.capacity {
 			continue
 		}
 		for _, action := range record.Actions {

@@ -22,7 +22,7 @@ import (
 )
 
 const CheckoutTemplateName = "checkout-template"
-const CheckoutTemplateDescription = "Check out the public Commander example-agent template into a new workspace session. A mission session policy supplies routing fields. Without a binding, supply session_scope to create, or session_scope and session_id to reuse an existing checkout on its owning builder. Returns the session binding, opaque workspace ID and exact Git revision. Does not build, run or publish code."
+const CheckoutTemplateDescription = "Check out the public Commander example-agent template into a new workspace session. Supply session_scope to create, or session_scope and session_id to reuse an existing checkout on its owning builder. The operation ID can serve as the scope. Returns the session binding, opaque workspace ID and exact Git revision. Does not build, run or publish code."
 const TemplateURL = "https://github.com/defos-ai/commander-example-agent.git"
 
 type CheckoutTemplateInput struct {
@@ -57,7 +57,7 @@ func NewCheckoutTemplate(provider *workspaces.Provider) (*CheckoutTemplate, erro
 			Name:        CheckoutTemplateName,
 			Description: CheckoutTemplateDescription,
 			InputSchema: json.RawMessage(`{"type":"object","properties":{
-"session_scope":{"type":"string","format":"uuid","description":"Supplied by a mission session policy; omit when bound. Otherwise supply a scope UUID, such as the operation ID."},
+"session_scope":{"type":"string","format":"uuid","description":"Scope UUID for the workspace session, such as the operation ID."},
 "session_id":{"type":"string","format":"uuid","description":"Existing session to reuse on its owning builder; omit to create."}
 },"required":["session_scope"],"additionalProperties":false}`),
 			OutputSchema: outputSchema,

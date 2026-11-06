@@ -2,7 +2,6 @@ package session
 
 import (
 	"context"
-	"slices"
 
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/agents"
@@ -41,32 +40,7 @@ func (w *Worker) Normalize(ctx context.Context, op operations.Operation, next []
 			}
 		}
 	}
-	var scopes []model.Scope
-	if hasSessionPolicy(op, next) {
-		// Repair only already accepted claims before resolving another task.
-		if err := w.Observe(ctx, runtimeSessions.Evidence{OperationID: op.ID}); err != nil {
-			return nil, err
-		}
-		var err error
-		scopes, err = w.store.List(ctx)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return runtimeSessions.Normalize(op, next, records, scopes, fallback...)
-}
-
-func hasSessionPolicy(op operations.Operation, next []actions.NextAction) bool {
-	if op.Mission.Policies != nil {
-		for _, policy := range op.Mission.Policies.Session {
-			for _, action := range next {
-				if action.ActionName == policy.CreateAction || slices.Contains(policy.UseActions, action.ActionName) {
-					return true
-				}
-			}
-		}
-	}
-	return false
+	return runtimeSessions.Normalize(next, records, fallback...)
 }
 
 func creation(task operations.Task) model.ExecutionRef {

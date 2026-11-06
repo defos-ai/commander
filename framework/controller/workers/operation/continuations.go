@@ -32,7 +32,7 @@ func (r *Worker) normalize(ctx context.Context, op operations.Operation, next []
 	if r.sessions != nil {
 		return r.sessions.Normalize(ctx, op, next, records)
 	}
-	return runtimeSessions.Normalize(op, next, records, nil, op.Mission.ActionDefinitions...)
+	return runtimeSessions.Normalize(next, records, op.Mission.ActionDefinitions...)
 }
 
 func (r *Worker) Resolve(ctx context.Context, command commands.ResolveContinuationCommand) (operations.Operation, error) {
