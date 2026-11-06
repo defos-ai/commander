@@ -16,6 +16,10 @@ limits, see [Sessions](../../docs/features/sessions.md).
 - Operation persistence determines acceptance. Reconcile session writes afterward
   and retry failures, including for terminal operations. Gate dispatch on completed
   reconciliation; preserve uncertain operation writes as uncertain.
+- Direct controller action calls use the same reservation/binding checks without
+  requiring an operation. Keep the supplied agent command ID and deadline fixed
+  before preparation. Session preparation uses stores directly and never waits
+  on coordination or the remote owner while holding its gate.
 - Completing/cancelling work or expiring inventory does not release a session.
   Close confirms the exact creation claim. Failed close stays pending with its
   saved request ID; abandonment retains identity/history and best-effort revocation.
@@ -120,6 +124,13 @@ These stores have no shared transaction: reconcile incomplete phases to the save
 identities before publication. Serialize preparation/publication and close/abandon
 through the session worker; do not hold its gate while waiting for remote execution
 or control replies. An uncertain write never authorizes a new owner or command.
+
+For direct calls, coordination prepares the original envelope through the session
+worker, then claims it and publishes through the same lifecycle guard. Existing
+execution claims bypass new preparation: completed outcomes remain readable after
+closure or owner loss, and pending direct work is observed without redelivery.
+An explicitly requested binding must match the saved one. Session routing still
+follows the advertised explicit inputs until acquisition/inheritance is adopted.
 
 One active controller per database is supported. FS stores scope aggregates in
 `runtime-sessions.json`; Mongo stores one aggregate per scope in `runtime_sessions`

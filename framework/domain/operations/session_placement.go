@@ -1,7 +1,6 @@
 package operations
 
 import (
-	"fmt"
 	"slices"
 
 	"github.com/defos-ai/commander/framework/domain/actions"
@@ -113,27 +112,14 @@ func sessionConstraint(task Task, scopes []sessions.Scope, check bool) (string, 
 	if !check {
 		return owner, nil
 	}
-	if err := record.Available(); err != nil {
-		return owner, err
-	}
 	if intent.Mode == sessions.Create {
+		if err := record.Available(); err != nil {
+			return owner, err
+		}
 		if record.CommandID != task.CommandID || record.OperationID != task.OperationID || record.TaskID != task.ID {
 			return owner, sessions.ErrConflict
 		}
 		return owner, nil
 	}
-	if owner == "" {
-		return "", fmt.Errorf("owner_unavailable")
-	}
-	if record.Observation == nil {
-		return owner, fmt.Errorf("session_not_usable")
-	}
-	state := record.Observation.State
-	if state == "lost" || state == "closed" || state == "failed" {
-		return owner, fmt.Errorf("session_not_usable: %s", state)
-	}
-	if intent.Mode == sessions.Use && state != "connected" {
-		return owner, fmt.Errorf("session_not_usable: verification required")
-	}
-	return owner, nil
+	return owner, record.Usable(intent.Mode)
 }

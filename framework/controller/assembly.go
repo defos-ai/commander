@@ -91,11 +91,10 @@ func assemble(c *Controller, bus comms.Bus, config ControllerConfig) (result []w
 	}
 	c.coreWorkers = append([]workers.Worker(nil), list...)
 	var sessionCoordinator runtimeSessions.Coordinator
-	var publisher coordination.SessionPublisher
 	if c.sessions != nil {
-		sessionCoordinator, publisher = c.sessions, c.sessions
+		sessionCoordinator = c.sessions
 	}
-	c.operations, err = operation.New(c.lifetime, coordination.Executor{Worker: coordinator, Sessions: publisher}, operation.Dependencies{
+	c.operations, err = operation.New(c.lifetime, c.actionExecutor(), operation.Dependencies{
 		Sessions: sessionCoordinator, AgentCatalog: coordinator, Sharing: c.sharing,
 		MissionStore: config.MissionStore, OperationStore: config.OperationStore, ReportStore: config.ReportStore,
 		AgentSelector: config.AgentSelector, TaskTimeout: config.TaskTimeout, Capacity: config.Capacity, Logger: config.Logger,

@@ -11,7 +11,8 @@ import (
 	"github.com/defos-ai/commander/framework/domain/sessions"
 )
 
-type SessionPublisher interface {
+type SessionDispatcher interface {
+	PrepareAction(context.Context, messages.Message) (messages.Message, error)
 	Publish(context.Context, messages.Message, func(context.Context, messages.Message) error) error
 }
 

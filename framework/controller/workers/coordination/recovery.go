@@ -16,6 +16,7 @@ import (
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
 	agentmodel "github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/executions"
+	"github.com/defos-ai/commander/framework/domain/sessions"
 )
 
 // RecoverAction waits for an already-dispatched task's durable outcome. It never
@@ -98,7 +99,7 @@ func (c *Worker) executionResult(ctx context.Context, agentID, commandID string,
 	if err := domain.Decode(command.Payload, &storedCall); err != nil {
 		return actionmodel.ActionOutput{}, false, recoveryOutcomeError(err)
 	}
-	if storedCall.ActionName != call.ActionName || (storedCall.OperationID != call.OperationID || storedCall.TaskID != call.TaskID) || !sameActionInput(storedCall.Input, call.Input) {
+	if storedCall.ActionName != call.ActionName || (storedCall.OperationID != call.OperationID || storedCall.TaskID != call.TaskID) || !sameActionInput(storedCall.Input, call.Input) || !matchesRequestedSession(call.Session, storedCall.Session) {
 		return actionmodel.ActionOutput{}, false, recoveryOutcomeError(errors.New("stored action request does not match the recovering task"))
 	}
 	if record.Result == nil {
@@ -129,6 +130,10 @@ func recoveryOutcomeError(err error) error {
 		return err
 	}
 	return errors.Join(executions.ErrIndeterminate, err)
+}
+
+func matchesRequestedSession(requested, accepted *sessions.Binding) bool {
+	return requested == nil || accepted != nil && *requested == *accepted
 }
 
 func sameActionInput(left, right json.RawMessage) bool {

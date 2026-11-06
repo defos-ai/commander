@@ -214,6 +214,26 @@ func (r Record) Available() error {
 	return nil
 }
 
+func (r Record) Usable(mode Mode) error {
+	if err := r.Available(); err != nil {
+		return err
+	}
+	if r.OwnerAgentID == "" {
+		return errors.New("owner_unavailable")
+	}
+	if r.Observation == nil {
+		return errors.New("session_not_usable")
+	}
+	state := r.Observation.State
+	if state == "lost" || state == "closed" || state == "failed" {
+		return fmt.Errorf("session_not_usable: %s", state)
+	}
+	if mode == Use && state != "connected" {
+		return errors.New("session_not_usable: verification required")
+	}
+	return nil
+}
+
 // Scope and its retained identities form one atomic store aggregate. Current may
 // change only together with release evidence. Providers own locking/revisions.
 type Scope struct {

@@ -18,7 +18,7 @@ import (
 // DispatchAction is for durable queued tasks. Redelivery uses the exact stored
 // envelope to the same process ID: agents keep a command ledger for their entire
 // lifetime, and replacements receive new IDs. Never retarget unknown work.
-func (c *Worker) DispatchAction(ctx context.Context, agentID string, call actionmodel.ActionCall, publisher SessionPublisher) (actionmodel.ActionOutput, error) {
+func (c *Worker) DispatchAction(ctx context.Context, agentID string, call actionmodel.ActionCall, publisher SessionDispatcher) (actionmodel.ActionOutput, error) {
 	message, err := agentcommands.NewRunAction(agentID, call)
 	if err != nil {
 		return actionmodel.ActionOutput{}, err
@@ -31,7 +31,7 @@ func (c *Worker) DispatchAction(ctx context.Context, agentID string, call action
 	return output, commandOutcomeError(agentcommands.RunAction, err)
 }
 
-func (c *Worker) resumeClaimedAction(ctx context.Context, stored executions.Execution, requested messages.Message, replay bool, publisher SessionPublisher) (state.CommandReply, error) {
+func (c *Worker) resumeClaimedAction(ctx context.Context, stored executions.Execution, requested messages.Message, replay bool, publisher SessionDispatcher) (state.CommandReply, error) {
 	if !replay {
 		return c.awaitClaimedAction(ctx, stored, requested)
 	}
@@ -48,7 +48,7 @@ func (c *Worker) resumeClaimedAction(ctx context.Context, stored executions.Exec
 	return c.awaitClaimedAction(ctx, current, requested)
 }
 
-func (c *Worker) redeliverAction(ctx context.Context, stored executions.Execution, requested messages.Message, publisher SessionPublisher) (executions.Execution, error) {
+func (c *Worker) redeliverAction(ctx context.Context, stored executions.Execution, requested messages.Message, publisher SessionDispatcher) (executions.Execution, error) {
 	if err := stored.Validate(); err != nil {
 		return executions.Execution{}, err
 	}

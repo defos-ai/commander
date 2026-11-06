@@ -17,7 +17,7 @@ func (c *Controller) DiscoverActions(ctx context.Context, agentID string, scope 
 }
 func (c *Controller) RunAction(ctx context.Context, agentID string, call actions.ActionCall) (actions.ActionOutput, error) {
 	return request(ctx, c, func(ctx context.Context) (actions.ActionOutput, error) {
-		return c.coordination.RunAction(ctx, agentID, call)
+		return c.actionExecutor().RunAction(ctx, agentID, call)
 	})
 }
 func (c *Controller) StopAgent(ctx context.Context, agentID string) (agents.Agent, error) {
@@ -26,13 +26,17 @@ func (c *Controller) StopAgent(ctx context.Context, agentID string) (agents.Agen
 	})
 }
 func (c *Controller) DispatchAction(ctx context.Context, agentID string, call actions.ActionCall) (actions.ActionOutput, error) {
-	var publisher coordination.SessionPublisher
-	if c.sessions != nil {
-		publisher = c.sessions
-	}
 	return request(ctx, c, func(ctx context.Context) (actions.ActionOutput, error) {
-		return c.coordination.DispatchAction(ctx, agentID, call, publisher)
+		return c.actionExecutor().DispatchAction(ctx, agentID, call)
 	})
+}
+
+func (c *Controller) actionExecutor() coordination.Executor {
+	executor := coordination.Executor{Worker: c.coordination}
+	if c.sessions != nil {
+		executor.Sessions = c.sessions
+	}
+	return executor
 }
 func (c *Controller) RecoverAction(ctx context.Context, agentID string, call actions.ActionCall) (actions.ActionOutput, error) {
 	return request(ctx, c, func(ctx context.Context) (actions.ActionOutput, error) {

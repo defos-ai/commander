@@ -34,11 +34,15 @@ func (c *Worker) DiscoverActions(ctx context.Context, agentID string, scope *age
 // deadline. Claims and outcomes remain in the controller database, so reusing a
 // task ID never dispatches again.
 func (c *Worker) RunAction(ctx context.Context, agentID string, call actionmodel.ActionCall) (actionmodel.ActionOutput, error) {
+	return c.runAction(ctx, agentID, call, nil)
+}
+
+func (c *Worker) runAction(ctx context.Context, agentID string, call actionmodel.ActionCall, dispatcher SessionDispatcher) (actionmodel.ActionOutput, error) {
 	message, err := agentcommands.NewRunAction(agentID, call)
 	if err != nil {
 		return actionmodel.ActionOutput{}, err
 	}
-	reply, err := c.command(ctx, message, controllerevents.ActionSucceeded, false, nil)
+	reply, err := c.command(ctx, message, controllerevents.ActionSucceeded, false, dispatcher)
 	if err != nil {
 		return actionmodel.ActionOutput{}, err
 	}
@@ -62,21 +66,23 @@ type commandDispatch struct {
 	stored  *executions.Execution
 }
 
-func (c *Worker) command(ctx context.Context, message messages.Message, expected messages.MessageType, replay bool, publisher SessionPublisher) (state.CommandReply, error) {
+func (c *Worker) command(ctx context.Context, message messages.Message, expected messages.MessageType, replay bool, dispatcher SessionDispatcher) (state.CommandReply, error) {
 	if ctx == nil {
 		return state.CommandReply{}, errors.New("command requires a context")
 	}
 	if err := ctx.Err(); err != nil {
 		return state.CommandReply{}, err
 	}
-	message.ExpiresAt, _ = ctx.Deadline()
 	if message.ExpiresAt.IsZero() {
-		message.ExpiresAt = message.CreatedAt.Add(defaultCommandLifetime)
+		message.ExpiresAt, _ = ctx.Deadline()
+		if message.ExpiresAt.IsZero() {
+			message.ExpiresAt = message.CreatedAt.Add(defaultCommandLifetime)
+		}
 	}
 	waiting, done := c.inventoryContext(ctx)
 	defer done()
 	dispatched, err := submit(waiting, c, func(ctx context.Context) (commandDispatch, error) {
-		return c.dispatchCommand(ctx, waiting, message, expected)
+		return c.dispatchCommand(ctx, waiting, message, expected, dispatcher)
 	})
 	if err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, state.ErrControllerClosed) {
@@ -85,7 +91,7 @@ func (c *Worker) command(ctx context.Context, message messages.Message, expected
 		return state.CommandReply{}, err
 	}
 	if dispatched.stored != nil {
-		return c.resumeClaimedAction(waiting, *dispatched.stored, message, replay, publisher)
+		return c.resumeClaimedAction(waiting, *dispatched.stored, message, replay, dispatcher)
 	}
 	select {
 	case reply := <-dispatched.pending.Reply:
@@ -95,7 +101,7 @@ func (c *Worker) command(ctx context.Context, message messages.Message, expected
 	}
 }
 
-func (c *Worker) dispatchCommand(ctx, waiting context.Context, message messages.Message, expected messages.MessageType) (commandDispatch, error) {
+func (c *Worker) dispatchCommand(ctx, waiting context.Context, message messages.Message, expected messages.MessageType, dispatcher SessionDispatcher) (commandDispatch, error) {
 	agentID, kind := message.AgentID, message.Type
 	if kind == agentcommands.RunAction {
 		// Completed work remains usable after its agent has disappeared.
@@ -127,7 +133,16 @@ func (c *Worker) dispatchCommand(ctx, waiting context.Context, message messages.
 		if err := domain.Decode(message.Payload, &call); err != nil {
 			return commandDispatch{}, err
 		}
-		if call.Session != nil {
+		if dispatcher != nil {
+			message, err = dispatcher.PrepareAction(ctx, message)
+			if err != nil {
+				return commandDispatch{}, err
+			}
+			call = actionmodel.ActionCall{}
+			if err := domain.Decode(message.Payload, &call); err != nil {
+				return commandDispatch{}, commandOutcomeError(kind, err)
+			}
+		} else if call.Session != nil {
 			return commandDispatch{}, errors.New("session commands require coordinated preparation")
 		}
 		stored, claimed, err := c.executionStore.Claim(ctx, message)
@@ -136,15 +151,26 @@ func (c *Worker) dispatchCommand(ctx, waiting context.Context, message messages.
 			claimed = false
 		}
 		if err != nil {
-			return commandDispatch{}, fmt.Errorf("claim execution: %w", err)
+			err = fmt.Errorf("claim execution: %w", err)
+			if call.Session != nil {
+				err = commandOutcomeError(kind, err)
+			}
+			return commandDispatch{}, err
 		}
 		if !claimed {
 			return commandDispatch{stored: &stored}, nil
 		}
+		message = stored.Command
 	}
 	pending := &state.PendingCommand{Context: waiting, AgentID: agentID, OperationID: message.OperationID, TaskID: message.TaskID, Expected: expected, Reply: make(chan state.CommandReply, 1)}
 	c.state.Pending[message.ID] = pending
-	if err := (agentcommands.Client{Bus: c.bus}).Publish(ctx, message); err != nil {
+	publish := (agentcommands.Client{Bus: c.bus}).Publish
+	if kind == agentcommands.RunAction && dispatcher != nil {
+		err = dispatcher.Publish(ctx, message, publish)
+	} else {
+		err = publish(ctx, message)
+	}
+	if err != nil {
 		delete(c.state.Pending, message.ID)
 		// Publication may have committed before its confirmation was lost.
 		return commandDispatch{}, commandOutcomeError(kind, err)
@@ -166,7 +192,7 @@ func (c *Worker) awaitClaimedAction(ctx context.Context, stored executions.Execu
 		return state.CommandReply{}, recoveryOutcomeError(err)
 	}
 	if stored.Command.ID != requested.ID || stored.Command.AgentID != requested.AgentID || (stored.Command.OperationID != requested.OperationID || stored.Command.TaskID != requested.TaskID) ||
-		original.ActionName != call.ActionName || (original.OperationID != call.OperationID || original.TaskID != call.TaskID) || !sameActionInput(original.Input, call.Input) {
+		original.ActionName != call.ActionName || (original.OperationID != call.OperationID || original.TaskID != call.TaskID) || !sameActionInput(original.Input, call.Input) || !matchesRequestedSession(call.Session, original.Session) {
 		return state.CommandReply{}, executions.ErrExecutionConflict
 	}
 	if stored.Result == nil {

@@ -88,32 +88,12 @@ func (w *Worker) Prepare(ctx context.Context, a runtimeSessions.Assignment) (run
 	uncertain := func(err error) (runtimeSessions.PreparedDispatch, error) {
 		return runtimeSessions.PreparedDispatch{Operation: op, Task: task}, errors.Join(operations.ErrWriteUncertain, err)
 	}
-	var binding *model.Binding
-	if intent := task.SessionIntent; intent != nil {
-		var record model.Record
-		if intent.Mode == model.Create {
-			record, err = w.apply(ctx, model.Change{Kind: model.Bind, ScopeID: intent.ScopeID, ID: intent.ID, OwnerAgentID: task.AgentID,
-				CommandID: task.CommandID, OperationID: task.OperationID, TaskID: task.ID})
-		} else {
-			var scope model.Scope
-			scope, err = w.store.Get(ctx, intent.ScopeID)
-			if err == nil {
-				record, err = scope.Find(intent.ID)
-			}
-		}
-		if err != nil {
-			return uncertain(err)
-		}
-		if err := record.Available(); err != nil {
-			return uncertain(err)
-		}
-		if record.OwnerAgentID != task.AgentID {
-			return uncertain(model.ErrConflict)
-		}
-		b := record.Binding(intent.Mode)
-		binding = &b
+	call := actions.ActionCall{ActionName: task.ActionName, Input: task.Input, OperationID: task.OperationID, TaskID: task.ID}
+	binding, err := w.prepareBinding(ctx, task.AgentID, task.CommandID, call, task.SessionIntent)
+	if err != nil {
+		return uncertain(err)
 	}
-	call := actions.ActionCall{ActionName: task.ActionName, Input: task.Input, OperationID: task.OperationID, TaskID: task.ID, Session: binding}
+	call.Session = binding
 	command, err := commands.NewRunAction(task.AgentID, call)
 	if err != nil {
 		return uncertain(err)
@@ -128,7 +108,7 @@ func (w *Worker) Prepare(ctx context.Context, a runtimeSessions.Assignment) (run
 
 // Publish serializes the final binding check with close/abandon. The callback is
 // a bounded broker publication, never an action/owner reply wait. Only a saved
-// execution envelope can cross this seam; new claims belong to Prepare.
+// execution envelope can cross this seam; preparation must precede its claim.
 func (w *Worker) Publish(ctx context.Context, command messages.Message, publish func(context.Context, messages.Message) error) error {
 	if err := w.lock(ctx); err != nil {
 		return err

@@ -39,6 +39,11 @@ including workers whose `Run` has not started. No runtime loop starts in assembl
 - [Sessions](session/worker.go) owns one gate, admission caches, preparation,
   publication and retrying retained controls. Share this exact instance with the
   operation worker, events and dispatch. Keep remote control waits outside the session gate.
+  Direct actions and operation tasks share reservation/binding preparation. The
+  coordination executor fixes each command envelope before preparation, claims
+  direct execution afterward and guards its first publication against closure.
+  Existing direct claims remain observation-only; durable task redelivery retains
+  its original identity and lifecycle checks.
   Follow the [session protocol](../../sessions/AGENTS.md) for changes.
 - [Secrets](secret/worker.go) owns encrypted delivery handlers and its retry loop.
   Both event handling and reconciliation execute inside coordination; never
