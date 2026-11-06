@@ -178,7 +178,7 @@ func TestE2EBuilderCloseCancelsActiveWorkspaceWork(t *testing.T) {
 				t.Fatalf("close did not stop workspace work: session=%+v task=%+v", closed, finished)
 			}
 			claim := sessions.CreationClaim{Reference: closed.Reference,
-				Creation: sessions.ExecutionRef{OperationID: operation, TaskID: creation.ID, CommandID: creation.ID}}
+				OperationID: operation, TaskID: creation.ID, CommandID: creation.ID}
 			if err := owner.Provider.Prepare(s.Context, claim); !errors.Is(err, sessions.ErrSessionClosed) {
 				t.Fatalf("closed creation could start again: %v", err)
 			}
@@ -203,13 +203,15 @@ func TestE2EBuilderRetainsAnExactCloseBeforePreparation(t *testing.T) {
 	owner := s.Builder(t, "00000001", "", "fail")
 	taskID := id.New()
 	claim := sessions.CreationClaim{Reference: sessions.Reference{ID: id.New(), ScopeID: id.New(), OwnerAgentID: owner.ID},
-		Creation: sessions.ExecutionRef{OperationID: id.New(), TaskID: taskID, CommandID: taskID}}
+		OperationID: id.New(), TaskID: taskID, CommandID: taskID}
 
-	closed, err := owner.Provider.Control(s.Context, sessions.Control{Reference: claim.Reference, Method: "close", Creation: &claim.Creation})
+	closed, err := owner.Provider.Control(s.Context, sessions.Control{Reference: claim.Reference, Method: "close",
+		OperationID: claim.OperationID, TaskID: claim.TaskID, CommandID: claim.CommandID})
 	prepared := owner.Provider.Prepare(s.Context, claim)
 	foreign := claim
 	foreign.OwnerAgentID = "builder-agent-00000002"
-	_, foreignErr := owner.Provider.Control(s.Context, sessions.Control{Reference: foreign.Reference, Method: "close", Creation: &foreign.Creation})
+	_, foreignErr := owner.Provider.Control(s.Context, sessions.Control{Reference: foreign.Reference, Method: "close",
+		OperationID: foreign.OperationID, TaskID: foreign.TaskID, CommandID: foreign.CommandID})
 
 	if err != nil || closed.State != "closed" || !errors.Is(prepared, sessions.ErrSessionClosed) || !errors.Is(foreignErr, sessions.ErrConflict) {
 		t.Fatalf("close tombstone lost its exact claim: closed=%+v close=%v prepare=%v foreign=%v", closed, err, prepared, foreignErr)

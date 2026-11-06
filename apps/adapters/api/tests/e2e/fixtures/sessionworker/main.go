@@ -100,7 +100,7 @@ func run() error {
 			if err != nil {
 				return useOutput{}, err
 			}
-			return useOutput{Owner: owner, ID: binding.ID, CreationTask: binding.Creation.TaskID, Isolated: !found}, nil
+			return useOutput{Owner: owner, ID: binding.ID, CreationTask: binding.TaskID, Isolated: !found}, nil
 		}})
 		if err != nil {
 			return err

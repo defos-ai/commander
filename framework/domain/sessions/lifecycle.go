@@ -74,30 +74,29 @@ func (i Intent) Validate() error {
 	return nil
 }
 
-type ExecutionRef struct {
-	OperationID string `json:"operation_id"`
-	TaskID      string `json:"task_id"`
-	CommandID   string `json:"command_id"`
-}
-
-func (r ExecutionRef) Validate() error {
-	if !id.Valid(r.OperationID) || !id.Valid(r.TaskID) || r.CommandID != r.TaskID {
-		return errors.New("session creation requires an operation task and its command")
+func validateCreation(commandID, operationID, taskID string) error {
+	if !id.Valid(commandID) {
+		return errors.New("session creation requires a canonical command ID")
+	}
+	if (operationID != "" || taskID != "") && (!id.Valid(operationID) || !id.Valid(taskID)) {
+		return errors.New("session creation requires both operation and task UUIDs, or neither")
 	}
 	return nil
 }
 
 type Binding struct {
 	Reference
-	Mode     Mode         `json:"mode"`
-	Creation ExecutionRef `json:"creation"`
+	Mode        Mode   `json:"mode"`
+	CommandID   string `json:"command_id"`
+	OperationID string `json:"operation_id,omitempty"`
+	TaskID      string `json:"task_id,omitempty"`
 }
 
 func (b Binding) Validate() error {
 	if err := b.Reference.Validate(); err != nil {
 		return err
 	}
-	if err := b.Creation.Validate(); err != nil {
+	if err := validateCreation(b.CommandID, b.OperationID, b.TaskID); err != nil {
 		return err
 	}
 	return (Intent{Mode: b.Mode, ScopeID: b.ScopeID, ID: b.ID}).Validate()
@@ -107,17 +106,20 @@ func (b Binding) Validate() error {
 // when close wins delivery order. Prepare must never open an external resource.
 type CreationClaim struct {
 	Reference
-	Creation ExecutionRef `json:"creation"`
+	CommandID   string `json:"command_id"`
+	OperationID string `json:"operation_id,omitempty"`
+	TaskID      string `json:"task_id,omitempty"`
 }
 
 func (c CreationClaim) Validate() error {
 	if err := c.Reference.Validate(); err != nil {
 		return err
 	}
-	return c.Creation.Validate()
+	return validateCreation(c.CommandID, c.OperationID, c.TaskID)
 }
 func (b Binding) Claim() CreationClaim {
-	return CreationClaim{Reference: b.Reference, Creation: b.Creation}
+	return CreationClaim{Reference: b.Reference, CommandID: b.CommandID,
+		OperationID: b.OperationID, TaskID: b.TaskID}
 }
 
 type Disposition string
@@ -136,16 +138,26 @@ type Release struct {
 }
 type Record struct {
 	Reference
-	Creation       ExecutionRef `json:"creation"`
-	Disposition    Disposition  `json:"disposition"`
-	Observation    *Session     `json:"observation,omitempty"`
-	PendingControl *Control     `json:"pending_control,omitempty"`
-	Release        *Release     `json:"release,omitempty"`
-	CreatedAt      time.Time    `json:"created_at"`
+	CommandID      string      `json:"command_id"`
+	OperationID    string      `json:"operation_id,omitempty"`
+	TaskID         string      `json:"task_id,omitempty"`
+	Disposition    Disposition `json:"disposition"`
+	Observation    *Session    `json:"observation,omitempty"`
+	PendingControl *Control    `json:"pending_control,omitempty"`
+	Release        *Release    `json:"release,omitempty"`
+	CreatedAt      time.Time   `json:"created_at"`
 }
 
 func (r Record) Binding(mode Mode) Binding {
-	return Binding{Reference: r.Reference, Mode: mode, Creation: r.Creation}
+	return Binding{Reference: r.Reference, Mode: mode, CommandID: r.CommandID,
+		OperationID: r.OperationID, TaskID: r.TaskID}
+}
+func (r Record) Claim() CreationClaim {
+	return CreationClaim{Reference: r.Reference, CommandID: r.CommandID,
+		OperationID: r.OperationID, TaskID: r.TaskID}
+}
+func (r Record) matchesCreation(commandID, operationID, taskID string) bool {
+	return r.CommandID == commandID && r.OperationID == operationID && r.TaskID == taskID
 }
 func (r Record) Clone() Record {
 	if r.Observation != nil {
@@ -229,7 +241,7 @@ func (s Scope) Validate() error {
 			return ErrConflict
 		}
 		seen[r.ID] = true
-		if err := r.Creation.Validate(); err != nil {
+		if err := validateCreation(r.CommandID, r.OperationID, r.TaskID); err != nil {
 			return err
 		}
 		if r.OwnerAgentID != "" && !id.ValidAgent(r.OwnerAgentID) {
@@ -265,7 +277,7 @@ func (s Scope) Validate() error {
 			return ErrConflict
 		}
 		if control := r.PendingControl; control != nil {
-			if control.Method != "close" || control.Reference != r.Reference || !id.Valid(control.RequestID) || control.Creation == nil || *control.Creation != r.Creation {
+			if control.Method != "close" || control.Reference != r.Reference || !id.Valid(control.RequestID) || control.Claim() != r.Claim() {
 				return ErrConflict
 			}
 		}
@@ -299,7 +311,9 @@ const (
 type Change struct {
 	Kind                      ChangeKind
 	ScopeID, ID, OwnerAgentID string
-	Creation                  ExecutionRef
+	CommandID                 string
+	OperationID               string
+	TaskID                    string
 	Observation               *Session
 	Control                   *Control
 	At                        time.Time
@@ -324,11 +338,11 @@ func (s *Scope) Apply(c Change) error {
 		}
 	}
 	if c.Kind == Reserve {
-		if err := c.Creation.Validate(); err != nil {
+		if err := validateCreation(c.CommandID, c.OperationID, c.TaskID); err != nil {
 			return err
 		}
 		if index >= 0 {
-			if s.Records[index].Creation != c.Creation {
+			if !s.Records[index].matchesCreation(c.CommandID, c.OperationID, c.TaskID) {
 				return ErrConflict
 			}
 			return nil
@@ -336,7 +350,9 @@ func (s *Scope) Apply(c Change) error {
 		if s.Current != "" {
 			return ErrScopeReserved
 		}
-		s.Records = append(s.Records, Record{Reference: Reference{ID: c.ID, ScopeID: c.ScopeID}, Creation: c.Creation, Disposition: Reserved, CreatedAt: c.At})
+		s.Records = append(s.Records, Record{Reference: Reference{ID: c.ID, ScopeID: c.ScopeID},
+			CommandID: c.CommandID, OperationID: c.OperationID, TaskID: c.TaskID,
+			Disposition: Reserved, CreatedAt: c.At})
 		s.Current = c.ID
 		return s.Validate()
 	}
@@ -349,7 +365,7 @@ func (s *Scope) Apply(c Change) error {
 		if err := r.Available(); err != nil {
 			return err
 		}
-		if !id.ValidAgent(c.OwnerAgentID) || r.OwnerAgentID != "" && r.OwnerAgentID != c.OwnerAgentID || r.Creation != c.Creation {
+		if !id.ValidAgent(c.OwnerAgentID) || r.OwnerAgentID != "" && r.OwnerAgentID != c.OwnerAgentID || !r.matchesCreation(c.CommandID, c.OperationID, c.TaskID) {
 			return ErrConflict
 		}
 		r.OwnerAgentID = c.OwnerAgentID
@@ -379,7 +395,7 @@ func (s *Scope) Apply(c Change) error {
 		if r.Disposition == Released {
 			return nil
 		}
-		if c.Control.Creation == nil || *c.Control.Creation != r.Creation {
+		if c.Control.Claim() != r.Claim() {
 			return ErrConflict
 		}
 		if r.PendingControl == nil {
@@ -388,7 +404,7 @@ func (s *Scope) Apply(c Change) error {
 		}
 		r.Disposition = Closing
 	case ConfirmClose:
-		if c.Control == nil || r.PendingControl == nil || c.Control.Method != "close" || c.Control.Creation == nil || *c.Control.Creation != r.Creation || c.Control.RequestID != r.PendingControl.RequestID || c.Control.Reference != r.Reference || c.Observation == nil || c.Observation.Reference != r.Reference || c.Observation.State != "closed" {
+		if c.Control == nil || r.PendingControl == nil || c.Control.Method != "close" || c.Control.Claim() != r.Claim() || c.Control.RequestID != r.PendingControl.RequestID || c.Control.Reference != r.Reference || c.Observation == nil || c.Observation.Reference != r.Reference || c.Observation.State != "closed" {
 			return ErrConflict
 		}
 		if r.Disposition == Released {

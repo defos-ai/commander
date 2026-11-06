@@ -107,7 +107,11 @@ applies to all domain packages below this directory.
   receipts against the in-memory exchange before persisting them.
 - Session [Scope and Record](sessions/lifecycle.go) own reservation and lifecycle;
   [Session](sessions/session.go) is an observed/query view. Preserve exact owner
-  and original creation identity. Completing an operation does not close a
+  and original creation command identity. Records, bindings and claims carry
+  `CommandID`, `OperationID` and `TaskID` directly. The
+  command ID is required; operation/task provenance is an optional paired set
+  of UUIDs and need not equal the command ID. Compare all retained creation IDs
+  when checking an accepted task or claim. Completing an operation does not close a
   session, abandonment does not prove closure, and close-before-start must fence
   delayed resource creation. Follow the [session guide](../sessions/AGENTS.md).
 - [Controller registration](controllers/controller.go) describes runtime liveness.

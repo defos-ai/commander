@@ -33,7 +33,8 @@ func (w *Worker) Observe(ctx context.Context, e runtimeSessions.Evidence) error 
 				}
 				intent := task.SessionIntent
 				if task.AgentID != "" && w.bound[task.ID] != task.AgentID {
-					_, err := w.apply(ctx, model.Change{Kind: model.Bind, ScopeID: intent.ScopeID, ID: intent.ID, OwnerAgentID: task.AgentID, Creation: creation(task)})
+					_, err := w.apply(ctx, model.Change{Kind: model.Bind, ScopeID: intent.ScopeID, ID: intent.ID, OwnerAgentID: task.AgentID,
+						CommandID: task.CommandID, OperationID: task.OperationID, TaskID: task.ID})
 					if err == nil {
 						w.bound[task.ID] = task.AgentID
 					}

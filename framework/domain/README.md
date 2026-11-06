@@ -109,7 +109,7 @@ Secret values stay outside operation questions, logs and model context.
 
 | Model | Why it exists | Consumers |
 | --- | --- | --- |
-| [`Reference`](sessions/session.go), [`ExecutionRef`](sessions/lifecycle.go) | Identify the resource, scope, exact owner process and original creating execution. | Session coordinator, agent resource providers, bindings and controls. |
+| [`Reference`](sessions/session.go) | Identifies the resource, scope and exact owner process. | Session coordinator, agent resource providers, bindings and controls. |
 | [`Session`](sessions/session.go) | Presents an observed/query view of the resource's connectivity, revision and lifecycle disposition. | Agent observations, Session coordinator, Queries and Adapters. |
 | [`Intent`](sessions/lifecycle.go) | Retains the requested create/reuse/use behavior resolved from an action contract and target. | Task admission, Operation worker placement/preflight, Session coordinator. |
 | [`Binding`](sessions/lifecycle.go) | Places the exact owner, resource, creation identity and mode in the saved dispatch. | Session coordinator, Controller replay, agent session context and resource providers. |

@@ -92,7 +92,8 @@ func (w *Worker) Prepare(ctx context.Context, a runtimeSessions.Assignment) (run
 	if intent := task.SessionIntent; intent != nil {
 		var record model.Record
 		if intent.Mode == model.Create {
-			record, err = w.apply(ctx, model.Change{Kind: model.Bind, ScopeID: intent.ScopeID, ID: intent.ID, OwnerAgentID: task.AgentID, Creation: creation(task)})
+			record, err = w.apply(ctx, model.Change{Kind: model.Bind, ScopeID: intent.ScopeID, ID: intent.ID, OwnerAgentID: task.AgentID,
+				CommandID: task.CommandID, OperationID: task.OperationID, TaskID: task.ID})
 		} else {
 			var scope model.Scope
 			scope, err = w.store.Get(ctx, intent.ScopeID)

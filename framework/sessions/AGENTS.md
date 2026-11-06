@@ -73,6 +73,10 @@ Implement `sessions.Provider` on the agent host:
 
 - `Prepare(ctx, claim)` registers the framework-issued creation identity before
   action validation, without opening a resource. Identical claims are idempotent.
+  `command_id` is required; `operation_id` and `task_id`
+  are optional and must be supplied together. These IDs are flat fields on records,
+  bindings and claims. Retain and compare the complete claim on reuse and
+  close. Command identity must not be inferred from a task ID.
 - `Snapshot()` returns quick, independent, concurrency-safe observations.
 - `Changes()` coalesces notifications that cause a full snapshot publication.
 - `Control(ctx, request)` verifies or closes an exact reference. Update the

@@ -43,9 +43,6 @@ func (w *Worker) Normalize(ctx context.Context, op operations.Operation, next []
 	return runtimeSessions.Normalize(next, records, fallback...)
 }
 
-func creation(task operations.Task) model.ExecutionRef {
-	return model.ExecutionRef{OperationID: task.OperationID, TaskID: task.ID, CommandID: task.CommandID}
-}
 func (w *Worker) admit(ctx context.Context, task operations.Task) error {
 	intent := task.SessionIntent
 	if intent == nil {
@@ -60,7 +57,8 @@ func (w *Worker) admit(ctx context.Context, task operations.Task) error {
 	if w.admitted[task.ID] {
 		return nil
 	}
-	_, err := w.apply(ctx, model.Change{Kind: model.Reserve, ScopeID: intent.ScopeID, ID: intent.ID, Creation: creation(task)})
+	_, err := w.apply(ctx, model.Change{Kind: model.Reserve, ScopeID: intent.ScopeID, ID: intent.ID,
+		CommandID: task.CommandID, OperationID: task.OperationID, TaskID: task.ID})
 	if err == nil {
 		w.admitted[task.ID] = true
 	}

@@ -48,8 +48,8 @@ func (a *Agent) serveSessions(ctx context.Context, bus comms.Bus, publisher even
 				if err == nil && request.Method == "abandon" {
 					err = errors.New("abandonment is controller-owned")
 				}
-				if err == nil && request.Creation != nil {
-					err = (sessions.CreationClaim{Reference: request.Reference, Creation: *request.Creation}).Validate()
+				if err == nil && request.HasCreation() {
+					err = request.Claim().Validate()
 				}
 				if err == nil && request.OwnerAgentID != a.ID() {
 					err = errors.New("session owner mismatch")
@@ -127,7 +127,7 @@ func (a *Agent) prepareSession(ctx context.Context, call ActionCall, commandID s
 		return errors.New("session binding disagrees with accepted action input")
 	}
 	if binding.Mode == sessions.Create {
-		if binding.Creation.CommandID != commandID || binding.Creation.TaskID != call.TaskID || binding.Creation.OperationID != call.OperationID {
+		if binding.CommandID != commandID || binding.TaskID != call.TaskID || binding.OperationID != call.OperationID {
 			return errors.New("session creation does not belong to this execution")
 		}
 		return a.config.Sessions.Prepare(ctx, binding.Claim())

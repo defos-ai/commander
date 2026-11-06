@@ -117,7 +117,7 @@ func sessionConstraint(task Task, scopes []sessions.Scope, check bool) (string, 
 		return owner, err
 	}
 	if intent.Mode == sessions.Create {
-		if record.Creation.TaskID != task.ID || record.Creation.OperationID != task.OperationID {
+		if record.CommandID != task.CommandID || record.OperationID != task.OperationID || record.TaskID != task.ID {
 			return owner, sessions.ErrConflict
 		}
 		return owner, nil

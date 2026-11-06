@@ -40,12 +40,14 @@ func CheckQueries(t *testing.T, store sessions.Store) {
 	}
 	seed := func(scopeID, sessionID, owner string) sessions.Record {
 		t.Helper()
-		creation := sessions.ExecutionRef{OperationID: id.New(), TaskID: sessionID, CommandID: sessionID}
-		record := apply(sessions.Change{Kind: sessions.Reserve, ScopeID: scopeID, ID: sessionID, Creation: creation})
+		operationID := id.New()
+		record := apply(sessions.Change{Kind: sessions.Reserve, ScopeID: scopeID, ID: sessionID,
+			CommandID: sessionID, OperationID: operationID, TaskID: sessionID})
 		if owner == "" {
 			return record
 		}
-		record = apply(sessions.Change{Kind: sessions.Bind, ScopeID: scopeID, ID: sessionID, Creation: creation, OwnerAgentID: owner})
+		record = apply(sessions.Change{Kind: sessions.Bind, ScopeID: scopeID, ID: sessionID, OwnerAgentID: owner,
+			CommandID: sessionID, OperationID: operationID, TaskID: sessionID})
 		observation := sessions.Session{Reference: record.Reference, Kind: "fixture", Label: "Resource", State: "connected", Revision: 1, CreatedAt: now, UpdatedAt: now}
 		return apply(sessions.Change{Kind: sessions.Observe, ScopeID: scopeID, ID: sessionID, Observation: &observation})
 	}
@@ -56,7 +58,8 @@ func CheckQueries(t *testing.T, store sessions.Store) {
 	apply(sessions.Change{Kind: sessions.Abandon, ScopeID: scopeB, ID: lostID, Control: &abandon})
 	seed(scopeB, pendingID, "")
 	closed := seed(scopeA, closedID, ownerA)
-	closeRequest := sessions.Control{Reference: closed.Reference, Method: "close", RequestID: id.New(), Creation: &closed.Creation}
+	closeRequest := sessions.Control{Reference: closed.Reference, Method: "close", RequestID: id.New(),
+		CommandID: closed.CommandID, OperationID: closed.OperationID, TaskID: closed.TaskID}
 	apply(sessions.Change{Kind: sessions.RequestClose, ScopeID: scopeA, ID: closedID, Control: &closeRequest})
 	observation := closed.Observation.Clone()
 	observation.State, observation.Revision = "closed", 2

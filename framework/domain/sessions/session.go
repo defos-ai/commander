@@ -81,9 +81,11 @@ func CloneAll(items []Session) []Session {
 
 type Control struct {
 	Reference
-	Method    string        `json:"method"`
-	RequestID string        `json:"request_id,omitempty"`
-	Creation  *ExecutionRef `json:"creation,omitempty"`
+	Method      string `json:"method"`
+	RequestID   string `json:"request_id,omitempty"`
+	CommandID   string `json:"command_id,omitempty"`
+	OperationID string `json:"operation_id,omitempty"`
+	TaskID      string `json:"task_id,omitempty"`
 }
 
 func (r Control) Validate() error {
@@ -92,6 +94,11 @@ func (r Control) Validate() error {
 	}
 	if err := r.Reference.Validate(); err != nil {
 		return err
+	}
+	if r.HasCreation() {
+		if err := r.Claim().Validate(); err != nil {
+			return err
+		}
 	}
 	switch r.Method {
 	case "inspect", "verify", "close", "abandon":
@@ -115,9 +122,14 @@ type Provider interface {
 }
 
 func (c Control) Clone() Control {
-	if c.Creation != nil {
-		v := *c.Creation
-		c.Creation = &v
-	}
 	return c
+}
+
+func (c Control) HasCreation() bool {
+	return c.CommandID != "" || c.OperationID != "" || c.TaskID != ""
+}
+
+func (c Control) Claim() CreationClaim {
+	return CreationClaim{Reference: c.Reference, CommandID: c.CommandID,
+		OperationID: c.OperationID, TaskID: c.TaskID}
 }

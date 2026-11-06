@@ -38,8 +38,9 @@ func (w *Worker) Control(ctx context.Context, request model.Control) (model.Sess
 	if record.PendingControl != nil && request.Method == "close" {
 		request = *record.PendingControl
 	}
-	creation := record.Creation
-	request.Creation = &creation
+	request.CommandID = record.CommandID
+	request.OperationID = record.OperationID
+	request.TaskID = record.TaskID
 	observation, err := w.remote.ControlSessionRemote(ctx, request)
 	if err != nil {
 		return model.Session{}, err
@@ -81,8 +82,9 @@ func (w *Worker) controlIntent(ctx context.Context, request model.Control) (mode
 	}
 	switch request.Method {
 	case "close":
-		creation := record.Creation
-		request.Creation = &creation
+		request.CommandID = record.CommandID
+		request.OperationID = record.OperationID
+		request.TaskID = record.TaskID
 		return w.apply(ctx, model.Change{Kind: model.RequestClose, ScopeID: request.ScopeID, ID: request.ID, Control: &request})
 	case "inspect":
 		return record, nil
@@ -146,7 +148,8 @@ func (w *Worker) ResumeControls(ctx context.Context) error {
 				if record.Disposition == model.Closing {
 					_, _ = w.Control(bounded, *record.PendingControl)
 				} else {
-					request := model.Control{Reference: record.Reference, Method: "close", RequestID: record.Release.RequestID, Creation: &record.Creation}
+					request := model.Control{Reference: record.Reference, Method: "close", RequestID: record.Release.RequestID,
+						CommandID: record.CommandID, OperationID: record.OperationID, TaskID: record.TaskID}
 					observation, err := w.remote.ControlSessionRemote(bounded, request)
 					if err == nil {
 						if err = w.lock(bounded); err == nil {

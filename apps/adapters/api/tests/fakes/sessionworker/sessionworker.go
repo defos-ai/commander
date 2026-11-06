@@ -64,10 +64,10 @@ func (r *Resources) Control(ctx context.Context, request sessions.Control) (sess
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if request.Method == "close" {
-		if request.Creation == nil {
+		if !request.HasCreation() {
 			return sessions.Session{}, errors.New("creation claim required")
 		}
-		claim := sessions.CreationClaim{Reference: request.Reference, Creation: *request.Creation}
+		claim := request.Claim()
 		if old, ok := r.claims[claim.ID]; ok && old != claim {
 			return sessions.Session{}, errors.New("claim conflict")
 		}

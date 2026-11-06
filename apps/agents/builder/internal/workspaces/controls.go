@@ -15,22 +15,22 @@ func (p *Provider) Control(ctx context.Context, request sessions.Control) (sessi
 	if request.Method == "abandon" {
 		return sessions.Session{}, errors.New("abandonment is controller-owned")
 	}
-	if request.Creation != nil {
-		if err := (sessions.CreationClaim{Reference: request.Reference, Creation: *request.Creation}).Validate(); err != nil {
+	if request.HasCreation() {
+		if err := request.Claim().Validate(); err != nil {
 			return sessions.Session{}, err
 		}
 	}
 	p.mu.Lock()
 	item := p.records[request.ID]
-	if item == nil && request.Method == "close" && request.Creation != nil {
-		item = newRecord(sessions.CreationClaim{Reference: request.Reference, Creation: *request.Creation})
+	if item == nil && request.Method == "close" && request.HasCreation() {
+		item = newRecord(request.Claim())
 		p.records[request.ID] = item
 	}
 	if item == nil {
 		p.mu.Unlock()
 		return sessions.Session{}, sessions.ErrUnknownSession
 	}
-	if item.claim.Reference != request.Reference || request.Creation != nil && item.claim.Creation != *request.Creation {
+	if item.claim.Reference != request.Reference || request.HasCreation() && item.claim != request.Claim() {
 		p.mu.Unlock()
 		return sessions.Session{}, sessions.ErrConflict
 	}
