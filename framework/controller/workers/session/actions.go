@@ -72,7 +72,13 @@ func (w *Worker) actionIntent(ctx context.Context, agentID string, call actions.
 		if readiness := operations.AssessAgentAction(agent, definition); readiness.Reason != "" {
 			return nil, errors.New(readiness.Reason)
 		}
-		return model.ResolveIntent(definition.SessionMode, call.Input)
+		if call.Session != nil {
+			if call.Session.Mode != model.Mode(definition.SessionMode) {
+				return nil, model.ErrConflict
+			}
+			return &model.Intent{Mode: call.Session.Mode, ScopeID: call.Session.ScopeID, ID: call.Session.ID}, nil
+		}
+		return model.ResolveIntent(definition.SessionMode)
 	}
 	return nil, nil
 }
@@ -85,8 +91,13 @@ func (w *Worker) prepareBinding(ctx context.Context, agentID, commandID string, 
 		return nil, nil
 	}
 	resolved := *intent
-	if resolved.Mode == model.Open && resolved.ID == "" {
-		resolved.ID = commandID
+	if resolved.Mode == model.Open {
+		if resolved.ScopeID == "" {
+			resolved.ScopeID = commandID
+		}
+		if resolved.ID == "" {
+			resolved.ID = commandID
+		}
 	}
 	if err := resolved.Validate(); err != nil {
 		return nil, err

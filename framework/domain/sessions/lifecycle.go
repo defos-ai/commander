@@ -2,7 +2,6 @@ package sessions
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -26,28 +25,17 @@ type Intent struct {
 	Error   string `json:"error,omitempty"`
 }
 
-func ResolveIntent(mode string, input json.RawMessage) (*Intent, error) {
-	if mode == "" {
+func ResolveIntent(mode string) (*Intent, error) {
+	switch Mode(mode) {
+	case "":
 		return nil, nil
-	}
-	var target struct {
-		ID    string `json:"session_id"`
-		Scope string `json:"session_scope"`
-	}
-	if err := json.Unmarshal(input, &target); err != nil {
-		return nil, err
-	}
-	if !id.Valid(target.Scope) || target.ID != "" && !id.Valid(target.ID) {
-		return nil, errors.New("session action requires canonical session_scope and session_id")
-	}
-	intent := &Intent{Mode: Mode(mode), ScopeID: target.Scope, ID: target.ID}
-	if mode == "use" && target.ID == "" {
-		return nil, errors.New("session_id is required")
-	}
-	if intent.Mode != Open && intent.Mode != Use {
+	case Open:
+		return &Intent{Mode: Open}, nil
+	case Use:
+		return nil, errors.New("session_binding_required: use a continuation of a session-aware action or supply a trusted binding")
+	default:
 		return nil, errors.New("invalid session mode")
 	}
-	return intent, nil
 }
 
 func (i *Intent) Clone() *Intent {

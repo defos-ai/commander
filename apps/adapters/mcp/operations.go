@@ -84,7 +84,7 @@ type OperationTasksResult struct {
 	NextCursor string        `json:"next_cursor"`
 }
 
-const sessionGuidance = "Session actions use explicit routing fields from their advertised input schema: creation requires session_scope; reuse and use also require the saved session_id. Inspect runtime session state, ownership and readiness before reuse. Close or abandon an existing claim before replacement; never invent session IDs or silently rebind accepted work."
+const sessionGuidance = "The controller assigns session identity and owner before dispatch. Open actions can start a new session; session-aware continuation actions inherit their direct parent's session. Queue use actions through that parent's continuation, not as unrelated root tasks. Never put routing session IDs in action input or infer a latest session. Inspect runtime session state, ownership and readiness; close or abandon an existing claim explicitly before replacement."
 
 func addOperationTools(server *mcp.Server, config Config) {
 	execution := config.Operations

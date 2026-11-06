@@ -16,7 +16,7 @@ import (
 	builderactions "github.com/defos-ai/commander/apps/agents/builder/actions"
 	"github.com/defos-ai/commander/apps/agents/builder/tests/fakes"
 	"github.com/defos-ai/commander/apps/agents/builder/tests/fixtures"
-	"github.com/defos-ai/commander/framework/comms/clients/controller/commands"
+	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/domain/sessions"
 	"github.com/defos-ai/commander/framework/id"
@@ -33,28 +33,30 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-func TestE2EBuilderWorkspaceRoutesAcrossOperationsAndRetainsSource(t *testing.T) {
+func TestE2EBuilderWorkspaceRoutesContinuationsAndRetainsSourceAfterReopen(t *testing.T) {
 	s := fixtures.NewWorkspaces(t)
 	owner := s.Builder(t, "00000001", "", "fail")
 	first := s.Start(t)
-	created, checkout := s.Checkout(t, first, first)
+	created, checkout := s.Checkout(t, first)
 	s.Builder(t, "00000002", "", "fail")
-	second := s.Start(t)
-	input := fixtures.WorkspaceBuildInput(checkout)
+	input := fixtures.WorkspaceBuildInput()
 
-	build := s.Assign(t, second, builderactions.BuildAgentName, input)
-	failed := s.Finished(t, second, build.ID)
-	reuse := s.Assign(t, second, builderactions.CheckoutTemplateName, builderactions.CheckoutTemplateInput{SessionScope: checkout.SessionScope, SessionID: checkout.SessionID})
-	reused := s.Finished(t, second, reuse.ID)
+	build := s.Continue(t, created, builderactions.BuildAgentName, input)
+	failed := s.Finished(t, first, build.ID)
+	binding := sessions.Binding{Reference: created.Result.Session.Reference, Mode: sessions.Open,
+		CommandID: created.CommandID, OperationID: created.OperationID, TaskID: created.ID}
+	reused, err := s.Controller.RunAction(s.Context, owner.ID, actionmodel.ActionCall{
+		ActionName: builderactions.CheckoutTemplateName, Input: json.RawMessage(`{}`), Session: &binding,
+	})
 
 	if failed.AgentID != owner.ID || failed.Status != operations.TaskFailed || !strings.Contains(failed.Error, "exit status 9") {
 		t.Fatalf("build was not attempted on the workspace owner: %+v", failed)
 	}
-	if reused.AgentID != owner.ID || reused.Status != operations.TaskSucceeded || reused.Result == nil {
-		t.Fatalf("checkout reuse changed the workspace owner: %+v", reused)
+	if err != nil || reused.Session == nil || reused.Session.OwnerAgentID != owner.ID {
+		t.Fatalf("standalone checkout reuse changed the workspace owner: result=%+v error=%v", reused, err)
 	}
 	var retained builderactions.CheckoutTemplateOutput
-	if err := json.Unmarshal(reused.Result.Output, &retained); err != nil {
+	if err := json.Unmarshal(reused.Output, &retained); err != nil {
 		t.Fatal(err)
 	}
 	if retained != checkout {
@@ -78,7 +80,8 @@ func TestE2EBuilderWorkspaceRoutesAcrossOperationsAndRetainsSource(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = s.Controller.Operations().Assign(s.Context, commands.AssignTaskCommand{OperationID: second, ActionName: builderactions.BuildAgentName, Input: data})
+	binding.Mode = sessions.Use
+	_, err = s.Controller.RunAction(s.Context, owner.ID, actionmodel.ActionCall{ActionName: builderactions.BuildAgentName, Input: data, Session: &binding})
 	if !errors.Is(err, sessions.ErrSessionClosed) {
 		t.Fatalf("closed workspace accepted more work: %v", err)
 	}
@@ -88,9 +91,9 @@ func TestE2EBuilderSuccessfulBuildPublishesItsSessionSourceArtifact(t *testing.T
 	s := fixtures.NewSuccessfulBuild(t)
 	owner := s.Builder(t, "00000001", "", "success")
 	operation := s.Start(t)
-	created, checkout := s.Checkout(t, operation, operation)
+	created, checkout := s.Checkout(t, operation)
 
-	task := s.Assign(t, operation, builderactions.BuildAgentName, fixtures.WorkspaceBuildInput(checkout))
+	task := s.Continue(t, created, builderactions.BuildAgentName, fixtures.WorkspaceBuildInput())
 	finished := s.Finished(t, operation, task.ID)
 
 	if finished.Status != operations.TaskSucceeded || finished.AgentID != owner.ID || finished.Result == nil {
@@ -159,11 +162,11 @@ func TestE2EBuilderCloseCancelsActiveWorkspaceWork(t *testing.T) {
 			var task, creation operations.Task
 			var output builderactions.CheckoutTemplateOutput
 			if stage == "checkout" {
-				task = s.Assign(t, operation, builderactions.CheckoutTemplateName, builderactions.CheckoutTemplateInput{SessionScope: operation})
+				task = s.Assign(t, operation, builderactions.CheckoutTemplateName, builderactions.CheckoutTemplateInput{})
 				creation = task
 			} else {
-				creation, output = s.Checkout(t, operation, operation)
-				task = s.Assign(t, operation, builderactions.BuildAgentName, fixtures.WorkspaceBuildInput(output))
+				creation, output = s.Checkout(t, operation)
+				task = s.Continue(t, creation, builderactions.BuildAgentName, fixtures.WorkspaceBuildInput())
 			}
 			s.AwaitStarted(t, owner)
 			observations := owner.Provider.Snapshot()

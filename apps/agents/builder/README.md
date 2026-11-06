@@ -46,9 +46,9 @@ the outcome.
 
 For direct MCP use, read `describe_mission` for `build-agent` and
 `describe_action` for each action's input schema. Checkout and build must run on
-the workspace's owning builder. Assign checkout with `session_scope` set to the
-operation ID and omit `session_id` to create a workspace. Then build with checkout's
-returned scope and session ID, together with the requested instructions and actions.
+the workspace's owning builder. Assign checkout with `{}`, then resolve its
+continuation with build's requested instructions and actions. The controller
+retains the workspace session and routes the build; session IDs are output metadata.
 
 ## Publish source
 

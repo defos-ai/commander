@@ -58,17 +58,10 @@ func (r *Worker) Resolve(ctx context.Context, command commands.ResolveContinuati
 		if err != nil {
 			return operations.Operation{}, err
 		}
-		scopes := map[string]bool{}
 		for _, a := range command.Actions {
 			task := operations.NewTask(command.OperationID, "", a)
 			if task.SessionIntent == nil {
 				continue
-			}
-			if task.SessionIntent.Mode == "open" && task.SessionIntent.ID == task.CommandID {
-				if scopes[task.SessionIntent.ScopeID] {
-					return operations.Operation{}, fmt.Errorf("%w: multiple creations in one scope", domain.ErrInvalidInput)
-				}
-				scopes[task.SessionIntent.ScopeID] = true
 			}
 			if r.sessions == nil {
 				return operations.Operation{}, fmt.Errorf("%w: session persistence required", domain.ErrInvalidInput)

@@ -62,15 +62,14 @@ limits, see [Sessions](../../docs/features/sessions.md).
 - The session worker normalizes direct assignments, model resolutions and automatic
   proposals using accepted action contracts. Mission policies do not create
   session bindings or inject routing fields.
-- Root assignments use explicit input references: an `open` action receives
-  `session_scope`; its accepted task ID becomes the
-  session ID. Supplying an existing `session_id` requests reuse. A `use` action
-  requires both references and a usable resource on its exact owner.
+- Root `open` assignments receive a fresh scope and session ID from their fixed
+  command identity. Root `use` assignments require a trusted host-supplied binding;
+  public operation commands currently acquire it through a continuation instead.
+  Business input never selects a session or scope, even if fields have those names.
 - Session-aware continuations inherit their direct parent's saved session identity.
-  The child's contract selects `open` or `use`. Explicit input
-  references, if present, must match that identity. Stateless children remain
+  The child's contract selects `open` or `use`. Stateless children remain
   unbound. Without a parent binding, consumers cannot use or reuse an unrelated
-  session; openers may create a new one through the explicit creation path.
+  session; openers receive a new scope and session identity.
   Do not search ancestors, aggregate children or the latest session for a binding.
 - `open` never identifies creation ownership by itself. A new target receives the
   original command ID as its session ID before reservation. Retained records
@@ -81,8 +80,12 @@ limits, see [Sessions](../../docs/features/sessions.md).
 - Persist the resolved intent without rewriting business input. Semantic errors
   remain visible on invalid automatic children without losing their parent's result.
   Recovery uses the accepted intent rather than resolving it from later inventory.
-- Agent validation and existing action schemas still require explicit references;
-  parameter-free acquisition helpers and schema adoption are a separate increment.
+- `action.OpenSession(ctx)` and `action.UseSession(ctx)` return the validated,
+  controller-issued binding for their declared mode. The action/provider opens
+  the actual transport or workspace and rechecks resource state and close fences.
+  Helpers do not run initializers or authorize repeating an uncertain effect.
+  Agent preparation validates the binding against its static contract and owner,
+  without interpreting business input. Builder inputs contain no session IDs.
 - Active or unresolved claims prevent competing creation in the same scope.
   Confirmed release permits replacement; accepted consumers retain the original
   identity. Stateless work gains no binding or owner constraint.
@@ -145,8 +148,10 @@ For direct calls, coordination prepares the original envelope through the sessio
 worker, then claims it and publishes through the same lifecycle guard. Existing
 execution claims bypass new preparation: completed outcomes remain readable after
 closure or owner loss, and pending direct work is observed without redelivery.
-An explicitly requested binding must match the saved one. Direct calls retain
-explicit input routing until acquisition helpers are adopted.
+An explicitly requested binding must match the saved one. Trusted direct hosts
+can supply `ActionCall.Session` to reuse a retained resource independently of an
+operation; match its mode and complete retained creation claim. It is never
+derived from action input or exposed as an MCP assignment field.
 
 One active controller per database is supported. FS stores scope aggregates in
 `runtime-sessions.json`; Mongo stores one aggregate per scope in `runtime_sessions`
@@ -158,6 +163,8 @@ Mongo's document limit); archival must preserve release and identity evidence.
 
 Run from the repository root; these tests launch real hosts and a resource fixture
 and assert public HTTP outcomes. Use only E2E checks for session changes.
+The existing HTTP session scenarios still need adaptation from input routing to
+the planned trusted task-attachment contract; they do not validate the new flow yet.
 
 ```sh
 go test -count=1 -timeout=6m ./apps/adapters/api/tests/e2e -run '^TestE2E'

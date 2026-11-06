@@ -44,8 +44,13 @@ type Task struct {
 func NewTask(operationID, parentID string, action actionmodel.NextAction) Task {
 	taskID := id.TaskID()
 	intent := action.SessionIntent.Clone()
-	if intent != nil && intent.Mode == sessions.Open && intent.ID == "" {
-		intent.ID = taskID
+	if intent != nil && intent.Mode == sessions.Open {
+		if intent.ScopeID == "" {
+			intent.ScopeID = taskID
+		}
+		if intent.ID == "" {
+			intent.ID = taskID
+		}
 	}
 	return Task{SessionIntent: intent, ID: taskID, CommandID: taskID, OperationID: operationID, ParentTaskID: parentID,
 		ActionName: action.ActionName, Input: append([]byte(nil), action.Input...), Status: TaskQueued}

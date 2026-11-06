@@ -37,8 +37,13 @@ func (r *Worker) Assign(ctx context.Context, command commands.AssignTaskCommand)
 		normalized := resolved[0]
 		task.Input = normalized.Input
 		task.SessionIntent = normalized.SessionIntent.Clone()
-		if task.SessionIntent != nil && task.SessionIntent.Mode == "open" && task.SessionIntent.ID == "" {
-			task.SessionIntent.ID = task.ID
+		if task.SessionIntent != nil && task.SessionIntent.Mode == "open" {
+			if task.SessionIntent.ScopeID == "" {
+				task.SessionIntent.ScopeID = task.CommandID
+			}
+			if task.SessionIntent.ID == "" {
+				task.SessionIntent.ID = task.CommandID
+			}
 		}
 		if r.sessions != nil {
 			if err := r.sessions.CheckAdmission(ctx, task); err != nil {

@@ -22,13 +22,10 @@ import (
 )
 
 const CheckoutTemplateName = "checkout-template"
-const CheckoutTemplateDescription = "Check out the public Commander example-agent template into a new workspace session. Supply session_scope to create, or session_scope and session_id to reuse an existing checkout on its owning builder. The operation ID can serve as the scope. Returns the session binding, opaque workspace ID and exact Git revision. Does not build, run or publish code."
+const CheckoutTemplateDescription = "Check out the public Commander example-agent template for building an agent. Continuing from a task with an existing checkout preserves its source. Returns workspace metadata and the exact Git revision. Does not build, run or publish code."
 const TemplateURL = "https://github.com/defos-ai/commander-example-agent.git"
 
-type CheckoutTemplateInput struct {
-	SessionScope string `json:"session_scope"`
-	SessionID    string `json:"session_id,omitempty"`
-}
+type CheckoutTemplateInput struct{}
 
 type CheckoutTemplateOutput struct {
 	SessionScope     string `json:"session_scope"`
@@ -53,13 +50,10 @@ func NewCheckoutTemplate(provider *workspaces.Provider) (*CheckoutTemplate, erro
 	}
 	return &CheckoutTemplate{
 		Base: action.NewBase(actionmodel.Action{
-			SessionMode: string(sessions.Open),
-			Name:        CheckoutTemplateName,
-			Description: CheckoutTemplateDescription,
-			InputSchema: json.RawMessage(`{"type":"object","properties":{
-"session_scope":{"type":"string","format":"uuid","description":"Scope UUID for the workspace session, such as the operation ID."},
-"session_id":{"type":"string","format":"uuid","description":"Existing session to reuse on its owning builder; omit to create."}
-},"required":["session_scope"],"additionalProperties":false}`),
+			SessionMode:  string(sessions.Open),
+			Name:         CheckoutTemplateName,
+			Description:  CheckoutTemplateDescription,
+			InputSchema:  json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
 			OutputSchema: outputSchema,
 		}),
 		workspaces: provider,
@@ -104,13 +98,9 @@ func (a *CheckoutTemplate) Run(ctx context.Context, raw json.RawMessage) (action
 	if err := action.DecodeInput(raw, &input); err != nil {
 		return action.Result{}, err
 	}
-	intent, err := sessions.ResolveIntent(string(sessions.Open), raw)
+	binding, err := action.OpenSession(ctx)
 	if err != nil {
 		return action.Result{}, err
-	}
-	binding, ok := action.SessionFromContext(ctx)
-	if !ok || binding.ScopeID != intent.ScopeID || intent.ID != "" && binding.ID != intent.ID || binding.Mode != intent.Mode {
-		return action.Result{}, errors.New("checkout requires its framework workspace session binding")
 	}
 	executable := a.executable.Load()
 	if executable == nil {

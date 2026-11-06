@@ -21,14 +21,15 @@ Read the [agent guide](../AGENTS.md) and [root guide](../../../AGENTS.md) first.
 - `cli.Run` enables managed-secret delivery without an encryption key. The host
   must not read, validate, generate or distribute `SECRETS_ENCRYPTION_KEY`.
 - [checkout-template](actions/checkout_template.go) declares `session_mode=open`
-  and accepts `session_scope`, plus an optional `session_id` for explicit reuse.
-  Clients supply the scope, such as the operation ID, and any explicit reuse ID.
+  and accepts `{}`. Acquire the controller-assigned binding with
+  `action.OpenSession(ctx)`; a continuation retains its direct parent's session.
   Its source URL is fixed; do not expose
   paths or arbitrary Git URLs through task input. Return the exact session binding,
   opaque workspace ID and revision; reuse never replaces existing source.
-- [build-agent](actions/build_agent.go) declares `session_mode=use` and accepts the
-  checkout's exact `session_scope` and `session_id`, instructions and 1–100
-  `actions.Definition` contracts. Workspace IDs are output metadata, never routing
+- [build-agent](actions/build_agent.go) declares `session_mode=use` and accepts
+  instructions and 1–100 `actions.Definition` contracts. Acquire its retained
+  binding with `action.UseSession(ctx)` and assign through a session-bound task's
+  continuation. Session and workspace IDs are output metadata, never routing
   inputs. Require unique safe
   action names, trimmed nonblank descriptions, compilable input/output schemas
   explicitly declaring `type: object`, and valid unique required secret names.
@@ -104,7 +105,7 @@ Read the [agent guide](../AGENTS.md) and [root guide](../../../AGENTS.md) first.
 - Constructors must not clone repositories or require executables. Discovery uses
   `environment.Environment.FindExecutable` and respects explicit scopes, including
   an empty scope. Missing tools make only the affected action unavailable.
-- Create a private, unique checkout per execution. Return an opaque workspace ID
+- Create a private, unique checkout per new session. Return an opaque workspace ID
   and exact revision, never a host path. Successful checkouts remain in configured
   storage; remove only the current incomplete checkout on errors or cancellation.
   Explicit reuse returns the original checkout without cloning again.
@@ -112,7 +113,7 @@ Read the [agent guide](../AGENTS.md) and [root guide](../../../AGENTS.md) first.
   `sessions.Provider` shared by checkout, build and the agent runtime. Read the
   [session contract](../../../framework/sessions/AGENTS.md) before changing it.
   `Prepare` retains the exact framework creation claim without touching disk;
-  actions require its binding through `action.SessionFromContext`. The provider
+  actions acquire its binding through `action.OpenSession` or `action.UseSession`. The provider
   serializes work per claim, keeps cancellation private and publishes independent
   snapshots through coalesced changes. Do not hold its mutex over subprocess work.
   Close fences starts first, cancels active checkout/build and waits before
@@ -169,8 +170,8 @@ Read the [agent guide](../AGENTS.md) and [root guide](../../../AGENTS.md) first.
   Keep child output bounded to 1 MiB, inspection bounded to two minutes, diagnostics
   redacted and the probe out of artifacts. Failures preserve source and return no
   artifacts. Constructor inspection checks declarations, not implementation behavior.
-- Workspace storage is local to the exact builder process. Clients supply
-  checkout's saved scope and session ID to build; session placement selects the
+- Workspace storage is local to the exact builder process. Build continuations
+  inherit checkout's saved binding; session placement selects the
   owner. Do not duplicate placement in the action
   or attach old workspace directories to a replacement process by ID. Publication
   continues to use artifact storage independently of workspace/session ownership.

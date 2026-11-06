@@ -10,7 +10,7 @@ operators use Commander; [README.md](README.md) is the feature index.
   and data sharing have their own guides. Avoid repeating their full workflows.
 - Use current `policies.continuation`, `policies.completion` and
   `policies.sharing` shapes. Session-aware actions declare `open` or `use`.
-  Root calls use explicit session references, including reuse across operations;
+  Root open calls receive controller-assigned identities;
   continuations inherit their direct parent's binding. Mission policies do not supply bindings.
   Mission edits affect future operations only.
 - Keep component setup, flags and command references in component READMEs.

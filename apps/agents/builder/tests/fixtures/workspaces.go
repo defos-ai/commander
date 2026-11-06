@@ -209,14 +209,47 @@ func (s *Workspaces) Finished(t *testing.T, operationID, taskID string) operatio
 	return task
 }
 
-func WorkspaceBuildInput(checkout builderactions.CheckoutTemplateOutput) builderactions.BuildAgentInput {
-	return builderactions.BuildAgentInput{SessionScope: checkout.SessionScope, SessionID: checkout.SessionID, Instructions: "Implement a local inspection action.",
+func WorkspaceBuildInput() builderactions.BuildAgentInput {
+	return builderactions.BuildAgentInput{Instructions: "Implement a local inspection action.",
 		Actions: []actionmodel.Definition{{Name: "inspect", Description: "Inspect supplied input.", InputSchema: json.RawMessage(`{"type":"object"}`), OutputSchema: json.RawMessage(`{"type":"object"}`)}}}
 }
 
-func (s *Workspaces) Checkout(t *testing.T, operationID, scope string) (operations.Task, builderactions.CheckoutTemplateOutput) {
+func (s *Workspaces) Continue(t *testing.T, parent operations.Task, name string, input any) operations.Task {
 	t.Helper()
-	task := s.Assign(t, operationID, builderactions.CheckoutTemplateName, builderactions.CheckoutTemplateInput{SessionScope: scope})
+	if parent.Continuation == nil {
+		t.Fatal("parent has no saved continuation")
+	}
+	data, err := json.Marshal(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	op, err := s.Controller.Operations().Resolve(s.Context, commands.ResolveContinuationCommand{
+		OperationID: parent.OperationID, TaskID: parent.ID, Version: parent.Continuation.Version,
+		Actions: []actionmodel.NextAction{{ActionName: name, Input: data}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range op.Tasks {
+		if item.ID != parent.ID {
+			continue
+		}
+		if item.Continuation == nil || len(item.Continuation.CreatedTaskIDs) != 1 {
+			t.Fatal("continuation did not create one task")
+		}
+		for _, child := range op.Tasks {
+			if child.ID == item.Continuation.CreatedTaskIDs[0] {
+				return child
+			}
+		}
+	}
+	t.Fatal("continuation task is missing")
+	return operations.Task{}
+}
+
+func (s *Workspaces) Checkout(t *testing.T, operationID string) (operations.Task, builderactions.CheckoutTemplateOutput) {
+	t.Helper()
+	task := s.Assign(t, operationID, builderactions.CheckoutTemplateName, builderactions.CheckoutTemplateInput{})
 	task = s.Finished(t, operationID, task.ID)
 	if task.Status != operations.TaskSucceeded || task.Result == nil {
 		t.Fatalf("checkout failed: %+v", task)

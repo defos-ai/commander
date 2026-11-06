@@ -109,6 +109,9 @@ func (a *Agent) prepareSession(ctx context.Context, call ActionCall, commandID s
 		}
 		return nil
 	}
+	if mode != string(sessions.Open) && mode != string(sessions.Use) {
+		return errors.New("invalid session action mode")
+	}
 	binding := call.Session
 	if !fromServer || binding == nil || a.config.Sessions == nil {
 		return errors.New("session actions require a framework dispatch binding and provider")
@@ -119,12 +122,8 @@ func (a *Agent) prepareSession(ctx context.Context, call ActionCall, commandID s
 	if binding.OwnerAgentID != a.ID() {
 		return errors.New("session binding belongs to another process")
 	}
-	intent, err := sessions.ResolveIntent(mode, call.Input)
-	if err != nil {
-		return err
-	}
-	if intent.Mode != binding.Mode || intent.ScopeID != binding.ScopeID || intent.ID != "" && intent.ID != binding.ID {
-		return errors.New("session binding disagrees with accepted action input")
+	if mode != string(binding.Mode) {
+		return errors.New("session binding disagrees with accepted action contract")
 	}
 	if binding.CommandID == commandID {
 		if binding.Mode != sessions.Open || binding.TaskID != call.TaskID || binding.OperationID != call.OperationID {

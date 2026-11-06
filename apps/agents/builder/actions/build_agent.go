@@ -19,23 +19,17 @@ import (
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/artifacts"
 	"github.com/defos-ai/commander/framework/domain/sessions"
-	"github.com/defos-ai/commander/framework/id"
 )
 
 const BuildAgentName = "build-agent"
-const BuildAgentDescription = "Implement the requested Commander agent with Codex from explicit action contracts and instructions in the workspace session returned by checkout-template. Supply checkout's exact session_scope and session_id. The controller routes work to the owning builder. Each action needs a unique name, description, input/output object schemas and any required secret names. Run Go tests and build ./cmd, then verify registered actions, generated identity and release structure before returning its source archive and package metadata. Contract checks compare names, descriptions, schemas and required secret names without discovery or execution. Temporary assets verify manifest generation; this does not test Docker, six native platforms or GitHub Actions. Requires the managed OPENAI_API_KEY secret; never include keys in instructions or contracts. Does not publish or launch the agent."
+const BuildAgentDescription = "Implement the requested Commander agent with Codex from explicit action contracts and instructions. Assign as a continuation of checkout-template or another task using its workspace session; the controller retains the binding and routes work to the owning builder. Each action needs a unique name, description, input/output object schemas and any required secret names. Run Go tests and build ./cmd, then verify registered actions, generated identity and release structure before returning its source archive and package metadata. Contract checks compare names, descriptions, schemas and required secret names without discovery or execution. Temporary assets verify manifest generation; this does not test Docker, six native platforms or GitHub Actions. Requires the managed OPENAI_API_KEY secret; never include keys in instructions or contracts. Does not publish or launch the agent."
 
 type BuildAgentInput struct {
-	SessionScope string                   `json:"session_scope"`
-	SessionID    string                   `json:"session_id"`
 	Instructions string                   `json:"instructions"`
 	Actions      []actionmodel.Definition `json:"actions"`
 }
 
 func (i BuildAgentInput) Validate() error {
-	if !id.Valid(i.SessionScope) || !id.Valid(i.SessionID) {
-		return errors.New("input requires canonical session_scope and session_id")
-	}
 	if !utf8.ValidString(i.Instructions) || strings.TrimSpace(i.Instructions) == "" || len(i.Instructions) > 32000 || strings.ContainsRune(i.Instructions, 0) {
 		return errors.New("input requires nonblank instructions of at most 32000 bytes")
 	}
@@ -76,8 +70,6 @@ func NewBuildAgent(provider *workspaces.Provider) (*BuildAgent, error) {
 		InputSchema: json.RawMessage(`{
   "type":"object",
   "properties":{
-    "session_scope":{"type":"string","format":"uuid","description":"Exact scope returned by checkout-template."},
-    "session_id":{"type":"string","format":"uuid","description":"Exact session ID returned by checkout-template."},
     "instructions":{"type":"string","minLength":1,"maxLength":32000,"pattern":"\\S"},
     "actions":{
       "type":"array","minItems":1,"maxItems":100,
@@ -95,7 +87,7 @@ func NewBuildAgent(provider *workspaces.Provider) (*BuildAgent, error) {
       }
     }
   },
-  "required":["session_scope","session_id","instructions","actions"],
+  "required":["instructions","actions"],
   "additionalProperties":false
 }`),
 		OutputSchema: output,
@@ -155,9 +147,9 @@ func (a *BuildAgent) Run(ctx context.Context, raw json.RawMessage) (action.Resul
 		a.SetStatus(action.Unknown)
 		return action.Result{}, errors.New("build tools changed; run discovery again")
 	}
-	binding, ok := action.SessionFromContext(ctx)
-	if !ok || binding.ScopeID != input.SessionScope || binding.ID != input.SessionID {
-		return action.Result{}, errors.New("build requires its framework workspace session binding")
+	binding, err := action.UseSession(ctx)
+	if err != nil {
+		return action.Result{}, err
 	}
 	ctx, workspace, release, err := a.workspaces.Use(ctx, binding)
 	if err != nil {
