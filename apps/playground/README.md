@@ -81,6 +81,12 @@ Explicit flags override nonempty environment values, then saved settings.
 Selecting a different provider does not reuse the previous provider's model or
 custom base URL. `/clear` clears model context while keeping the visible transcript.
 
+OpenAI responses use a 16,384-token output budget, including reasoning. Explicit
+rate-limit rejections before model output retry up to twice, respecting the
+provider's retry delay, with at most 30 seconds of cumulative waiting. Stop
+cancels the wait. For long conversations, use `/clear`, then `/watch <id>` to
+resume review from the saved operation with fresh context.
+
 ### Build from source
 
 With Go 1.26.7+ and Node 24+, run from the repository root:

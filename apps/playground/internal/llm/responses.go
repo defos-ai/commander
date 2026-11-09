@@ -33,6 +33,7 @@ func (c *Client) responses(ctx context.Context, system string, history []Message
 	body := map[string]any{
 		"model": c.config.Model, "instructions": system, "input": input,
 		"stream": true, "store": false, "include": []string{"reasoning.encrypted_content"},
+		"max_output_tokens": 16384,
 	}
 	if len(tools) != 0 {
 		functions := make([]any, 0, len(tools))
@@ -52,8 +53,10 @@ func (c *Client) responses(ctx context.Context, system string, history []Message
 	}
 	defer response.Body.Close()
 	var output json.RawMessage
+	generated := false
 	err = stream(response.Body, func(data []byte) error {
 		if bytes.Equal(data, []byte("[DONE]")) {
+			generated = true
 			return nil
 		}
 		var event struct {
@@ -70,21 +73,28 @@ func (c *Client) responses(ctx context.Context, system string, history []Message
 			return fmt.Errorf("invalid model stream: %w", err)
 		}
 		switch event.Type {
+		case "response.created", "response.queued", "response.in_progress":
+			generated = generated || responseHasOutput(event.Response.Output)
 		case "response.output_text.delta", "response.refusal.delta":
+			generated = true
 			if delta != nil {
 				delta(event.Delta)
 			}
 		case "response.completed":
+			generated = true
 			if event.Response.Status != "completed" {
 				return errors.New("model response did not complete; no tool calls were executed")
 			}
 			output = event.Response.Output
 		case "response.failed":
-			return c.diagnosticError("model response failed; no tool calls were executed", event.Response.Error)
+			return c.responseError("model response failed; no tool calls were executed", event.Response.Error, response.Header, !generated && !responseHasOutput(event.Response.Output))
 		case "response.incomplete":
 			return c.diagnosticError("model response incomplete; no tool calls were executed", event.Response.IncompleteDetails)
 		case "error":
-			return c.diagnosticError("model reported a streaming error", data)
+			return c.responseError("model reported a streaming error", data, response.Header, !generated)
+		default:
+			// Reasoning, tool calls and unrecognized events may indicate work.
+			generated = true
 		}
 		return nil
 	})
@@ -95,6 +105,14 @@ func (c *Client) responses(ctx context.Context, system string, history []Message
 		return Message{}, errors.New("model stream ended before completion; no tool calls were executed")
 	}
 	return responseMessage(output)
+}
+
+func responseHasOutput(output json.RawMessage) bool {
+	if len(output) == 0 {
+		return false
+	}
+	var items []json.RawMessage
+	return json.Unmarshal(output, &items) != nil || len(items) != 0
 }
 
 // Only the completed response is authoritative. Partial streamed calls are

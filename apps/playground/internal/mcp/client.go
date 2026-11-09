@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -155,6 +156,10 @@ func (c *Client) Call(ctx context.Context, name string, arguments json.RawMessag
 
 func Bounded(data []byte) string {
 	const limit = 96 * 1024
+	var compact bytes.Buffer
+	if json.Compact(&compact, data) == nil {
+		data = compact.Bytes()
+	}
 	if len(data) <= limit {
 		return string(data)
 	}

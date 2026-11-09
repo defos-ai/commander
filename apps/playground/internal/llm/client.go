@@ -107,7 +107,7 @@ func (c *Client) Complete(ctx context.Context, system string, history []Message,
 		return c.anthropic(ctx, system, history, tools, delta)
 	}
 	if c.config.Provider == "openai" {
-		return c.responses(ctx, system, history, tools, delta)
+		return c.responsesWithRetry(ctx, system, history, tools, delta)
 	}
 	return c.compatible(ctx, system, history, tools, delta)
 }
@@ -158,6 +158,9 @@ func (c *Client) request(ctx context.Context, method, path string, body any) (*h
 		}
 		summary := fmt.Sprintf("model API returned HTTP %d: %s", response.StatusCode, hint)
 		err := c.diagnosticError(summary, detail)
+		if c.config.Provider == "openai" && method == http.MethodPost && path == "/responses" && response.StatusCode == http.StatusTooManyRequests {
+			err = c.responseError(summary, detail, response.Header, true)
+		}
 		if authentication {
 			return nil, &AuthenticationError{Err: err}
 		}

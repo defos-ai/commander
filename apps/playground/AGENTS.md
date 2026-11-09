@@ -11,6 +11,9 @@
   owns the ready server until shutdown. Serialize starts and await shutdown.
 - [`internal/llm/`](internal/llm/) owns model discovery, provider protocols,
   streaming, tool-call conversion and redacted errors.
+  OpenAI Responses requests cap output, including reasoning, at 16,384 tokens.
+  Keep incomplete responses non-executable. Compact valid JSON tool results
+  without altering string contents, numeric precision or retained evidence.
 - [`../admin/client`](../admin/client/) supplies authenticated API transport;
   [`../admin/secrets`](../admin/secrets/) owns secret metadata and versioned
   writes shared with the local masked form. Keep values outside chat and MCP.
@@ -323,8 +326,13 @@
 - `/stop` ends model work, not the server operation. Watching an operation can
   resume model review. Distinguish an active reply from an idle stop and only
   describe paused review for watched operations whose settlement is not known.
-  Keep operation updates flowing while review is paused. Do not automatically
-  retry failed model or mutating MCP requests: their execution outcome may be unknown.
+  Keep operation updates flowing while review is paused. OpenAI completions may
+  retry explicit rate-limit rejections only before any response output, including
+  reasoning and tool calls. Require a valid Retry-After or retry-after-ms hint,
+  honor the longer delay, and bound retries to two and cumulative waits to 30s.
+  Refuse longer waits rather than retrying early; cancellation interrupts waits.
+  Other failed model requests and mutating MCP requests are not automatically
+  retried because their execution outcome may be unknown.
 - Questions remain pending until an answer is saved. The controller permits
   operator answers before and after `fallback_at`, and rejects model answers
   before it. Keep operator forms open across this time; it never supplies
