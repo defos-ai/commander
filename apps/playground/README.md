@@ -48,10 +48,34 @@ expiry marks an unknown outcome and does not stop the agent.
 Type `/admin serve` to start Admin, or pass `--serve-admin-ui` at launch.
 The terminal session works without it.
 
+### Headless all-in-one
+
+Run the local hosts without Playground or a model API key:
+
+```sh
+./commander --all-in-one --headless
+```
+
+The process prints the ready MCP and API addresses and stays in the foreground.
+Connect an [MCP client](../adapters/README.md#quick-start) to plan work and handle
+model decisions. Add `--serve-admin-ui` to serve Admin as well. Stop with Ctrl+C
+or SIGTERM; local results and credentials are retained under `~/.commander`.
+
+Read credentials from another terminal:
+
+```sh
+./commander credentials api
+./commander credentials mcp --raw
+```
+
+Use the same `--state-dir PATH` on both commands when choosing another profile.
+For `--temporary`, supply `API_USERNAME`, `API_PASSWORD` and `MCP_TOKEN` before
+starting if clients need access; generated temporary credentials are not saved.
+
 ### Saved state
 
-Both modes save settings, full chat history and keys entered in Playground under
-`~/.commander`. All-in-one additionally keeps its database, artifacts and agent
+Local and remote Playground sessions save settings, full chat history and entered
+keys under `~/.commander`. All-in-one additionally keeps its database, artifacts and agent
 workspaces. Reopening restores conversation context; use `/watch <id>`
 to resume operation review. Exiting still stops local hosts and spawned agents;
 saved state does not keep their processes running. Install agents again when
@@ -66,7 +90,7 @@ Use `--state-dir PATH` for another profile, or `--temporary` to skip local saves
 Temporary mode removes all-in-one results on exit; remote server data remains
 managed by that server. An unwritable or unfamiliar state directory stops startup
 with instructions to choose another directory or use `--temporary`. Existing
-recognized profiles are reused. One Playground process may use a profile at a time.
+recognized profiles are reused. One Commander process may own a profile at a time.
 
 Provider keys entered here are remembered encrypted on this machine, bound to
 their provider and API base URL. Alternatively, set the provider's environment

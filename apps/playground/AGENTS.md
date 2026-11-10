@@ -3,6 +3,10 @@
 ## Code map
 
 - [`cli/`](cli/) parses flags/environment and starts the terminal program.
+  `--headless` requires `--all-in-one` and starts the same local hosts without
+  Bubble Tea or model setup. It prints actual ready endpoints without credentials,
+  waits for cancellation or a required-host failure, and uses normal joined cleanup.
+  Caller cancellation stops cleanly; internal failures and output errors propagate.
 - [`internal/local/session.go`](internal/local/session.go) composes the existing
   Admin, MCP, API, controller and spawner hosts for `--all-in-one`.
   The spawner launches agent packages requested through chat/MCP as native children.
@@ -32,6 +36,10 @@
   Never write the real home in tests. Explicit flags override nonempty environment
   values, then saved settings. Do not reuse a saved model/base URL for a different
   provider or all-in-one's changing listener addresses as remote defaults.
+  `state.LockProfile` validates directory ownership, marker and OS lock without
+  reading client settings, key cache or histories; headless uses this seam.
+  `state.Open` additionally validates those client files for normal Playground.
+  Both retain the same exclusive profile ownership until hosts have stopped.
 - [`docker/Dockerfile`](docker/Dockerfile) is the lightweight client image used by
   Compose. [`docker/Dockerfile.aio`](docker/Dockerfile.aio) starts
   `--all-in-one --serve-admin-ui`, embeds Admin, includes Chromium/fonts, Git,
@@ -230,6 +238,10 @@
   an unrelated persistent profile for a temporary container. Keep the private
   startup flag parser in `internal/credentials` aligned with CLI flags; keep its
   scenarios in `tests/credential_settings_test.go`. Do not add discovery sockets.
+  Recognize `--headless` when parsing container startup settings. Headless temporary
+  sessions need explicit environment credentials for clients because there is no
+  TUI credential lookup. Headless mode ignores model/client configuration and
+  does not share locally cached provider keys with agents.
 - Remote MCP uses `COMMANDER_MCP_TOKEN` or a masked setup input; all-in-one ignores
   this remote credential. Validate entered tokens with `host.BearerCredentials`;
   keep them in session memory, outside the environment, files and model history.

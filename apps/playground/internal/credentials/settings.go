@@ -17,7 +17,7 @@ func ContainerState(arguments []string, environment map[string]string) (string, 
 	for _, name := range []string{"mcp-url", "api-url", "admin-url", "provider", "model", "base-url"} {
 		flags.String(name, "", "")
 	}
-	for _, name := range []string{"all-in-one", "serve-admin-ui", "debug", "no-color"} {
+	for _, name := range []string{"all-in-one", "headless", "serve-admin-ui", "debug", "no-color"} {
 		flags.Bool(name, false, "")
 	}
 	if flags.Parse(arguments) != nil || flags.NArg() != 0 {

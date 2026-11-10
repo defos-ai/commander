@@ -34,9 +34,17 @@ func (c *config) openState() (*state.Profile, error) {
 	if err != nil {
 		return nil, err
 	}
-	profile, err := state.Open(directory)
+	open := state.Open
+	if c.Headless {
+		open = state.LockProfile
+	}
+	profile, err := open(directory)
 	if err != nil {
-		return nil, fmt.Errorf("open Playground state: %w; choose another --state-dir or run with --temporary", err)
+		return nil, fmt.Errorf("open Commander state: %w; choose another --state-dir or run with --temporary", err)
+	}
+	if c.Headless {
+		c.StateDir = profile.Directory
+		return profile, nil
 	}
 	saved, err := profile.Load()
 	if err == nil {

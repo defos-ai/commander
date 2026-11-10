@@ -18,6 +18,7 @@ import (
 
 type config struct {
 	ui.Config
+	Headless      bool
 	ServeAdminUI  bool
 	Temporary     bool
 	StateDir      string
@@ -53,6 +54,7 @@ func configuration(args []string, stderr io.Writer) (config, error) {
 	flags.StringVar(&c.MCP.URL, "mcp-url", env("COMMANDER_MCP_URL", "http://localhost:4273/mcp"), "Commander MCP endpoint (COMMANDER_MCP_URL)")
 	flags.StringVar(&c.API.URL, "api-url", env("COMMANDER_API_URL", ""), "Commander API URL for Admin commands and agent secrets; omitted asks when needed (COMMANDER_API_URL)")
 	flags.BoolVar(&c.AllInOne, "all-in-one", false, "Start local MCP, API, controller and spawner with saved state")
+	flags.BoolVar(&c.Headless, "headless", false, "Run all-in-one hosts in the foreground without Playground")
 	flags.BoolVar(&c.Temporary, "temporary", false, "Keep Playground state in memory; remove all-in-one state on exit (COMMANDER_TEMPORARY)")
 	flags.StringVar(&c.StateDir, "state-dir", env("COMMANDER_STATE_DIR", ""), "Playground state directory; defaults to ~/.commander (COMMANDER_STATE_DIR)")
 	flags.BoolVar(&c.ServeAdminUI, "serve-admin-ui", false, "Start Admin UI now; otherwise use /admin serve later")
@@ -63,7 +65,7 @@ func configuration(args []string, stderr io.Writer) (config, error) {
 	flags.BoolVar(&c.Debug, "debug", false, "Show redacted model API error details (COMMANDER_DEBUG)")
 	flags.BoolVar(&c.NoColor, "no-color", os.Getenv("NO_COLOR") != "" || os.Getenv("TERM") == "dumb", "Disable corporate colors (NO_COLOR)")
 	flags.Usage = func() {
-		fmt.Fprint(stderr, "Usage: commander [flags]\n\nChat with a model and run missions through Commander MCP.\nUse --all-in-one for a local session, or connect to docker compose up --build -d.\n\nIn chat: /help for essential commands and a link to the full documentation.\nAnswer questions with arrow keys and Enter, or type your answer.\n\n")
+		fmt.Fprint(stderr, "Usage: commander [flags]\n\nChat with a model and run missions through Commander MCP.\nUse --all-in-one for a local session, or connect to docker compose up --build -d.\nAdd --headless to --all-in-one to run hosts without Playground.\n\nIn chat: /help for essential commands and a link to the full documentation.\nAnswer questions with arrow keys and Enter, or type your answer.\n\n")
 		fmt.Fprintln(stderr, "Paste the MCP token when prompted, or set COMMANDER_MCP_TOKEN. Use /credentials inside all-in-one Playground. commander credentials api|mcp [--raw] reads credentials from the current environment or the running all-in-one container.")
 		flags.PrintDefaults()
 	}
@@ -72,6 +74,9 @@ func configuration(args []string, stderr io.Writer) (config, error) {
 	}
 	if flags.NArg() != 0 {
 		return c, errors.New("unexpected positional arguments; run commander --help")
+	}
+	if c.Headless && !c.AllInOne {
+		return c, errors.New("--headless requires --all-in-one")
 	}
 	debugProvided := false
 	mcpProvided := false
@@ -101,6 +106,9 @@ func configuration(args []string, stderr io.Writer) (config, error) {
 		if err != nil {
 			return c, errors.New("COMMANDER_TEMPORARY must be a boolean (true or false)")
 		}
+	}
+	if c.Headless {
+		return c, nil
 	}
 	c.adminOverride = c.AdminURL
 	if !c.AllInOne && c.AdminURL == "" {

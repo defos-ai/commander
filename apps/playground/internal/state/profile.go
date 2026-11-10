@@ -40,6 +40,24 @@ type marker struct {
 }
 
 func Open(directory string) (*Profile, error) {
+	p, err := LockProfile(directory)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := p.Load(); err != nil {
+		return nil, errors.Join(err, p.Close())
+	}
+	if _, err := p.loadKeys(); err != nil {
+		return nil, errors.Join(err, p.Close())
+	}
+	if err := regularDirectory(p.root, "histories", false); err != nil {
+		return nil, errors.Join(err, p.Close())
+	}
+	return p, nil
+}
+
+// LockProfile acquires profile ownership without loading Playground client data.
+func LockProfile(directory string) (*Profile, error) {
 	if directory == "" {
 		return nil, errors.New("profile directory is required")
 	}
@@ -104,15 +122,6 @@ func (p *Profile) initialize(expected os.FileInfo) error {
 		if err := writeJSON(p.root, "profile.json", marker{Application: "commander", Version: 1}); err != nil {
 			return err
 		}
-	}
-	if _, err := p.Load(); err != nil {
-		return err
-	}
-	if _, err := p.loadKeys(); err != nil {
-		return err
-	}
-	if err := regularDirectory(p.root, "histories", false); err != nil {
-		return err
 	}
 	return directory.Chmod(0700)
 }

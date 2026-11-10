@@ -55,6 +55,12 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 			return err
 		}
 		defer func() { result = errors.Join(result, session.Close()) }()
+		if config.Headless {
+			if config.ServeAdminUI && session.AdminURL == "" {
+				fmt.Fprintf(stderr, "Admin UI unavailable; see %s for details.\n", filepath.Join(session.Directory, "hosts.log"))
+			}
+			return runHeadless(caller, session, stdout)
+		}
 		ctx = session.Context
 		config.configureLocalSession(session)
 	} else {
