@@ -39,7 +39,7 @@ func openRegular(root *os.Root, name string, create bool) (*os.File, error) {
 func lockFile(file *os.File) error {
 	err := unix.Flock(int(file.Fd()), unix.LOCK_EX|unix.LOCK_NB)
 	if errors.Is(err, unix.EWOULDBLOCK) || errors.Is(err, unix.EAGAIN) {
-		return errors.New("Playground profile is already in use by another process")
+		return ErrLocked
 	}
 	return err
 }

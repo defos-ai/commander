@@ -58,42 +58,89 @@ func Open(directory string) (*Profile, error) {
 
 // LockProfile acquires profile ownership without loading Playground client data.
 func LockProfile(directory string) (*Profile, error) {
-	if directory == "" {
-		return nil, errors.New("profile directory is required")
-	}
-	directory, err := filepath.Abs(directory)
+	p, expected, err := openProfileDirectory(directory)
 	if err != nil {
 		return nil, err
 	}
-	if err := os.Mkdir(directory, 0700); err != nil && !errors.Is(err, os.ErrExist) {
-		return nil, err
-	}
-	info, err := os.Lstat(directory)
-	if err != nil || info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
-		return nil, errors.New("profile path must be a directory, not a symbolic link")
-	}
-	root, err := os.OpenRoot(directory)
-	if err != nil {
-		return nil, err
-	}
-	p := &Profile{Directory: directory, root: root}
-	if err := p.initialize(info); err != nil {
-		p.Close()
-		return nil, err
+	if err := p.initialize(expected); err != nil {
+		return nil, errors.Join(err, p.Close())
 	}
 	return p, nil
 }
 
-func (p *Profile) initialize(expected os.FileInfo) error {
+// OpenSharedProfile validates profile ownership without taking the client lock.
+func OpenSharedProfile(directory string) (*Profile, error) {
+	p, expected, err := openProfileDirectory(directory)
+	if err != nil {
+		return nil, err
+	}
+	if err := p.validateDirectory(expected); err == nil {
+		return p, nil
+	}
+	if err := p.initialize(expected); err != nil {
+		return nil, errors.Join(err, p.Close())
+	}
+	err = p.lock.Close()
+	p.lock = nil
+	if err != nil {
+		return nil, errors.Join(err, p.Close())
+	}
+	return p, nil
+}
+
+func openProfileDirectory(directory string) (*Profile, os.FileInfo, error) {
+	if directory == "" {
+		return nil, nil, errors.New("profile directory is required")
+	}
+	directory, err := filepath.Abs(directory)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := os.Mkdir(directory, 0700); err != nil && !errors.Is(err, os.ErrExist) {
+		return nil, nil, err
+	}
+	info, err := os.Lstat(directory)
+	if err != nil || info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+		return nil, nil, errors.New("profile path must be a directory, not a symbolic link")
+	}
+	root, err := os.OpenRoot(directory)
+	if err != nil {
+		return nil, nil, err
+	}
+	return &Profile{Directory: directory, root: root}, info, nil
+}
+
+func (p *Profile) openDirectory(expected os.FileInfo) (*os.File, error) {
 	directory, err := p.root.Open(".")
+	if err != nil {
+		return nil, err
+	}
+	actual, err := directory.Stat()
+	if err != nil || !os.SameFile(expected, actual) {
+		directory.Close()
+		return nil, errors.New("profile directory changed while opening")
+	}
+	return directory, nil
+}
+
+func (p *Profile) validateDirectory(expected os.FileInfo) error {
+	directory, err := p.openDirectory(expected)
 	if err != nil {
 		return err
 	}
 	defer directory.Close()
-	actual, err := directory.Stat()
-	if err != nil || !os.SameFile(expected, actual) {
-		return errors.New("profile directory changed while opening")
+	if err := p.checkMarker(); err != nil {
+		return err
 	}
+	return directory.Chmod(0700)
+}
+
+func (p *Profile) initialize(expected os.FileInfo) error {
+	directory, err := p.openDirectory(expected)
+	if err != nil {
+		return err
+	}
+	defer directory.Close()
 	entries, err := directory.ReadDir(-1)
 	if err != nil {
 		return err
@@ -104,14 +151,8 @@ func (p *Profile) initialize(expected os.FileInfo) error {
 			return err
 		}
 	}
-	p.lock, err = openRegular(p.root, ".lock", true)
+	p.lock, err = LockFile(p.root, ".lock")
 	if err != nil {
-		return err
-	}
-	if err := lockFile(p.lock); err != nil {
-		return err
-	}
-	if err := p.lock.Chmod(0600); err != nil {
 		return err
 	}
 	if newProfile {

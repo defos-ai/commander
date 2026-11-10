@@ -13,6 +13,11 @@ nonempty `MCP_LISTEN_ADDRESS`, `0.0.0.0:$PORT`, then `127.0.0.1:4273`. Validate
 Explicit addresses retain port zero for embedded hosts. The Docker image sets
 `PORT=4273` rather than a fixed command argument, so platform ports can override it.
 
+Embedded hosts may supply a canonical UUID through `Options.InstanceID`; `/aboutz`
+then includes `instance_id` alongside runtime/application. Standalone hosts omit
+the field. Keep identity outside flags/environment and preserve public GET/HEAD
+Host/Origin checks. This metadata identifies an instance; it is not authentication.
+
 `get_agent_sources` uses the caller-owned `SourceClient` to load the fixed public
 `DefaultAgentSourcesURL` on demand. Return only name, description, source and
 visibility in a `sources` list, sorted public first, then by name and full source

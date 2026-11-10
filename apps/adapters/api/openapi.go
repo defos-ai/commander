@@ -82,6 +82,8 @@ func openAPIDocument() ([]byte, error) {
 		case "About":
 			schema.Properties["runtime"].Enum = []any{"native", "docker", "docker-compose"}
 			schema.Properties["application"].Enum = []any{"commander-api", "commander"}
+			schema.Properties["instance_id"].Format = "uuid"
+			schema.Properties["instance_id"].Description = "Optional identity supplied by an embedded host for local instance discovery."
 		case "MissionSharingPolicy", "MissionSharingPolicyRequest":
 			schema.Required = []string{"from_actions", "to_actions", "include"}
 			schema.AdditionalProperties = &jsonschema.Schema{Not: &jsonschema.Schema{}}

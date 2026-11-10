@@ -36,10 +36,13 @@
   Never write the real home in tests. Explicit flags override nonempty environment
   values, then saved settings. Do not reuse a saved model/base URL for a different
   provider or all-in-one's changing listener addresses as remote defaults.
-  `state.LockProfile` validates directory ownership, marker and OS lock without
-  reading client settings, key cache or histories; headless uses this seam.
-  `state.Open` additionally validates those client files for normal Playground.
-  Both retain the same exclusive profile ownership until hosts have stopped.
+  `state.OpenSharedProfile` validates directory and marker without holding the
+  client lock or loading client data; headless uses this seam. `state.Open`
+  retains the root client lock and validates settings, keys and histories for
+  Playground. `local.Session` separately holds `local/.lock` from before
+  bootstrap access through joined host shutdown, including library callers.
+  Keep lock-file inodes stable. A shared first initialization may safely refuse
+  while another initializer is writing the ownership marker.
 - [`docker/Dockerfile`](docker/Dockerfile) is the lightweight client image used by
   Compose. [`docker/Dockerfile.aio`](docker/Dockerfile.aio) starts
   `--all-in-one --serve-admin-ui`, embeds Admin, includes Chromium/fonts, Git,
@@ -164,17 +167,36 @@
 - The embedded API identifies itself as `application: commander` at `/aboutz`;
   `API_RUNTIME` defaults to `native`, and the all-in-one image sets `docker`.
   Embedded MCP uses the same application and reads `MCP_RUNTIME` (default native).
-  Keep this public metadata limited to deployment enums; it retains API Host,
-  Origin and proxy validation and must never expose credentials or paths.
+  Embedded API and MCP additionally expose the same optional canonical UUID
+  `instance_id` through `/aboutz`, injected through host options only. Metadata
+  retains API Host, Origin and proxy validation and must never expose credentials
+  or paths.
 - All-in-one starts loopback services beneath the selected profile's `local/`.
-  Stop hosts and await native children before releasing the profile lock. Retain
+  Stop hosts and await native children before releasing backend ownership. Retain
   persistent files on success and failure; only temporary sessions delete their
   own runtime files. Library `local.Options.Directory == ""` keeps temporary
   behavior. Never use or delete externally configured database/storage or Compose
   state. Saved records do not resurrect child processes or exact-owner sessions.
-  Reject unknown nonempty profiles, invalid markers, corrupt bootstrap and concurrent
-  profile owners without overwriting retained data. Keep the OS lockfile inode
+  Reject unknown nonempty profiles, invalid markers, corrupt bootstrap and competing
+  owners of the same client or backend state without overwriting retained data.
+  Keep the OS lockfile inode
   stable across shutdown; do not use a stale PID file as ownership.
+- `local/instance.json` is a private, bounded, atomic ready-endpoint record with
+  no credentials. Publish only after mandatory readiness and invalidate before
+  shutdown. Startup may discard an old runtime descriptor only under its backend
+  lease; failed duplicate starts must leave the active owner's record alone.
+  Discovery probes both literal-loopback `/aboutz` endpoints without credentials,
+  redirects or environment proxies, and compares their instance IDs. A PID or
+  leftover file does not prove liveness. IDs prevent stale-service mixups and do
+  not attest process integrity. Admin metadata is its startup address, not ongoing
+  health monitoring or discovery of later `/admin serve` calls.
+  `commander status [--json] [--state-dir PATH]` reads discovery without creating
+  state or loading client settings. Plain Playground may attach automatically
+  only when explicit or saved remote configuration does not take precedence.
+  Load local credentials only after endpoint verification; never send them to
+  another destination. Clear the MCP token when the setup URL changes. Local
+  attachment retains the `local` history scope and preserves saved remote settings;
+  it does not own or stop the backend or its existing Admin server.
 - The embedded controller reads `TASK_TIMEOUT` through its existing host configuration.
   Keep this deployment setting in that host rather than copying timeout parsing into
   Playground or changing process environment. Remote Playground does not configure

@@ -27,6 +27,7 @@ type Options struct {
 	Ready       func(net.Addr)
 	Credentials *host.BasicCredentials
 	Application string
+	InstanceID  string
 	// SecretCipher takes precedence over SECRETS_ENCRYPTION_KEY for embedded hosts.
 	SecretCipher *crypto.SecretCipher
 }
@@ -47,6 +48,7 @@ func RunWithOptions(ctx context.Context, args []string, stderr io.Writer, option
 		return err
 	}
 	configuration.deployment.Application = options.Application
+	configuration.deployment.InstanceID = options.InstanceID
 	if err := configuration.deployment.Validate(); err != nil {
 		return err
 	}

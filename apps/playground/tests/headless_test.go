@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -39,6 +41,40 @@ func TestHeadlessAllInOneServesAuthenticatedToolsAndRetainsStateAcrossRestart(t 
 	endpoints, err := app.AwaitReady(ctx)
 	if err != nil {
 		t.Fatal(err)
+	}
+	instance, err := local.Discover(ctx, filepath.Join(directory, "local"))
+	if err != nil || instance.ID == "" || instance.MCPURL != endpoints.MCP || instance.APIURL != endpoints.API {
+		t.Fatalf("ready hosts were not discoverable: %v", err)
+	}
+	status, reported := headlessStatus(t, ctx, directory)
+	if status != "running" || reported != instance {
+		t.Fatal("public status did not identify the ready local hosts")
+	}
+	instancePath := filepath.Join(directory, "local", "instance.json")
+	record, err := os.ReadFile(instancePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info, err := os.Stat(instancePath); err != nil || runtime.GOOS != "windows" && info.Mode().Perm() != 0600 {
+		t.Fatal("instance discovery record was not private")
+	}
+	client, err := state.LockProfile(directory)
+	if err != nil {
+		t.Fatalf("headless backend blocked Playground profile ownership: %v", err)
+	}
+	t.Cleanup(func() { _ = client.Close() })
+	if duplicate, err := state.LockProfile(directory); err == nil {
+		_ = duplicate.Close()
+		t.Fatal("concurrent Playground clients acquired the same client profile")
+	}
+	duplicateHosts, duplicateErr := local.StartWithOptions(ctx, local.Options{Directory: filepath.Join(directory, "local")})
+	if duplicateErr == nil {
+		_ = duplicateHosts.Close()
+		t.Fatal("direct library startup bypassed local backend ownership")
+	}
+	afterDuplicate, err := os.ReadFile(instancePath)
+	if err != nil || !bytes.Equal(afterDuplicate, record) {
+		t.Fatal("rejected library startup changed the running instance record")
 	}
 	apiCredentials, mcpCredentials, err := local.SavedCredentials(filepath.Join(directory, "local"))
 	if err != nil {
@@ -76,7 +112,7 @@ func TestHeadlessAllInOneServesAuthenticatedToolsAndRetainsStateAcrossRestart(t 
 		t.Fatal("headless startup read terminal input or rendered terminal controls")
 	}
 	for _, private := range []string{apiCredentials.Password, mcpCredentials.Token, string(key)} {
-		if strings.Contains(app.Output.String()+app.Errors.String(), private) {
+		if strings.Contains(app.Output.String()+app.Errors.String()+string(record), private) {
 			t.Fatal("headless output exposed bootstrap credentials")
 		}
 	}
@@ -86,11 +122,23 @@ func TestHeadlessAllInOneServesAuthenticatedToolsAndRetainsStateAcrossRestart(t 
 		t.Fatal(err)
 	}
 	assertHeadlessStopped(t, endpoints)
+	if _, err := os.Stat(instancePath); !os.IsNotExist(err) {
+		t.Fatal("joined shutdown retained a live instance discovery record")
+	}
+	if _, err := local.Discover(ctx, filepath.Join(directory, "local")); !errors.Is(err, local.ErrNotRunning) {
+		t.Fatalf("stopped hosts were still discoverable: %v", err)
+	}
+	if status, _ := headlessStatus(t, ctx, directory); status != "stopped" {
+		t.Fatal("status did not report joined shutdown")
+	}
 
 	restarted := fixtures.StartHeadless(t, directory)
 	ready, err := restarted.AwaitReady(ctx)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if status, restartedInstance := headlessStatus(t, ctx, directory); status != "running" || restartedInstance.ID == instance.ID || restartedInstance.MCPURL != ready.MCP || restartedInstance.APIURL != ready.API {
+		t.Fatal("restarted hosts did not acquire a fresh public instance identity")
 	}
 	savedAPI, savedMCP, err := local.SavedCredentials(filepath.Join(directory, "local"))
 	if err != nil || savedAPI != apiCredentials || savedMCP != mcpCredentials {
@@ -118,6 +166,9 @@ func TestHeadlessAllInOneServesAuthenticatedToolsAndRetainsStateAcrossRestart(t 
 			t.Fatalf("headless startup changed retained client file %s", name)
 		}
 	}
+	if err := client.Close(); err != nil {
+		t.Fatal(err)
+	}
 	profile, err := state.LockProfile(directory)
 	if err != nil {
 		t.Fatalf("shutdown retained profile ownership: %v", err)
@@ -125,6 +176,25 @@ func TestHeadlessAllInOneServesAuthenticatedToolsAndRetainsStateAcrossRestart(t 
 	if err := profile.Close(); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func headlessStatus(t *testing.T, ctx context.Context, directory string) (string, local.Instance) {
+	t.Helper()
+	var output bytes.Buffer
+	if err := cli.Run(ctx, []string{"status", "--json", "--state-dir", directory}, nil, &output, io.Discard); err != nil {
+		t.Fatalf("read local Commander status: %v", err)
+	}
+	var status struct {
+		Status string `json:"status"`
+		local.Instance
+	}
+	if err := json.Unmarshal(output.Bytes(), &status); err != nil {
+		t.Fatalf("status was not machine-readable JSON: %v", err)
+	}
+	if bytes.Contains(output.Bytes(), []byte("password")) || bytes.Contains(output.Bytes(), []byte("token")) || bytes.Contains(output.Bytes(), []byte("secrets")) {
+		t.Fatal("public status included bootstrap credential fields")
+	}
+	return status.Status, status.Instance
 }
 
 func TestHeadlessTemporarySessionIgnoresProfileAndCleansItsRuntime(t *testing.T) {

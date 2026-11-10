@@ -20,6 +20,7 @@ import (
 	"github.com/defos-ai/commander/apps/playground/internal/adminhost"
 	bridge "github.com/defos-ai/commander/apps/playground/internal/mcp"
 	"github.com/defos-ai/commander/framework/host"
+	"github.com/defos-ai/commander/framework/id"
 )
 
 type runningHost struct {
@@ -36,6 +37,7 @@ type Options struct {
 }
 
 type Session struct {
+	InstanceID     string
 	Context        context.Context
 	MCPURL         string
 	APIURL         string
@@ -52,6 +54,10 @@ type Session struct {
 	closeErr       error
 	admin          *adminhost.Manager
 	persistent     bool
+	stateRoot      *os.Root
+	stateLock      *os.File
+	startedAt      time.Time
+	instanceSaved  bool
 }
 
 func Start(ctx context.Context) (session *Session, err error) {
@@ -59,7 +65,7 @@ func Start(ctx context.Context) (session *Session, err error) {
 }
 
 func StartWithOptions(ctx context.Context, options Options) (session *Session, err error) {
-	s := &Session{}
+	s := &Session{InstanceID: id.New(), startedAt: time.Now().UTC()}
 	s.Context, s.cancel = context.WithCancelCause(ctx)
 	defer func() {
 		if err != nil {
@@ -68,6 +74,9 @@ func StartWithOptions(ctx context.Context, options Options) (session *Session, e
 	}()
 	cipher, err := s.prepareState(options.Directory)
 	if err != nil {
+		return nil, err
+	}
+	if err = s.removeInstance(""); err != nil {
 		return nil, err
 	}
 	s.log, err = os.OpenFile(filepath.Join(s.Directory, "hosts.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
@@ -93,7 +102,7 @@ func StartWithOptions(ctx context.Context, options Options) (session *Session, e
 	mcpReady := make(chan struct{})
 	s.start("MCP", func(ctx context.Context) error {
 		args := append(append([]string{}, common...), database, "--listen-address=127.0.0.1:0")
-		return mcpcli.RunWithOptions(ctx, args, s.log, mcpcli.Options{Application: "commander", Credentials: &s.MCPCredentials, Ready: func(address net.Addr) {
+		return mcpcli.RunWithOptions(ctx, args, s.log, mcpcli.Options{Application: "commander", InstanceID: s.InstanceID, Credentials: &s.MCPCredentials, Ready: func(address net.Addr) {
 			s.MCPURL = "http://" + address.String() + "/mcp"
 			close(mcpReady)
 		}})
@@ -108,7 +117,7 @@ func StartWithOptions(ctx context.Context, options Options) (session *Session, e
 			address = "127.0.0.1:4274"
 		}
 		args := append(append([]string{}, common...), database, "--listen-address="+address)
-		return apicli.RunWithOptions(ctx, args, s.log, apicli.Options{Application: "commander", Credentials: &s.APICredentials, SecretCipher: cipher, Ready: func(address net.Addr) {
+		return apicli.RunWithOptions(ctx, args, s.log, apicli.Options{Application: "commander", InstanceID: s.InstanceID, Credentials: &s.APICredentials, SecretCipher: cipher, Ready: func(address net.Addr) {
 			s.APIURL = localHTTPURL(address)
 			close(apiReady)
 		}})
@@ -152,6 +161,9 @@ func StartWithOptions(ctx context.Context, options Options) (session *Session, e
 	}
 	if err = s.Context.Err(); err != nil {
 		return nil, context.Cause(s.Context)
+	}
+	if err = s.saveInstance(); err != nil {
+		return nil, err
 	}
 	stateNotice := "Temporary session · results deleted on exit"
 	if s.persistent {
@@ -262,6 +274,9 @@ func (s *Session) awaitAgents(ctx context.Context, expected map[string]string) e
 
 func (s *Session) Close() error {
 	s.once.Do(func() {
+		if s.instanceSaved {
+			s.closeErr = errors.Join(s.closeErr, s.removeInstance(s.InstanceID))
+		}
 		s.cancel(context.Canceled)
 		if s.admin != nil {
 			s.closeErr = errors.Join(s.closeErr, s.admin.Close())
@@ -279,6 +294,7 @@ func (s *Session) Close() error {
 		if s.log != nil {
 			s.closeErr = errors.Join(s.closeErr, s.log.Close())
 		}
+		s.closeErr = errors.Join(s.closeErr, s.closeState())
 		if s.Directory != "" && !s.persistent {
 			if retainState {
 				s.closeErr = errors.Join(s.closeErr, fmt.Errorf("local state retained at %s because spawner shutdown failed", s.Directory))

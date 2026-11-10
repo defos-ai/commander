@@ -36,7 +36,7 @@ func (c *config) openState() (*state.Profile, error) {
 	}
 	open := state.Open
 	if c.Headless {
-		open = state.LockProfile
+		open = state.OpenSharedProfile
 	}
 	profile, err := open(directory)
 	if err != nil {
@@ -55,7 +55,7 @@ func (c *config) openState() (*state.Profile, error) {
 	}
 	c.StateDir = profile.Directory
 	c.SaveSettings = func(settings state.Settings) error {
-		if c.AllInOne {
+		if c.localScope(settings.Remote.MCPURL) {
 			settings.Remote = saved.Remote
 		}
 		return profile.Save(settings)
@@ -63,7 +63,7 @@ func (c *config) openState() (*state.Profile, error) {
 	c.LoadProviderKey = profile.LoadKey
 	c.SaveProviderKey = profile.SaveKey
 	scope := func(endpoint string) string {
-		if c.AllInOne {
+		if c.localScope(endpoint) {
 			return "local"
 		}
 		return "remote:" + endpoint
@@ -121,6 +121,7 @@ func (c *config) applySettings(saved state.Settings) error {
 	if c.AllInOne {
 		return nil
 	}
+	c.savedRemote = saved.Remote.MCPURL != "" || saved.Remote.APIURL != ""
 	if !c.settingProvided("mcp-url", "COMMANDER_MCP_URL") && saved.Remote.MCPURL != "" {
 		c.MCP.URL = saved.Remote.MCPURL
 	}

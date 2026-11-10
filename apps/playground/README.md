@@ -68,7 +68,20 @@ Read credentials from another terminal:
 ./commander credentials mcp --raw
 ```
 
-Use the same `--state-dir PATH` on both commands when choosing another profile.
+To connect Playground to the running local instance, launch `./commander` in a
+second terminal. It discovers the endpoints and uses the saved local credentials.
+Explicit connection settings and saved remote destinations take precedence.
+Exiting this Playground leaves the headless hosts running.
+
+Inspect the local instance without starting Playground:
+
+```sh
+./commander status
+./commander status --json
+```
+
+Use the same `--state-dir PATH` for hosts, Playground, status and credential lookup
+when choosing another profile.
 For `--temporary`, supply `API_USERNAME`, `API_PASSWORD` and `MCP_TOKEN` before
 starting if clients need access; generated temporary credentials are not saved.
 
@@ -90,7 +103,8 @@ Use `--state-dir PATH` for another profile, or `--temporary` to skip local saves
 Temporary mode removes all-in-one results on exit; remote server data remains
 managed by that server. An unwritable or unfamiliar state directory stops startup
 with instructions to choose another directory or use `--temporary`. Existing
-recognized profiles are reused. One Commander process may own a profile at a time.
+recognized profiles are reused. One local backend and one Playground client can
+share a profile; a second backend or client is rejected.
 
 Provider keys entered here are remembered encrypted on this machine, bound to
 their provider and API base URL. Alternatively, set the provider's environment

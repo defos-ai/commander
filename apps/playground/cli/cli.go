@@ -20,6 +20,9 @@ import (
 )
 
 func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) (result error) {
+	if len(args) != 0 && args[0] == "status" {
+		return showStatus(ctx, args[1:], stdout, stderr)
+	}
 	if len(args) != 0 && args[0] == "credentials" {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -44,6 +47,9 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	if profile != nil {
 		defer func() { result = errors.Join(result, profile.Close()) }()
 	}
+	if err := config.attachLocal(ctx); err != nil {
+		return err
+	}
 	if config.AllInOne {
 		fmt.Fprintln(stderr, "Starting local Commander…")
 		options := local.Options{ServeAdmin: config.ServeAdminUI}
@@ -64,9 +70,13 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 		ctx = session.Context
 		config.configureLocalSession(session)
 	} else {
-		admin := adminhost.New(ctx, io.Discard, "")
+		upstream := ""
+		if config.localConnection {
+			upstream = config.API.URL
+		}
+		admin := adminhost.New(ctx, io.Discard, upstream)
 		defer func() { result = errors.Join(result, admin.Close()) }()
-		config.configureAdminServer(admin.Start)
+		config.configureClientAdmin(admin.Start)
 		if config.ServeAdminUI {
 			address, err := config.ServeAdmin(ctx, nil)
 			if err != nil {

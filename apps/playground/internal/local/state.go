@@ -13,6 +13,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/defos-ai/commander/apps/playground/internal/state"
 	"github.com/defos-ai/commander/framework/crypto"
 	"github.com/defos-ai/commander/framework/host"
 )
@@ -59,6 +60,9 @@ func (s *Session) prepareState(directory string) (*crypto.SecretCipher, error) {
 			return nil, err
 		}
 		s.Directory, err = os.MkdirTemp("", "commander-playground-*")
+		if err == nil {
+			s.stateRoot, s.stateLock, _, err = openStateDirectory(s.Directory)
+		}
 		return cipher, err
 	}
 	s.persistent = true
@@ -67,11 +71,11 @@ func (s *Session) prepareState(directory string) (*crypto.SecretCipher, error) {
 	if err != nil {
 		return nil, err
 	}
-	root, empty, err := openStateDirectory(s.Directory)
+	root, lease, empty, err := openStateDirectory(s.Directory)
 	if err != nil {
 		return nil, err
 	}
-	defer root.Close()
+	s.stateRoot, s.stateLock = root, lease
 	var saved bootstrap
 	var key string
 	if empty {
@@ -89,26 +93,41 @@ func (s *Session) prepareState(directory string) (*crypto.SecretCipher, error) {
 	return crypto.NewSecretCipher(key)
 }
 
-func openStateDirectory(directory string) (*os.Root, bool, error) {
+func openStateDirectory(directory string) (*os.Root, *os.File, bool, error) {
 	if err := os.MkdirAll(directory, 0700); err != nil {
-		return nil, false, fmt.Errorf("create local state directory: %w", err)
+		return nil, nil, false, fmt.Errorf("create local state directory: %w", err)
 	}
 	root, err := openExistingStateDirectory(directory)
 	if err != nil {
-		return nil, false, err
+		return nil, nil, false, err
+	}
+	lease, err := state.LockFile(root, ".lock")
+	if err != nil {
+		return nil, nil, false, errors.Join(fmt.Errorf("lock local state: %w", err), root.Close())
 	}
 	directoryFile, err := root.Open(".")
 	if err != nil {
-		root.Close()
-		return nil, false, err
+		return nil, nil, false, errors.Join(err, lease.Close(), root.Close())
 	}
-	entries, err := directoryFile.ReadDir(1)
+	entries, err := directoryFile.ReadDir(2)
 	directoryFile.Close()
 	if err != nil && !errors.Is(err, io.EOF) {
-		root.Close()
-		return nil, false, err
+		return nil, nil, false, errors.Join(err, lease.Close(), root.Close())
 	}
-	return root, len(entries) == 0, nil
+	return root, lease, len(entries) == 1 && entries[0].Name() == ".lock", nil
+}
+
+func (s *Session) closeState() error {
+	var err error
+	if s.stateLock != nil {
+		err = s.stateLock.Close()
+		s.stateLock = nil
+	}
+	if s.stateRoot != nil {
+		err = errors.Join(err, s.stateRoot.Close())
+		s.stateRoot = nil
+	}
+	return err
 }
 
 func openExistingStateDirectory(directory string) (*os.Root, error) {

@@ -52,9 +52,10 @@
   through CLI options. Validate before opening listeners or providers. Protect
   every `/mcp` method, including notifications/resources, and keep `/healthz` public.
   Preserve Host/Origin checks alongside bearer verification.
-- MCP `/aboutz` exposes only `runtime` (`native`, `docker`, `docker-compose`) and
+- MCP `/aboutz` exposes `runtime` (`native`, `docker`, `docker-compose`) and
   `application` (`commander-mcp`, `commander`). Configure `MCP_RUNTIME`/`--runtime`
-  explicitly; embedded hosts set the application through run options. Only exact
+  explicitly; embedded hosts set the application through run options and may
+  supply an optional canonical UUID `instance_id` for local discovery. Only exact
   `GET`/`HEAD` are public and retain Host/Origin checks. Keep tokens, paths and
   shell commands out of metadata responses.
 - Secrets belong in environment variables or explicit in-memory overrides. Never

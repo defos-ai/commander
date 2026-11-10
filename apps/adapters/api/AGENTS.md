@@ -207,8 +207,11 @@
 - Preserve Basic authentication on protected routes, including unknown paths and
   enabled Swagger. Public `GET`/`HEAD` health probes, `/aboutz` and approved CORS
   preflights have deliberate exceptions; see [security.go](security.go) and [cors.go](cors.go).
-- `/aboutz` exposes only `runtime` (`native`, `docker`, `docker-compose`) and
-  `application` (`commander-api`, `commander`). Configure runtime explicitly with
+- `/aboutz` exposes `runtime` (`native`, `docker`, `docker-compose`) and
+  `application` (`commander-api`, `commander`). Embedded hosts may also inject an
+  optional canonical UUID `instance_id` through `Options.InstanceID` for local
+  discovery. Standalone hosts omit it; do not add identity flags or environment
+  settings. It is identity metadata, not authentication. Configure runtime with
   `API_RUNTIME`/`--runtime`; embedded Playground identifies its application through
   CLI options. Only `GET`/`HEAD` are unauthenticated and still require valid Host,
   Origin and proxy headers. Never expose secrets, paths or shell commands here.

@@ -301,6 +301,9 @@ func (m *Model) submit(value string) tea.Cmd {
 			m.add("error", err.Error())
 			return nil
 		}
+		if value != m.config.MCP.URL {
+			m.config.MCP.Credentials = host.BearerCredentials{}
+		}
 		m.config.MCP.URL = value
 		return m.connect()
 	case stageMCPToken:
