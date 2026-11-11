@@ -68,10 +68,12 @@ jobs:
           "./dist/commander-admin_$suffix" --help
           "./dist/commander-spawner-agent_$suffix" --help
           "./dist/commander-builder-agent_$suffix" --help
-      - name: Test native installers
+          printf 'commander_binary=%s/dist/commander_%s\n' "$GITHUB_WORKSPACE" "$suffix" >> "$GITHUB_OUTPUT"
+      - name: Test native installers and installed Commander
         working-directory: .github/tests
         env:
           GOWORK: 'off'
+          COMMANDER_TEST_NATIVE_BINARY: ${{ steps.build.outputs.commander_binary }}
         run: go test -count=1 -timeout=3m -run '^TestCIInstallers' .
       - uses: actions/upload-artifact@v4
         with:

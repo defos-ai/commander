@@ -169,6 +169,7 @@ func NewNativeBuild(t *testing.T, platform string) *Native {
 	f.env = map[string]string{
 		"PATH": f.dir + ":/usr/bin:/bin", "STATE": f.dir,
 		"GOOS": goos, "GOARCH": goarch, "VERSION": "v0.1.0",
+		"GITHUB_WORKSPACE": f.dir, "GITHUB_OUTPUT": filepath.Join(f.dir, "output"),
 	}
 	f.Write(t, "go", fakes.NativeGoBuild)
 

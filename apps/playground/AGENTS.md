@@ -558,3 +558,8 @@ agent, filesystem and spawner tests on Linux, macOS and Windows for amd64 and ar
 They build the embedded hosts and check each binary's `--help`. Keep the embedded
 missions, local host lifecycle and test fixtures portable; native binaries must
 run without a checkout or Go installation.
+The installer step sets `COMMANDER_TEST_NATIVE_BINARY` to the artifact just built
+and runs `TestCIInstallersNativeOnboarding` in `.github/tests`. It installs through
+local download fakes, executes from a temporary directory without development
+tools or model credentials, checks embedded Admin assets and authenticated MCP,
+then stops/restarts the same profile and reads retained work through a new client.

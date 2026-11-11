@@ -327,6 +327,13 @@ func TestCINativeBinaryBuildNames(t *testing.T) {
 					t.Errorf("%s native executable smoke check did not run: %q", name, got)
 				}
 			}
+			name := "commander_" + platform
+			if goos == "windows" {
+				name += ".exe"
+			}
+			if got := f.Read(t, "output"); got != "commander_binary="+f.Dir()+"/dist/"+name+"\n" {
+				t.Fatal("native build did not pass the built executable to installer onboarding")
+			}
 		})
 	}
 }
