@@ -58,6 +58,7 @@ type Session struct {
 	stateLock      *os.File
 	startedAt      time.Time
 	instanceSaved  bool
+	shutdownDone   chan struct{}
 }
 
 func Start(ctx context.Context) (session *Session, err error) {
@@ -165,6 +166,7 @@ func StartWithOptions(ctx context.Context, options Options) (session *Session, e
 	if err = s.saveInstance(); err != nil {
 		return nil, err
 	}
+	s.startShutdownWatcher()
 	stateNotice := "Temporary session · results deleted on exit"
 	if s.persistent {
 		stateNotice = "Persistent session · results retained between runs"
@@ -278,6 +280,9 @@ func (s *Session) Close() error {
 			s.closeErr = errors.Join(s.closeErr, s.removeInstance(s.InstanceID))
 		}
 		s.cancel(context.Canceled)
+		if s.shutdownDone != nil {
+			<-s.shutdownDone
+		}
 		if s.admin != nil {
 			s.closeErr = errors.Join(s.closeErr, s.admin.Close())
 		}
@@ -293,6 +298,9 @@ func (s *Session) Close() error {
 		}
 		if s.log != nil {
 			s.closeErr = errors.Join(s.closeErr, s.log.Close())
+		}
+		if s.instanceSaved {
+			s.closeErr = errors.Join(s.closeErr, removeShutdownRequest(s.stateRoot, s.InstanceID))
 		}
 		s.closeErr = errors.Join(s.closeErr, s.closeState())
 		if s.Directory != "" && !s.persistent {

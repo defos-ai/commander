@@ -20,6 +20,9 @@ import (
 )
 
 func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) (result error) {
+	if len(args) != 0 && (args[0] == "start" || args[0] == "stop") {
+		return manageLocal(ctx, args[0], args[1:], stdout, stderr)
+	}
 	if len(args) != 0 && args[0] == "status" {
 		return showStatus(ctx, args[1:], stdout, stderr)
 	}
@@ -114,6 +117,9 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	program := tea.NewProgram(model, tea.WithContext(ctx), tea.WithInput(stdin), tea.WithOutput(stdout), tea.WithAltScreen())
 	_, err = program.Run()
 	if config.AllInOne && ctx.Err() != nil && caller.Err() == nil {
+		if errors.Is(context.Cause(ctx), local.ErrStopRequested) {
+			return nil
+		}
 		return context.Cause(ctx)
 	}
 	if errors.Is(err, tea.ErrProgramKilled) && ctx.Err() != nil {

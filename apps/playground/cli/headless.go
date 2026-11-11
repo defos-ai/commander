@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 
@@ -17,7 +18,7 @@ func runHeadless(caller context.Context, session *local.Session, output io.Write
 		return fmt.Errorf("write Commander readiness: %w", err)
 	}
 	<-session.Context.Done()
-	if caller.Err() != nil {
+	if caller.Err() != nil || errors.Is(context.Cause(session.Context), local.ErrStopRequested) {
 		return nil
 	}
 	return context.Cause(session.Context)

@@ -85,6 +85,31 @@ when choosing another profile.
 For `--temporary`, supply `API_USERNAME`, `API_PASSWORD` and `MCP_TOKEN` before
 starting if clients need access; generated temporary credentials are not saved.
 
+### Background local hosts
+
+Start Commander independently of your terminal or MCP client:
+
+```sh
+./commander start
+./commander status --json
+./commander stop
+```
+
+Start returns after the API, MCP and spawner are ready. Add `--serve-admin-ui`
+to include Admin, or `--json` for machine-readable endpoints. Repeated start
+uses the running instance and leaves its configuration unchanged. Use
+`--state-dir PATH` consistently to manage another profile.
+
+Closing Playground or your MCP client leaves the hosts running. Stop waits for
+host and agent cleanup and retains saved results, credentials and encryption
+keys. It can also stop a foreground all-in-one instance using that profile.
+Startup failures point to `~/.commander/startup.log`; host details are in
+`~/.commander/local/hosts.log`.
+
+Background hosts always use persistent state and run until stopped or the
+machine shuts down. They do not start automatically after reboot. Read current
+endpoints with `status` after each restart; MCP's local port can change.
+
 ### Saved state
 
 Local and remote Playground sessions save settings, full chat history and entered

@@ -197,6 +197,26 @@
   another destination. Clear the MCP token when the setup URL changes. Local
   attachment retains the `local` history scope and preserves saved remote settings;
   it does not own or stop the backend or its existing Admin server.
+- `commander start [--serve-admin-ui] [--json]` launches the same executable
+  directly with persistent `--all-in-one --headless` settings, null stdin and
+  private `startup.log` output. It uses a detached Unix session or Windows process
+  group, preserves the environment, and never starts a model or client profile.
+  The profile's `.start.lock` serializes launch attempts; readiness must identify
+  the child this call launched. Repeated start returns the existing ready instance
+  without changing its configuration. Reap the child while the launching process
+  lives. Startup cleanup may terminate only that call's child handle, never a PID
+  loaded from saved state. Background hosts force persistence even when the client
+  environment sets `COMMANDER_TEMPORARY`.
+  `commander stop [--json]` writes an empty private `local/stop-<instance UUID>`
+  request only while backend ownership is held. The persistent Session watches
+  only its own UUID, cancels through normal lifecycle, joins the watcher and
+  removes its request before releasing ownership. Wait for the backend lease,
+  not disappearance of discovery, before reporting stopped. A newer ready UUID
+  also proves the original owner's cleanup ended. Stale descriptors never justify
+  signaling a PID or changing retained bootstrap. Malformed state fails explicitly;
+  inactive stop does not create a profile. Caller cancellation of stop ends the
+  wait without withdrawing an already submitted request. No force-stop, OS
+  service/autostart installation or client MCP configuration is included here.
 - The embedded controller reads `TASK_TIMEOUT` through its existing host configuration.
   Keep this deployment setting in that host rather than copying timeout parsing into
   Playground or changing process environment. Remote Playground does not configure

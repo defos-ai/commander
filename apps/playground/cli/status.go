@@ -41,24 +41,31 @@ func showStatus(ctx context.Context, args []string, output, stderr io.Writer) er
 	if err != nil && !errors.Is(err, local.ErrNotRunning) {
 		return err
 	}
+	if err == nil {
+		return printStatus(&instance, *asJSON, output)
+	}
+	return printStatus(nil, *asJSON, output)
+}
+
+func printStatus(instance *local.Instance, asJSON bool, output io.Writer) error {
 	status := struct {
 		Status string `json:"status"`
 		*local.Instance
 	}{Status: "stopped"}
-	if err == nil {
-		status.Status, status.Instance = "running", &instance
+	if instance != nil {
+		status.Status, status.Instance = "running", instance
 	}
-	if *asJSON {
+	if asJSON {
 		return json.NewEncoder(output).Encode(status)
 	}
 	if status.Instance == nil {
-		_, err = fmt.Fprintln(output, "Commander is not running.")
+		_, err := fmt.Fprintln(output, "Commander is not running.")
 		return err
 	}
 	message := fmt.Sprintf("Commander is running\nInstance: %s\nPID: %d\nMCP: %s\nAPI: %s\n", instance.ID, instance.PID, instance.MCPURL, instance.APIURL)
 	if instance.AdminURL != "" {
 		message += "Admin: " + instance.AdminURL + "\n"
 	}
-	_, err = io.WriteString(output, message)
+	_, err := io.WriteString(output, message)
 	return err
 }

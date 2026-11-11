@@ -72,6 +72,7 @@ func configuration(args []string, stderr io.Writer) (config, error) {
 		fmt.Fprint(stderr, "Usage: commander [flags]\n\nChat with a model and run missions through Commander MCP.\nUse --all-in-one for a local session, or connect to docker compose up --build -d.\nAdd --headless to --all-in-one to run hosts without Playground.\n\nIn chat: /help for essential commands and a link to the full documentation.\nAnswer questions with arrow keys and Enter, or type your answer.\n\n")
 		fmt.Fprintln(stderr, "Paste the MCP token when prompted, or set COMMANDER_MCP_TOKEN. Use /credentials inside all-in-one Playground. commander credentials api|mcp [--raw] reads credentials from the current environment or the running all-in-one container.")
 		fmt.Fprintln(stderr, "commander status [--json] [--state-dir directory] reports the running local instance without credentials.")
+		fmt.Fprintln(stderr, "commander start [--serve-admin-ui] starts persistent local hosts in the background; commander stop stops them after cleanup.")
 		flags.PrintDefaults()
 	}
 	if err := flags.Parse(args); err != nil {
