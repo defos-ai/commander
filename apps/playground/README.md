@@ -62,6 +62,12 @@ Connect an [MCP client](../adapters/README.md#quick-start) to plan work and hand
 model decisions. Stop with Ctrl+C
 or SIGTERM; local results and credentials are retained under `~/.commander`.
 
+If a coding-agent sandbox stops child processes when a shell command ends, keep
+this command running in a long-lived tool session. Run `./commander status` and
+`./commander setup --json` from another tool call, using the same `--state-dir PATH`
+if supplied. You can also start Commander in a separate terminal. Background
+`start` cannot override the sandbox's process lifetime.
+
 Read credentials from another terminal:
 
 ```sh
@@ -101,14 +107,17 @@ Use `--json` for machine-readable endpoints. Repeated start
 uses the running instance and leaves its configuration unchanged. Use
 `--state-dir PATH` consistently to manage another profile.
 
-Closing Playground or your MCP client leaves the hosts running. Stop waits for
-host and agent cleanup and retains saved results, credentials and encryption
-keys. It can also stop a foreground all-in-one instance using that profile.
+On hosts that allow detached processes, closing Playground or your MCP client
+leaves the hosts running. For restricted coding-agent shells, use
+[headless all-in-one](#headless-all-in-one) in a long-lived tool session instead.
+Stop waits for host and agent cleanup and retains saved results, credentials and
+encryption keys. It can also stop a foreground all-in-one instance using that
+profile.
 Startup failures point to `~/.commander/startup.log`; host details are in
 `~/.commander/local/hosts.log`.
 
-Background hosts always use persistent state and run until stopped or the
-machine shuts down. They do not start automatically after reboot. Local MCP
+Background hosts always use persistent state. They do not start automatically
+after reboot. Local MCP
 defaults to `http://127.0.0.1:4273/mcp`, keeping the same address across restarts.
 The API defaults to `http://127.0.0.1:4274`.
 
@@ -131,11 +140,16 @@ Start Commander and get its verified MCP connection details:
 ./commander setup --json
 ```
 
+If the coding-agent shell ends background processes, keep
+[headless all-in-one](#headless-all-in-one) running and call setup from another
+tool session.
+
 Ask your coding agent:
 
 > Connect your MCP client to Commander using these connection details. Show me
 > the configuration change for approval, preserve my existing settings, and
-> verify that you can discover Commander's tools.
+> reload the client if needed. Then call `list_missions` through your MCP client
+> to verify the connection.
 
 The output describes the Streamable HTTP endpoint, bearer authentication and
 verified tool count. Your agent translates those details into its client's
@@ -156,10 +170,10 @@ command. Keep token values out of chat and configuration previews.
 For remote Commander, supply `--mcp-url https://your-host/mcp` and its
 `COMMANDER_MCP_TOKEN`. Setup does not reuse local credentials for that address.
 Setup reads and verifies the server connection without changing client settings.
-Its connection description is not a client configuration file. Follow your
-client's reload procedure and check that its tools are loaded. The default local
-MCP address stays the same across restarts. Rerun setup when changing listener
-settings or explicitly using port `0`.
+Its connection description is not a client configuration file, and server
+verification does not prove that your client has loaded or called the tools.
+The default local MCP address stays the same across restarts. Rerun setup when
+changing listener settings or explicitly using port `0`.
 
 ### Saved state
 

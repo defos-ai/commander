@@ -20,9 +20,23 @@ func TestSetupVerifiesLocalCommanderWithoutClientSoftwareOrClientStateChanges(t 
 	fixtures.HeadlessEnvironment(t)
 	directory := filepath.Join(t.TempDir(), "profile")
 	clientFiles := fixtures.HeadlessProfileWithClientData(t, directory)
-	app := fixtures.StartHeadless(t, directory)
 	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 	defer cancel()
+	var stoppedOutput bytes.Buffer
+
+	err := cli.Run(ctx, []string{"setup", "--json", "--state-dir", directory}, nil, &stoppedOutput, io.Discard)
+
+	if err == nil || !strings.Contains(err.Error(), "commander start") || !strings.Contains(err.Error(), "commander --all-in-one --headless") || !strings.Contains(err.Error(), "same --state-dir") {
+		t.Fatalf("stopped-instance setup did not explain background and foreground startup: %v", err)
+	}
+	if stoppedOutput.Len() != 0 {
+		t.Fatal("stopped-instance setup reported a verified connection")
+	}
+	if _, err := os.Stat(filepath.Join(directory, "local")); !os.IsNotExist(err) {
+		t.Fatal("setup created local backend state instead of waiting for an explicit launch")
+	}
+
+	app := fixtures.StartHeadless(t, directory)
 	endpoints, err := app.AwaitReady(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -60,6 +74,9 @@ func TestSetupVerifiesLocalCommanderWithoutClientSoftwareOrClientStateChanges(t 
 	}
 	if strings.Contains(output.String(), credentials.Token) {
 		t.Fatal("human-readable setup exposed a saved MCP token")
+	}
+	if !strings.Contains(output.String(), "call list_missions through it") {
+		t.Fatal("setup did not guide verification through the calling MCP client")
 	}
 }
 

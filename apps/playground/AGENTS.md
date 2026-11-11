@@ -208,6 +208,11 @@
   directly with persistent `--all-in-one --headless` settings, null stdin and
   private `startup.log` output. It uses a detached Unix session or Windows process
   group, preserves the environment, and never starts a model or client profile.
+  Detachment cannot outlive a caller's destroyed PID namespace or other host
+  process-lifetime restrictions. Guide restricted coding-agent shells to keep
+  existing foreground `--all-in-one --headless` running in a long-lived tool
+  session, then verify discovery/setup from another call using the same profile.
+  Keep this guidance conditional; do not add sandbox detection or escape attempts.
   The profile's `.start.lock` serializes launch attempts; readiness must identify
   the child this call launched. Repeated start returns the existing ready instance
   without changing its configuration. Reap the child while the launching process
@@ -226,6 +231,9 @@
   service/autostart installation or client MCP configuration is included here.
 - `commander setup [--json]` reads and verifies an already running local instance
   or an explicit `--mcp-url` / `COMMANDER_MCP_URL`.
+  Its stopped-instance guidance includes the foreground hosting alternative.
+  A coding client's final connection check calls `list_missions` through that
+  client after configuration/reload; server verification is separate evidence.
   Local discovery must verify the instance before reading saved credentials.
   Explicit remote selection uses only `COMMANDER_MCP_TOKEN`, never local
   bootstrap, and does not open a profile. Setup does not read Playground history,

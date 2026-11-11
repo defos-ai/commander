@@ -123,6 +123,12 @@ when backing up or restoring it. See [saved state](../apps/playground/README.md#
 
 For background hosts without Playground or a model key, use `commander start`,
 then `commander setup --json` to get verified connection details for your coding
-agent. These commands require a release containing the v0.5.0 changes, or a build
-of this checkout. Follow the [coding-agent connection guide](../apps/playground/README.md#connect-a-coding-agent)
+agent. If its sandbox ends background processes after a tool command, keep
+[`commander --all-in-one --headless`](../apps/playground/README.md#headless-all-in-one)
+running in a long-lived tool session and run setup from another tool call with
+the same state directory. After configuring the MCP client, verify it by calling
+`list_missions` through that client.
+
+These commands require a release containing the v0.5.0 changes, or a build of
+this checkout. Follow the [coding-agent connection guide](../apps/playground/README.md#connect-a-coding-agent)
 and [background lifecycle guide](../apps/playground/README.md#background-local-hosts).

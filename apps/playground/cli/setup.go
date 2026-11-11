@@ -87,7 +87,7 @@ func setupConnection(ctx context.Context, directory, endpoint string) (string, h
 	}
 	instance, err := local.Discover(ctx, filepath.Join(resolved, "local"))
 	if errors.Is(err, local.ErrNotRunning) {
-		return "", host.BearerCredentials{}, errors.New("local Commander is not running; run commander start with the same --state-dir, then rerun setup")
+		return "", host.BearerCredentials{}, errors.New("local Commander is not running; run commander start with the same --state-dir, then rerun setup. If your coding-agent shell stops background processes when a tool command ends, keep commander --all-in-one --headless running in a long-lived tool session and rerun setup from another tool call, using the same --state-dir")
 	}
 	if err != nil {
 		return "", host.BearerCredentials{}, err
@@ -104,7 +104,7 @@ func printSetup(result setupResult, asJSON bool, output io.Writer) error {
 	if !result.TokenEnvironmentReady {
 		text += "Provide this endpoint's token through your MCP client's authentication settings. For local credentials, use commander credentials mcp --raw with the same --state-dir.\n"
 	}
-	text += "Have your coding agent configure its own MCP client with these details and preserve existing settings. This command only reads and verifies the connection; it does not confirm that your client has loaded the tools.\n"
+	text += "Have your coding agent configure its own MCP client with these details and preserve existing settings. After configuring or reloading that client, call list_missions through it to verify tool execution. This command only reads and verifies the server connection; it does not confirm that your client can call the tools.\n"
 	_, err := io.WriteString(output, text)
 	return err
 }
