@@ -28,7 +28,7 @@ or restarting Commander.
 
 ### Native: one executable
 
-Download a [release binary](../../README.md#binary), then run:
+Download a [release binary](../../docs/installation.md#direct-downloads), then run:
 
 ```sh
 ./commander --all-in-one
@@ -45,8 +45,8 @@ TASK_TIMEOUT=30m ./commander --all-in-one
 In Docker, pass `-e TASK_TIMEOUT=30m`. This affects newly dispatched tasks;
 expiry marks an unknown outcome and does not stop the agent.
 
-Type `/admin serve` to start Admin, or pass `--serve-admin-ui` at launch.
-The terminal session works without it.
+Admin starts automatically. An Admin startup failure leaves the terminal and
+local hosts running; `/admin serve` retries after you fix the issue.
 
 ### Headless all-in-one
 
@@ -56,9 +56,10 @@ Run the local hosts without Playground or a model API key:
 ./commander --all-in-one --headless
 ```
 
-The process prints the ready MCP and API addresses and stays in the foreground.
+The process prints ready service addresses, including Admin when available, and
+stays in the foreground.
 Connect an [MCP client](../adapters/README.md#quick-start) to plan work and handle
-model decisions. Add `--serve-admin-ui` to serve Admin as well. Stop with Ctrl+C
+model decisions. Stop with Ctrl+C
 or SIGTERM; local results and credentials are retained under `~/.commander`.
 
 Read credentials from another terminal:
@@ -95,8 +96,8 @@ Start Commander independently of your terminal or MCP client:
 ./commander stop
 ```
 
-Start returns after the API, MCP and spawner are ready. Add `--serve-admin-ui`
-to include Admin, or `--json` for machine-readable endpoints. Repeated start
+Start returns after the API, MCP and spawner are ready, with Admin served by default.
+Use `--json` for machine-readable endpoints. Repeated start
 uses the running instance and leaves its configuration unchanged. Use
 `--state-dir PATH` consistently to manage another profile.
 
@@ -210,8 +211,10 @@ npm --prefix apps/admin/ui/frontend run build -- --outDir ../backend/static/dist
 go build -tags embed_ui -o commander ./apps/playground/cmd/commander && ./commander --all-in-one
 ```
 
-For a Go-only build, omit the frontend steps and `-tags embed_ui`. To serve Admin
-later, build the frontend and set `UI_STATIC_DIR` to its output directory.
+For a Go-only build, omit the frontend steps and `-tags embed_ui`. Missing Admin
+assets produce a notice without stopping the local hosts. To serve Admin later,
+build the frontend and set
+`UI_STATIC_DIR` to its output directory.
 
 Native agents use tools installed on your host: Git for checkout/publication,
 Go and Codex for builds, and [Chromium](https://github.com/defos-ai/commander-browser-agent#connect-to-commander)
@@ -306,7 +309,6 @@ Paste the MCP token when prompted, or set `COMMANDER_MCP_TOKEN` before launch.
 | API for Admin commands and agent secrets | `COMMANDER_API_URL` | `--api-url` |
 | API login | `COMMANDER_API_USERNAME`, `COMMANDER_API_PASSWORD` | Local form |
 | Admin browser address | `COMMANDER_ADMIN_URL` | `--admin-url` |
-| Start Admin UI | — | `--serve-admin-ui` |
 | Model provider/name | `COMMANDER_LLM_PROVIDER`, `COMMANDER_LLM_MODEL` | `--provider`, `--model` |
 | Model API base URL | `COMMANDER_LLM_BASE_URL` | `--base-url` |
 | Redacted error details | `COMMANDER_DEBUG=true` | `--debug` |
@@ -317,8 +319,10 @@ Flags override environment settings. Provider keys can use `OPENAI_API_KEY`,
 `DEEPSEEK_API_KEY` or `COMMANDER_LLM_API_KEY` for Other.
 Gemini keys are saved as `GEMINI_API_KEY`, including keys read from `GOOGLE_API_KEY`.
 
+Connecting to an existing Commander does not start another Admin server.
 The standalone Admin link defaults to `http://localhost:4275`; setting
-`--admin-url` changes the link, not the server. Set the API URL/login for Admin
+`--admin-url` selects the existing Admin address, not a new listener.
+Set the API URL/login for Admin
 commands, or enter them in the local form when prompted. All-in-one supplies
 its own API connection. Compose supplies the default internal API login; a custom
 `COMMANDER_API_URL` needs that API's own login.
@@ -383,7 +387,7 @@ Build the all-in-one image locally from the repository root:
 docker build -f apps/playground/docker/Dockerfile.aio -t commander:aio .
 ```
 
-Docker AIO starts Admin automatically; pass `--serve-admin-ui=false` to skip it.
+Docker AIO starts Admin automatically.
 
 [Contributor guidance](AGENTS.md) · [Test setup](../../framework/tests/README.md) ·
 [MCP workflow](../adapters/README.md#operation-workflow)

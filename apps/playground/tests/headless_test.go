@@ -281,7 +281,10 @@ func TestHeadlessRejectsInvalidStartupWithoutReplacingRetainedFiles(t *testing.T
 
 func assertHeadlessStopped(t *testing.T, endpoints fixtures.HeadlessEndpoints) {
 	t.Helper()
-	for _, endpoint := range []string{endpoints.API, endpoints.MCP} {
+	for _, endpoint := range []string{endpoints.API, endpoints.MCP, endpoints.Admin} {
+		if endpoint == "" {
+			continue
+		}
 		parsed, err := url.Parse(endpoint)
 		if err != nil {
 			t.Fatal(err)

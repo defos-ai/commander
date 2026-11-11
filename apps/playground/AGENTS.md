@@ -10,8 +10,8 @@
 - [`internal/local/session.go`](internal/local/session.go) composes the existing
   Admin, MCP, API, controller and spawner hosts for `--all-in-one`.
   The spawner launches agent packages requested through chat/MCP as native children.
-- [`internal/adminhost/`](internal/adminhost/) owns the optional UI listener for
-  native and remote sessions. Command cancellation limits startup; Playground
+- [`internal/adminhost/`](internal/adminhost/) owns the UI listener for local hosts
+  and explicit `/admin serve` calls. Command cancellation limits startup; Playground
   owns the ready server until shutdown. Serialize starts and await shutdown.
 - [`internal/llm/`](internal/llm/) owns model discovery, provider protocols,
   streaming, tool-call conversion and redacted errors.
@@ -50,7 +50,7 @@
   while another initializer is writing the ownership marker.
 - [`docker/Dockerfile`](docker/Dockerfile) is the lightweight client image used by
   Compose. [`docker/Dockerfile.aio`](docker/Dockerfile.aio) starts
-  `--all-in-one --serve-admin-ui`, embeds Admin, includes Chromium/fonts, Git,
+  `--all-in-one`, embeds Admin, includes Chromium/fonts, Git,
   Go and Codex, and uses a real non-root user's home plus
   an init process for browser children. Keep browser packages aligned with the
   browser image.
@@ -66,11 +66,12 @@
   as data, not instructions. Never invent package references or imply installation
   grants dependencies, secrets or Docker privileges. Keep the welcome hint short
   and actionable.
-- When requested, all-in-one starts Admin through its existing CLI host after
-  API and agent readiness. Default to `127.0.0.1:4275`, honor `UI_LISTEN_ADDRESS`, and pass the
-  listen flag explicitly so `PORT` cannot expose it. Native Playground starts
-  without UI unless `--serve-admin-ui` is passed; `/admin serve` can start it
-  later, including while connected to remote hosts. Repeated starts return the
+- All-in-one, headless and background local hosts start Admin through its existing
+  CLI host after API and agent readiness.
+  Default to `127.0.0.1:4275`, honor `UI_LISTEN_ADDRESS`, and pass the
+  listen flag explicitly so `PORT` cannot expose it. Remote Playground reuses
+  supplied or existing Admin links without automatically starting another UI;
+  `/admin serve` can explicitly start it later in either mode. Repeated starts return the
   ready link rather than creating another listener. Admin startup failures
   must leave MCP, API and agents running; retain a short notice and host-log
   details. Optional Admin failures must not fail cleanup.
@@ -95,8 +96,8 @@
   default, not detection of a running server or published port.
   `--admin-url` / `COMMANDER_ADMIN_URL` optionally overrides the browser address;
   it does not start Admin or change listeners or port mappings. Never infer
-  Admin's address from a remote MCP endpoint. Do not advertise a disabled or
-  failed local Admin. A local server started with `/admin serve` remains owned
+  Admin's address from a remote MCP endpoint. Do not advertise a failed local
+  Admin. A local server started with `/admin serve` remains owned
   by Playground and must stop before its session state is removed.
   Local links use `#/connect?api=...&username=...` with URL-encoded non-secret
   values; operation review links add `operation=...`. Preserve encoded query
@@ -162,7 +163,8 @@
   keep polling receipt using its unchanged task/command/agent IDs.
 - Native release binaries build Admin assets into `apps/admin/ui/backend/static/dist`
   and compile with `-tags embed_ui`. Untagged Go builds still work without Node;
-  use `UI_STATIC_DIR` for an existing frontend when starting Admin. A terminal-only
+  missing Admin assets retain a nonfatal notice without stopping local hosts.
+  Use `UI_STATIC_DIR` for an existing frontend when starting Admin. A terminal-only
   session needs no assets. Keep `UI_STATIC_DIR`, `UI_PUBLIC_ORIGIN` and
   `UI_API_UPSTREAMS` semantics in the Admin host. When no upstream mapping is
   supplied, map the session's exact
@@ -202,7 +204,7 @@
   another destination. Clear the MCP token when the setup URL changes. Local
   attachment retains the `local` history scope and preserves saved remote settings;
   it does not own or stop the backend or its existing Admin server.
-- `commander start [--serve-admin-ui] [--json]` launches the same executable
+- `commander start [--json]` launches the same executable
   directly with persistent `--all-in-one --headless` settings, null stdin and
   private `startup.log` output. It uses a detached Unix session or Windows process
   group, preserves the environment, and never starts a model or client profile.
@@ -350,8 +352,7 @@
 - The all-in-one image builds Admin assets with Node, copies them into
   `apps/admin/ui/backend/static/dist`, and compiles Commander with `-tags embed_ui`.
   Do not copy a loose frontend directory into the runtime image. Its entrypoint
-  opts into Admin with `--serve-admin-ui`; a later `--serve-admin-ui=false` must
-  override that default. It binds Admin
+  uses the normal all-in-one default to start Admin. It binds Admin
   to `0.0.0.0:4275` and the API to `0.0.0.0:4274`; document host publishing on
   `127.0.0.1` by default. Admin proxies to the API inside the same container, so
   the quick start publishes only `4275`; API publishing stays optional. MCP stays
@@ -536,7 +537,8 @@ For image changes, build both Dockerfiles from the repository root. Verify the
 all-in-one image starts without a model key, serves Admin assets and `/healthz`
 through published port `4275`, and authenticates/proxies to its API without
 publishing `4274`. Check the default Admin link, explicit `--admin-url`,
-`--serve-admin-ui=false`, explicit credential overrides and clean SIGTERM shutdown.
+explicit credential overrides and clean SIGTERM shutdown. Missing assets or an
+occupied Admin port must leave the required hosts running with an Admin notice.
 Keep Docker lifecycle in shell/CI rather than Go test fixtures.
 
 [Native release builds](../../.github/workflows/build-binaries.yml) run retained

@@ -17,10 +17,6 @@ func manageLocal(ctx context.Context, command string, args []string, output, std
 	flags.SetOutput(stderr)
 	directory := flags.String("state-dir", env("COMMANDER_STATE_DIR", ""), "Commander state directory; defaults to ~/.commander")
 	asJSON := flags.Bool("json", false, "Print machine-readable status without credentials")
-	serveAdmin := false
-	if command == "start" {
-		flags.BoolVar(&serveAdmin, "serve-admin-ui", false, "Start Admin UI with the background hosts")
-	}
 	flags.Usage = func() {
 		fmt.Fprintf(stderr, "Usage: commander %s [flags]\n", command)
 		flags.PrintDefaults()
@@ -42,9 +38,12 @@ func manageLocal(ctx context.Context, command string, args []string, output, std
 		return err
 	}
 	if command == "start" {
-		instance, err := local.StartBackground(ctx, resolved, serveAdmin)
+		instance, err := local.StartBackground(ctx, resolved)
 		if err != nil {
 			return err
+		}
+		if instance.AdminURL == "" {
+			fmt.Fprintf(stderr, "Admin UI unavailable; Commander is running. See %s for details.\n", filepath.Join(resolved, "local", "hosts.log"))
 		}
 		return printStatus(&instance, *asJSON, output)
 	}

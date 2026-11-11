@@ -36,6 +36,18 @@ func BackgroundProfile(t *testing.T) string {
 	return directory
 }
 
+func BackgroundAdminAssets(t *testing.T) string {
+	t.Helper()
+	directory := t.TempDir()
+	document := "<!doctype html><html><body>Commander background Admin fixture</body></html>"
+	if err := os.WriteFile(filepath.Join(directory, "index.html"), []byte(document), 0600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("UI_STATIC_DIR", directory)
+	t.Setenv("UI_LISTEN_ADDRESS", "127.0.0.1:0")
+	return document
+}
+
 func FixedMCPAddress(t *testing.T) string {
 	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")

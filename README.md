@@ -12,83 +12,21 @@ What are the use cases for Commander? [Ask ChatGPT](https://chatgpt.com/?q=What%
 
 ## Quick start
 
-Each option opens Playground. Choose a model, enter its API key, and ask:
+Follow [Installation](docs/installation.md) for native setup, or
+[Deployment](docs/deployment.md) for Docker and Compose.
+
+Ask your coding agent:
+
+> Install Commander (`defos-ai/commander`) and connect it to this coding agent using `commander start` and `commander setup --json`. Show me the setup plan for approval, then verify the installation and suggest how Commander can help with my work and projects.
+
+Or open Playground, choose a model, enter its API key, and ask:
 
 > Create a Hacker News digest
 
-The demo installs [example-agent](https://github.com/defos-ai/commander-example-agent), asks for topics, and saves a reading list as Markdown and JSON.
+The demo saves a topic-focused reading list as Markdown and JSON.
 
-### Docker
+## Learn more
 
-Run all-in-one (AIO):
+[Documentation](docs/README.md) · [Use cases](docs/use-cases.md) · [Releases](docs/releases/README.md) · [Contributing](CONTRIBUTING.md)
 
-```sh
-docker run --rm -it --name commander -p 127.0.0.1:4275:4275 ghcr.io/defos-ai/commander-aio:stable
-```
-
-With persistent state:
-
-```sh
-docker run --rm -it --name commander -v commander-state:/home/commander/.commander -p 127.0.0.1:4275:4275 ghcr.io/defos-ai/commander-aio:stable
-```
-
-Open [Admin UI](http://localhost:4275). Get the login with `/credentials` in Playground.
-
-### Binary
-
-Linux (amd64):
-
-```sh
-curl -fsSL https://github.com/defos-ai/commander/releases/latest/download/commander_linux_amd64 -o commander && chmod +x commander && ./commander --all-in-one
-```
-
-macOS (Apple silicon):
-
-```sh
-curl -fsSL https://github.com/defos-ai/commander/releases/latest/download/commander_darwin_arm64 -o commander && chmod +x commander && ./commander --all-in-one
-```
-
-Windows (amd64):
-
-```powershell
-powershell -c "iwr -UseBasicParsing https://github.com/defos-ai/commander/releases/latest/download/commander_windows_amd64.exe -OutFile commander.exe; .\commander.exe --all-in-one"
-```
-
-Other architectures: [Releases](https://github.com/defos-ai/commander/releases/latest).
-
-From a checkout, use the [native installers](docs/installation.md) to preview the
-platform-specific download and verify its checksum before installation.
-
-Type `/admin serve` to start Admin UI, or add `--serve-admin-ui` when launching. Playground saves settings and chat history in `~/.commander` by default. Use `--temporary` for a disposable session.
-
-### Source
-
-Docker Compose:
-
-```sh
-docker compose up --build --wait && docker compose run --build --rm --no-deps playground
-```
-
-Go:
-
-```sh
-go build -o commander ./apps/playground/cmd/commander && ./commander --all-in-one
-```
-
-See [Playground](apps/playground/README.md) for native dependencies and configuration.
-
-## Explore the project
-
-| You want to… | Read |
-| --- | --- |
-| Run and configure Commander | [Setup](docs/deployment.md) · [Playground](apps/playground/README.md) |
-| Inspect operations in a browser | [Admin UI](apps/admin/ui/README.md) |
-| Use Commander features | [Feature guides](docs/features/README.md) |
-| Build an agent or workflow | [Agents](apps/agents/README.md) · [Missions and policies](docs/features/missions.md) |
-| Integrate or extend Commander | [Framework](framework/README.md) · [Controllers](apps/controllers/README.md) · [HTTP API](apps/adapters/api/README.md) · [Providers](providers/README.md) |
-| Understand the architecture and limits | [Overview](docs/overview.md) |
-| Connect existing agent frameworks | [Frameworks](docs/frameworks.md) |
-| Contribute | [Contributing](CONTRIBUTING.md) · [Testing](framework/tests/README.md) |
-| Participate in the community | [Code of Conduct](CODE_OF_CONDUCT.md) |
-| Understand licensing | [AGPL-3.0-only](LICENSE) |
-| Report a vulnerability | [Security](SECURITY.md) |
+[Security](SECURITY.md) · [Code of Conduct](CODE_OF_CONDUCT.md) · [AGPL-3.0-only](LICENSE)

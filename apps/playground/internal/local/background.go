@@ -12,7 +12,7 @@ import (
 	"github.com/defos-ai/commander/apps/playground/internal/state"
 )
 
-func StartBackground(ctx context.Context, directory string, serveAdmin bool) (Instance, error) {
+func StartBackground(ctx context.Context, directory string) (Instance, error) {
 	if err := ctx.Err(); err != nil {
 		return Instance{}, err
 	}
@@ -47,9 +47,6 @@ func StartBackground(ctx context.Context, directory string, serveAdmin bool) (In
 	}
 	defer log.Close()
 	args := []string{"--all-in-one", "--headless", "--state-dir", profile.Directory, "--temporary=false"}
-	if serveAdmin {
-		args = append(args, "--serve-admin-ui")
-	}
 	command, err := startDetached(executable, args, log)
 	if err != nil {
 		return Instance{}, fmt.Errorf("start Commander process: %w", err)

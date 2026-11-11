@@ -32,8 +32,7 @@ type runningHost struct {
 }
 
 type Options struct {
-	ServeAdmin bool
-	Directory  string
+	Directory string
 }
 
 type Session struct {
@@ -157,12 +156,10 @@ func StartWithOptions(ctx context.Context, options Options) (session *Session, e
 		return nil, err
 	}
 	s.admin = adminhost.New(s.Context, s.log, s.APIURL)
-	if options.ServeAdmin {
-		s.AdminURL, err = s.ServeAdmin(startup, nil)
-		if err != nil {
-			fmt.Fprintf(s.log, "Admin UI startup: %v\n", err)
-			s.Notices = append(s.Notices, "Admin UI unavailable; Playground is ready. Use --debug for details.")
-		}
+	s.AdminURL, err = s.ServeAdmin(startup, nil)
+	if err != nil {
+		fmt.Fprintf(s.log, "Admin UI startup: %v\n", err)
+		s.Notices = append(s.Notices, "Admin UI unavailable; Commander is ready. Use --debug for details.")
 	}
 	if err = s.Context.Err(); err != nil {
 		return nil, context.Cause(s.Context)

@@ -58,7 +58,7 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	}
 	if config.AllInOne {
 		fmt.Fprintln(stderr, "Starting local Commander…")
-		options := local.Options{ServeAdmin: config.ServeAdminUI}
+		options := local.Options{}
 		if profile != nil {
 			options.Directory = filepath.Join(profile.Directory, "local")
 		}
@@ -68,7 +68,7 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 		}
 		defer func() { result = errors.Join(result, session.Close()) }()
 		if config.Headless {
-			if config.ServeAdminUI && session.AdminURL == "" {
+			if session.AdminURL == "" {
 				fmt.Fprintf(stderr, "Admin UI unavailable; see %s for details.\n", filepath.Join(session.Directory, "hosts.log"))
 			}
 			return runHeadless(caller, session, stdout)
@@ -83,16 +83,6 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 		admin := adminhost.New(ctx, io.Discard, upstream)
 		defer func() { result = errors.Join(result, admin.Close()) }()
 		config.configureClientAdmin(admin.Start)
-		if config.ServeAdminUI {
-			address, err := config.ServeAdmin(ctx, nil)
-			if err != nil {
-				config.AdminURL = ""
-				config.AdminHint = "Admin UI unavailable. Use /admin serve to try again."
-				config.Notices = append(config.Notices, config.AdminHint)
-			} else {
-				config.Config.SetAdminURL(address)
-			}
-		}
 	}
 	if file, ok := stdout.(*os.File); !ok || !isatty.IsTerminal(file.Fd()) {
 		config.NoColor = true

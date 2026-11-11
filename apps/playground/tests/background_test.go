@@ -24,6 +24,7 @@ import (
 
 func TestBackgroundCommanderStartsOnceAndStopsWithoutLosingSavedWork(t *testing.T) {
 	fixtures.HeadlessEnvironment(t)
+	adminDocument := fixtures.BackgroundAdminAssets(t)
 	t.Setenv("COMMANDER_TEMPORARY", "true")
 	t.Setenv("PORT", "1")
 	address := fixtures.FixedMCPAddress(t)
@@ -42,6 +43,7 @@ func TestBackgroundCommanderStartsOnceAndStopsWithoutLosingSavedWork(t *testing.
 	if status, discovered := headlessStatus(t, ctx, directory); status != "running" || discovered != instance {
 		t.Fatal("the background process was not discoverable after start returned")
 	}
+	assertBackgroundAdminServes(t, ctx, instance.AdminURL, adminDocument)
 	apiCredentials, mcpCredentials, err := local.SavedCredentials(filepath.Join(directory, "local"))
 	if err != nil {
 		t.Fatal(err)
@@ -79,7 +81,7 @@ func TestBackgroundCommanderStartsOnceAndStopsWithoutLosingSavedWork(t *testing.
 	if status, _ := headlessStatus(t, ctx, directory); status != "stopped" {
 		t.Fatal("stop returned with a live background instance")
 	}
-	assertHeadlessStopped(t, fixtures.HeadlessEndpoints{API: instance.APIURL, MCP: instance.MCPURL})
+	assertHeadlessStopped(t, fixtures.HeadlessEndpoints{API: instance.APIURL, MCP: instance.MCPURL, Admin: instance.AdminURL})
 	if err := cli.Run(ctx, []string{"stop", "--state-dir", directory}, nil, io.Discard, io.Discard); err != nil {
 		t.Fatalf("repeated stop failed: %v", err)
 	}
@@ -95,6 +97,7 @@ func TestBackgroundCommanderStartsOnceAndStopsWithoutLosingSavedWork(t *testing.
 	if restarted.MCPURL != instance.MCPURL {
 		t.Fatal("restart changed the configured MCP endpoint")
 	}
+	assertBackgroundAdminServes(t, ctx, restarted.AdminURL, adminDocument)
 	savedAPI, savedMCP, err := local.SavedCredentials(filepath.Join(directory, "local"))
 	if err != nil || savedAPI != apiCredentials || savedMCP != mcpCredentials {
 		t.Fatal("background restart replaced saved credentials")
@@ -114,6 +117,56 @@ func TestBackgroundCommanderStartsOnceAndStopsWithoutLosingSavedWork(t *testing.
 	api.Close()
 	if err != nil {
 		t.Fatalf("background restart lost saved API state: %v", err)
+	}
+}
+
+func TestBackgroundCommanderKeepsRequiredHostsRunningWhenAdminFails(t *testing.T) {
+	for _, failure := range []string{"missing assets", "occupied address"} {
+		t.Run(failure, func(t *testing.T) {
+			fixtures.HeadlessEnvironment(t)
+			if failure == "occupied address" {
+				fixtures.BackgroundAdminAssets(t)
+				fixtures.OccupyHostAddress(t, "UI_LISTEN_ADDRESS")
+			}
+			directory := fixtures.BackgroundProfile(t)
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			defer cancel()
+			var output, diagnostic bytes.Buffer
+
+			err := cli.Run(ctx, []string{"start", "--json", "--state-dir", directory}, nil, &output, &diagnostic)
+
+			if err != nil {
+				t.Fatalf("unavailable Admin prevented background startup: %v; %s", err, diagnostic.String())
+			}
+			var instance local.Instance
+			if err := json.Unmarshal(output.Bytes(), &instance); err != nil {
+				t.Fatalf("start did not return machine-readable readiness: %v", err)
+			}
+			if instance.AdminURL != "" {
+				t.Fatal("start advertised an unavailable Admin UI")
+			}
+			if !strings.Contains(diagnostic.String(), "Admin UI unavailable; Commander is running.") {
+				t.Fatalf("start did not report the optional Admin failure: %s", diagnostic.String())
+			}
+			if status, discovered := headlessStatus(t, ctx, directory); status != "running" || discovered != instance {
+				t.Fatal("unavailable Admin left required hosts undiscoverable")
+			}
+			apiCredentials, mcpCredentials, err := local.SavedCredentials(filepath.Join(directory, "local"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := bridge.Verify(ctx, instance.MCPURL, mcpCredentials); err != nil {
+				t.Fatalf("unavailable Admin stopped MCP: %v", err)
+			}
+			api, err := adminclient.New(adminclient.Connection{URL: instance.APIURL, Credentials: apiCredentials})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer api.Close()
+			if _, err := api.Request(ctx, http.MethodGet, "/api/v1/missions", nil); err != nil {
+				t.Fatalf("unavailable Admin stopped the API: %v", err)
+			}
+		})
 	}
 }
 
@@ -236,4 +289,26 @@ func startBackgroundCommander(t *testing.T, ctx context.Context, directory strin
 		t.Fatal("start output exposed bootstrap credential fields")
 	}
 	return status.Instance
+}
+
+func assertBackgroundAdminServes(t *testing.T, ctx context.Context, endpoint, document string) {
+	t.Helper()
+	if endpoint == "" {
+		t.Fatal("background startup did not advertise its ready Admin UI")
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Close = true
+	client := &http.Client{Timeout: 2 * time.Second}
+	response, err := client.Do(request)
+	if err != nil {
+		t.Fatalf("background Admin was not reachable: %v", err)
+	}
+	defer response.Body.Close()
+	body, err := io.ReadAll(response.Body)
+	if err != nil || response.StatusCode != http.StatusOK || string(body) != document {
+		t.Fatalf("background Admin did not serve its configured assets: status=%d, error=%v", response.StatusCode, err)
+	}
 }

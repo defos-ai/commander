@@ -40,14 +40,8 @@ func validateAdminURL(raw string) error {
 func (c *config) configureLocalAdmin(session *local.Session) {
 	c.configureAdminServer(session.ServeAdmin)
 	if session.AdminURL == "" {
-		if c.ServeAdminUI {
-			c.AdminURL = ""
-			c.AdminHint = "Admin UI unavailable. Use /admin serve to try again."
-		} else if c.AdminURL == "" {
-			c.AdminHint = "Start Admin with /admin serve."
-		} else {
-			c.Config.SetAdminURL(c.AdminURL)
-		}
+		c.AdminURL = ""
+		c.AdminHint = "Admin UI unavailable. Use /admin serve to try again."
 		return
 	}
 	c.Config.SetAdminURL(c.adminBrowserAddress(session.AdminURL))

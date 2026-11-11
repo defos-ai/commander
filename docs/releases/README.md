@@ -71,7 +71,7 @@ releases keep their original assets.
 
 Commander and Admin embed the built frontend; `commander-admin serve` starts
 the standalone UI. For Commander download and run commands, use
-the [quick start](../../README.md#binary). Use `releases/latest/download/<filename>`
+the [installation guide](../installation.md#direct-downloads). Use `releases/latest/download/<filename>`
 for the current release, or `releases/download/<version>/<filename>` to pin one.
 
 ## Agent packages

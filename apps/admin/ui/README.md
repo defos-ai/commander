@@ -26,9 +26,10 @@ see [deployment](../../../docs/deployment.md#local-compose) to rotate the passwo
 
 ### All-in-one
 
-The [all-in-one image](../../playground/README.md#docker-recommended) starts Admin
-automatically. With a native binary, type `/admin serve` or launch with
-`--all-in-one --serve-admin-ui`.
+The [all-in-one image](../../playground/README.md#docker-recommended), native
+`--all-in-one` and `commander start` serve Admin automatically. If Admin cannot
+start, the other hosts keep running; `/admin serve` retries in Playground after
+you fix the issue.
 
 Type `/admin` for its link and `/credentials` for the all-in-one API login.
 Completed operation rows link directly to their Admin details.

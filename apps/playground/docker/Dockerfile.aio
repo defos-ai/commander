@@ -38,4 +38,4 @@ ENV PATH=/opt/codex/codex:/opt/codex/path:/usr/local/go/bin:${PATH} \
 EXPOSE 4274 4275
 USER 1000:1000
 WORKDIR /home/commander
-ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/commander", "--all-in-one", "--serve-admin-ui"]
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/commander", "--all-in-one"]

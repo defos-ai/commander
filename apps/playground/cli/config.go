@@ -19,7 +19,6 @@ import (
 type config struct {
 	ui.Config
 	Headless        bool
-	ServeAdminUI    bool
 	Temporary       bool
 	StateDir        string
 	adminOverride   string
@@ -57,11 +56,10 @@ func configuration(args []string, stderr io.Writer) (config, error) {
 	flags.SetOutput(stderr)
 	flags.StringVar(&c.MCP.URL, "mcp-url", env("COMMANDER_MCP_URL", "http://localhost:4273/mcp"), "Commander MCP endpoint (COMMANDER_MCP_URL)")
 	flags.StringVar(&c.API.URL, "api-url", env("COMMANDER_API_URL", ""), "Commander API URL for Admin commands and agent secrets; omitted asks when needed (COMMANDER_API_URL)")
-	flags.BoolVar(&c.AllInOne, "all-in-one", false, "Start local MCP, API, controller and spawner with saved state")
+	flags.BoolVar(&c.AllInOne, "all-in-one", false, "Start local MCP, API, Admin UI, controller and spawner with saved state")
 	flags.BoolVar(&c.Headless, "headless", false, "Run all-in-one hosts in the foreground without Playground")
 	flags.BoolVar(&c.Temporary, "temporary", false, "Keep Playground state in memory; remove all-in-one state on exit (COMMANDER_TEMPORARY)")
 	flags.StringVar(&c.StateDir, "state-dir", env("COMMANDER_STATE_DIR", ""), "Playground state directory; defaults to ~/.commander (COMMANDER_STATE_DIR)")
-	flags.BoolVar(&c.ServeAdminUI, "serve-admin-ui", false, "Start Admin UI now; otherwise use /admin serve later")
 	flags.StringVar(&c.AdminURL, "admin-url", env("COMMANDER_ADMIN_URL", ""), "Admin UI browser address; defaults to http://localhost:4275 or the native all-in-one address (COMMANDER_ADMIN_URL)")
 	flags.StringVar(&c.Provider, "provider", env("COMMANDER_LLM_PROVIDER", ""), "Skip provider selection: openai, anthropic, gemini, xai, deepseek, other (COMMANDER_LLM_PROVIDER)")
 	flags.StringVar(&c.Model, "model", env("COMMANDER_LLM_MODEL", ""), "Model name; omitted asks interactively (COMMANDER_LLM_MODEL)")
@@ -72,7 +70,7 @@ func configuration(args []string, stderr io.Writer) (config, error) {
 		fmt.Fprint(stderr, "Usage: commander [flags]\n\nChat with a model and run missions through Commander MCP.\nUse --all-in-one for a local session, or connect to docker compose up --build -d.\nAdd --headless to --all-in-one to run hosts without Playground.\n\nIn chat: /help for essential commands and a link to the full documentation.\nAnswer questions with arrow keys and Enter, or type your answer.\n\n")
 		fmt.Fprintln(stderr, "Paste the MCP token when prompted, or set COMMANDER_MCP_TOKEN. Use /credentials inside all-in-one Playground. commander credentials api|mcp [--raw] reads credentials from the current environment or the running all-in-one container.")
 		fmt.Fprintln(stderr, "commander status [--json] [--state-dir directory] reports the running local instance without credentials.")
-		fmt.Fprintln(stderr, "commander start [--serve-admin-ui] starts persistent local hosts in the background; commander stop stops them after cleanup.")
+		fmt.Fprintln(stderr, "commander start starts persistent local hosts and Admin UI in the background; commander stop stops them after cleanup.")
 		fmt.Fprintln(stderr, "commander setup [--json] describes and verifies the MCP connection for your coding agent.")
 		flags.PrintDefaults()
 	}

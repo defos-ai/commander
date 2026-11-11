@@ -1,9 +1,18 @@
-# Local setup and configuration
+# Deploy Commander
 
-For the fastest start, use the [Docker or binary quick start](../README.md#quick-start).
-Use Compose to develop against persistent local services.
+Use one all-in-one container for Playground, or Compose for separate services
+with persistent storage. For native binaries, background hosts and coding-agent
+connections, follow [installation](installation.md).
 
 ## All-in-one Docker
+
+Run a disposable container:
+
+```sh
+docker run --rm -it --name commander -p 127.0.0.1:4275:4275 ghcr.io/defos-ai/commander-aio:stable
+```
+
+Keep saved state across container removal with a named volume:
 
 ```sh
 docker run --rm -it --name commander -v commander-state:/home/commander/.commander -p 127.0.0.1:4275:4275 ghcr.io/defos-ai/commander-aio:stable
@@ -11,7 +20,10 @@ docker run --rm -it --name commander -v commander-state:/home/commander/.command
 
 Open [Admin](http://localhost:4275), or use `/admin` in Playground.
 Use `/credentials` for the API login. The named volume keeps results, credentials
-and chat history after exit. Use `--temporary` for a disposable all-in-one session.
+and chat history after exit; without it, `--rm` removes the container's saved state.
+Choose a model and enter its API key in Playground, then ask:
+
+> Create a Hacker News digest
 
 For another host or published port, pass `--admin-url=<browser-facing URL>` after
 the image name. Publish API port `4274` only if another tool needs it.
@@ -21,8 +33,12 @@ the image name. Publish API port `4274` only if another tool needs it.
 From the repository root:
 
 ```sh
-docker compose up --build --wait && docker compose run --build --rm --no-deps playground
+docker compose up --build --wait
+docker compose run --build --rm --no-deps playground
 ```
+
+The first command starts the stack in the background. The second opens the
+optional Playground client; exiting it leaves the services running.
 
 Spawner is ready to use. Ask chat to install other agents when needed.
 Compose supplies RabbitMQ, MongoDB and MinIO, using local development credentials.
@@ -95,8 +111,9 @@ from the [agent sources](../sources/README.md). The
 [spawner](../apps/agents/spawner/README.md#docker) uses the host Docker socket to
 launch sibling containers on the Compose network. Installation needs Internet access.
 
-Each installation creates one instance. Check readiness before starting dependent
-work. After an uncertain launch, inspect the existing container before trying again.
+The spawner can request one or multiple instances. Check the returned agents'
+readiness before starting dependent work. After an uncertain launch, inspect the
+existing container before trying again.
 Spawned containers keep running when the spawner restarts and are
 [removed separately during teardown](#stopping-and-resetting-agents).
 
@@ -118,6 +135,23 @@ Use the component guides for [API](../apps/adapters/api/README.md),
 [Admin hosting](../apps/admin/ui/README.md#connections),
 [spawner](../apps/agents/spawner/README.md) and
 [model settings](../apps/playground/README.md).
+
+## Separate services
+
+Run hosts independently when they need different infrastructure or lifecycle:
+
+| Component | Deployment guide |
+| --- | --- |
+| HTTP API | [API hosting and configuration](../apps/adapters/api/README.md) |
+| MCP | [MCP hosting and authentication](../apps/adapters/mcp/README.md) |
+| Admin UI | [Standalone Admin hosting](../apps/admin/ui/README.md#standalone-docker-image) |
+| Controller | [Controller setup](../apps/controllers/README.md#quick-start) |
+| Spawner | [Native, Docker and Kubernetes runtimes](../apps/agents/spawner/README.md) |
+| Builder | [Builder setup](../apps/agents/builder/README.md) |
+
+Connect hosts to the same configured providers and run one active controller per
+database. API and controller need the same secret encryption key. See
+[secret encryption](#secret-encryption) for backup and restore requirements.
 
 ## State
 
