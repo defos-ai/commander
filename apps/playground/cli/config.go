@@ -73,6 +73,7 @@ func configuration(args []string, stderr io.Writer) (config, error) {
 		fmt.Fprintln(stderr, "Paste the MCP token when prompted, or set COMMANDER_MCP_TOKEN. Use /credentials inside all-in-one Playground. commander credentials api|mcp [--raw] reads credentials from the current environment or the running all-in-one container.")
 		fmt.Fprintln(stderr, "commander status [--json] [--state-dir directory] reports the running local instance without credentials.")
 		fmt.Fprintln(stderr, "commander start [--serve-admin-ui] starts persistent local hosts in the background; commander stop stops them after cleanup.")
+		fmt.Fprintln(stderr, "commander setup [--json] describes and verifies the MCP connection for your coding agent.")
 		flags.PrintDefaults()
 	}
 	if err := flags.Parse(args); err != nil {

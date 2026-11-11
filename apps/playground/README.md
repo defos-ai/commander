@@ -110,6 +110,44 @@ Background hosts always use persistent state and run until stopped or the
 machine shuts down. They do not start automatically after reboot. Read current
 endpoints with `status` after each restart; MCP's local port can change.
 
+### Connect a coding agent
+
+Start Commander and get its verified MCP connection details:
+
+```sh
+./commander start
+./commander setup --json
+```
+
+Ask your coding agent:
+
+> Connect your MCP client to Commander using these connection details. Show me
+> the configuration change for approval, preserve my existing settings, and
+> verify that you can discover Commander's tools.
+
+The output describes the Streamable HTTP endpoint, bearer authentication and
+verified tool count. Your agent translates those details into its client's
+configuration. Commander supports compatible [MCP clients](https://modelcontextprotocol.io/specification/latest/basic/transports)
+without a separate installer for each one.
+
+For a client that reads its token from the environment:
+
+```sh
+export COMMANDER_MCP_TOKEN="$(./commander credentials mcp --raw)"
+```
+
+In PowerShell, set the token with
+`$env:COMMANDER_MCP_TOKEN = (.\commander.exe credentials mcp --raw)`.
+For another local profile, use the same `--state-dir PATH` on each Commander
+command. Keep token values out of chat and configuration previews.
+
+For remote Commander, supply `--mcp-url https://your-host/mcp` and its
+`COMMANDER_MCP_TOKEN`. Setup does not reuse local credentials for that address.
+Setup reads and verifies the server connection without changing client settings.
+Its connection description is not a client configuration file. Follow your
+client's reload procedure and check that its tools are loaded. After a backend
+restart, rerun setup and update the client if the MCP address changed.
+
 ### Saved state
 
 Local and remote Playground sessions save settings, full chat history and entered

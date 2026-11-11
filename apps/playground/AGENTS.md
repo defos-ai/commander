@@ -23,6 +23,11 @@
   writes shared with the local masked form. Keep values outside chat and MCP.
 - [`internal/mcp/client.go`](internal/mcp/client.go) owns MCP transport, tool
   replies and operation snapshots. Keep the chat engine behind its interfaces.
+  [`internal/mcp/verify.go`](internal/mcp/verify.go) verifies raw SDK discovery
+  and a read-only `list_agents` request for client setup; do not use Playground's
+  filtered/synthetic tool inventory as proof of what an external client can load.
+- [`cli/setup.go`](cli/setup.go) describes the verified MCP connection for the
+  calling coding agent. Keep client-specific configuration outside Commander.
 - [`internal/chat/`](internal/chat/) owns conversation turns, queued input,
   watched operations, continuation review and operator commands.
 - [`internal/ui/`](internal/ui/) owns Bubble Tea state, selectors and rendering.
@@ -217,6 +222,23 @@
   inactive stop does not create a profile. Caller cancellation of stop ends the
   wait without withdrawing an already submitted request. No force-stop, OS
   service/autostart installation or client MCP configuration is included here.
+- `commander setup [--json]` reads and verifies an already running local instance
+  or an explicit `--mcp-url` / `COMMANDER_MCP_URL`.
+  Local discovery must verify the instance before reading saved credentials.
+  Explicit remote selection uses only `COMMANDER_MCP_TOKEN`, never local
+  bootstrap, and does not open a profile. Setup does not read Playground history,
+  provider keys or model settings and never starts a model or backend.
+  Local verification may use the retained token. Return only its suggested
+  environment variable name, never its value, in setup output. The JSON describes
+  transport, endpoint, bearer authentication, connection verification and tool
+  count. `token_environment_ready` compares the current variable with the verified
+  credential; it does not describe another process's environment. This is
+  Commander connection metadata, not a universal client configuration format.
+  The calling agent owns its client's configuration, approval and reload steps;
+  setup never launches a client CLI or reads/writes its settings. No invocation
+  proves the client has loaded tools. Do not introduce per-client installers,
+  configuration adapters or compatibility aliases for unreleased setup commands.
+  Local MCP ports can change on restart; rerun setup to obtain the current address.
 - The embedded controller reads `TASK_TIMEOUT` through its existing host configuration.
   Keep this deployment setting in that host rather than copying timeout parsing into
   Playground or changing process environment. Remote Playground does not configure
