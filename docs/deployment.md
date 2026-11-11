@@ -1,10 +1,16 @@
 # Deploy Commander
 
-Use one all-in-one container for Playground, or Compose for separate services
-with persistent storage. For native binaries, background hosts and coding-agent
+Choose [Containers](#containers) for individual hosts,
+[Compose](#local-compose) for a local stack, or [Kubernetes](#kubernetes) for
+cluster deployment. For native binaries, background hosts and coding-agent
 connections, follow [installation](installation.md).
 
-## All-in-one Docker
+## Containers
+
+Run the all-in-one image for Playground and local hosts, or deploy
+[separate component images](#separate-services) for your infrastructure.
+
+### All-in-one Docker
 
 Run a disposable container:
 
@@ -27,6 +33,26 @@ Choose a model and enter its API key in Playground, then ask:
 
 For another host or published port, pass `--admin-url=<browser-facing URL>` after
 the image name. Publish API port `4274` only if another tool needs it.
+
+### Separate services
+
+Run hosts independently when they need different infrastructure or lifecycle.
+Replace `stable` with one shared version tag to pin your deployment:
+
+| Component | Image | Deployment guide |
+| --- | --- | --- |
+| HTTP API | `ghcr.io/defos-ai/commander-api:stable` | [API hosting and configuration](../apps/adapters/api/README.md) |
+| MCP | `ghcr.io/defos-ai/commander-mcp:stable` | [MCP hosting and authentication](../apps/adapters/mcp/README.md) |
+| Admin UI | `ghcr.io/defos-ai/commander-admin:stable` | [Standalone Admin hosting](../apps/admin/ui/README.md#standalone-docker-image) |
+| Controller | `ghcr.io/defos-ai/commander-controller:stable` | [Controller setup](../apps/controllers/README.md#quick-start) |
+| Spawner | `ghcr.io/defos-ai/commander-spawner-agent:stable` | [Native, Docker and Kubernetes runtimes](../apps/agents/spawner/README.md) |
+| Builder | `ghcr.io/defos-ai/commander-builder-agent:stable` | [Builder setup](../apps/agents/builder/README.md) |
+
+Published images target `linux/amd64`; use compatible hosts and Kubernetes nodes.
+
+Connect hosts to the same configured providers and run one active controller per
+database. API and controller need the same secret encryption key. See
+[secret encryption](#secret-encryption) for backup and restore requirements.
 
 ## Local Compose
 
@@ -102,13 +128,41 @@ that key for managed-secret delivery. See [secret setup](../framework/secrets/RE
 Use the [VS Code debugging guide](../.vscode/debug/README.md) to attach to
 the controller, API and MCP containers.
 
+## Kubernetes
+
+Deploy the [component images](#separate-services) through your Kubernetes
+manifests. API, MCP, controller and agents need reachable provider addresses;
+use RabbitMQ, MongoDB and S3-compatible storage with persistent data.
+
+1. Configure shared `BUS_URL`, `DATABASE_URL` and `STORAGE_URL` where required.
+   Give API and controller the same `SECRETS_ENCRYPTION_KEY`, keeping it out of
+   agent configuration. Follow [secret backup requirements](#secret-encryption).
+2. Run one active controller per database. Use `strategy.type: Recreate` for its
+   Deployment so upgrades do not briefly run overlapping controllers.
+3. Run Spawner in the cluster with `SPAWNER_RUNTIME=kubernetes`. Its own
+   ServiceAccount needs namespaced Pod `get`, `create` and `patch` permissions.
+   Create the child namespace, ServiceAccount, ConfigMap and Secret, then set
+   their references using the [Spawner Kubernetes settings](../apps/agents/spawner/README.md#kubernetes).
+   The child Secret supplies `BUS_URL` and `STORAGE_URL` for the same providers;
+   child Pods do not mount a Kubernetes API token.
+4. Expose API, MCP and Admin through Services and your Ingress. Configure public
+   hostnames and proxy settings through their component guides. Use
+   `UI_API_UPSTREAMS` for Admin's internal API mapping; see
+   [Admin connections](../apps/admin/ui/README.md#connections).
+
+Run the official Builder on a separate native or Docker host connected to the
+same broker and storage; Spawner's Kubernetes runtime does not support it yet.
+Spawned Pods survive Spawner shutdown. Follow the
+[agent shutdown guidance](../apps/agents/spawner/README.md#stop-or-replace-agents)
+before removing or replacing them.
+
 ## Configuration
 
 ### Spawned agents
 
-Ask Playground to install an agent from a trusted GitHub repository or choose one
-from the [agent sources](../sources/README.md). The
-[spawner](../apps/agents/spawner/README.md#docker) uses the host Docker socket to
+Ask your MCP client or Playground to install an agent from a trusted GitHub
+repository or choose one from the [agent sources](../sources/README.md). In Compose,
+the [spawner](../apps/agents/spawner/README.md#docker) uses the host Docker socket to
 launch sibling containers on the Compose network. Installation needs Internet access.
 
 The spawner can request one or multiple instances. Check the returned agents'
@@ -135,23 +189,6 @@ Use the component guides for [API](../apps/adapters/api/README.md),
 [Admin hosting](../apps/admin/ui/README.md#connections),
 [spawner](../apps/agents/spawner/README.md) and
 [model settings](../apps/playground/README.md).
-
-## Separate services
-
-Run hosts independently when they need different infrastructure or lifecycle:
-
-| Component | Deployment guide |
-| --- | --- |
-| HTTP API | [API hosting and configuration](../apps/adapters/api/README.md) |
-| MCP | [MCP hosting and authentication](../apps/adapters/mcp/README.md) |
-| Admin UI | [Standalone Admin hosting](../apps/admin/ui/README.md#standalone-docker-image) |
-| Controller | [Controller setup](../apps/controllers/README.md#quick-start) |
-| Spawner | [Native, Docker and Kubernetes runtimes](../apps/agents/spawner/README.md) |
-| Builder | [Builder setup](../apps/agents/builder/README.md) |
-
-Connect hosts to the same configured providers and run one active controller per
-database. API and controller need the same secret encryption key. See
-[secret encryption](#secret-encryption) for backup and restore requirements.
 
 ## State
 

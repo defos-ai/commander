@@ -1,8 +1,8 @@
 # Install Commander
 
 Choose [native installers](#native-installers), [direct downloads](#direct-downloads)
-or a [source build](#build-from-source). For Docker and Compose, use the
-[deployment guide](deployment.md).
+or a [source build](#build-from-source). For Containers, Compose and Kubernetes,
+use the [deployment guide](deployment.md).
 
 Background hosting and generic MCP setup are prepared for v0.5.0. To use them
 before that release, build this checkout; downloading an earlier release does

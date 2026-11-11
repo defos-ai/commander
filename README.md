@@ -13,7 +13,7 @@ What are the use cases for Commander? [Ask ChatGPT](https://chatgpt.com/?q=What%
 ## Quick start
 
 Follow [Installation](docs/installation.md) for native setup, or
-[Deployment](docs/deployment.md) for Docker and Compose.
+[Deployment](docs/deployment.md) for Containers, Compose and Kubernetes.
 
 Ask your coding agent:
 
@@ -23,7 +23,7 @@ Or open Playground, choose a model, enter its API key, and ask:
 
 > Create a Hacker News digest
 
-The demo saves a topic-focused reading list as Markdown and JSON.
+The demo installs `example` agent, saves a topic-focused reading list as Markdown and JSON.
 
 ## Learn more
 

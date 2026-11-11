@@ -1,7 +1,7 @@
 # Commander documentation
 
 Start with [Installation](installation.md) to run natively, or
-[Deployment](deployment.md) for Docker, Compose and service hosting.
+[Deployment](deployment.md) for Containers, Compose and Kubernetes.
 
 | You want to… | Read |
 | --- | --- |
