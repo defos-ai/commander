@@ -40,7 +40,7 @@
   selects another profile; `--temporary` / `COMMANDER_TEMPORARY` bypasses it entirely.
   Never write the real home in tests. Explicit flags override nonempty environment
   values, then saved settings. Do not reuse a saved model/base URL for a different
-  provider or all-in-one's changing listener addresses as remote defaults.
+  provider or all-in-one's bound listener addresses as remote defaults.
   `state.OpenSharedProfile` validates directory and marker without holding the
   client lock or loading client data; headless uses this seam. `state.Open`
   retains the root client lock and validates settings, keys and histories for
@@ -238,7 +238,15 @@
   setup never launches a client CLI or reads/writes its settings. No invocation
   proves the client has loaded tools. Do not introduce per-client installers,
   configuration adapters or compatibility aliases for unreleased setup commands.
-  Local MCP ports can change on restart; rerun setup to obtain the current address.
+  Local MCP defaults to `127.0.0.1:4273`, with the existing `MCP_LISTEN_ADDRESS`
+  overriding it. Pass the listen flag explicitly so generic `PORT` cannot change
+  it. Advertise the actual bound address through `localHTTPURL`, including
+  loopback URLs for wildcard listeners. A busy or invalid configured address
+  fails startup through normal joined cleanup; never fall back to another port.
+  Listener settings remain deployment environment, not client settings or new
+  persisted bootstrap. With unchanged fixed settings and retained credentials,
+  external clients can reconnect to the same URL after restart. Port `0` is an
+  explicit opt-in to changing ports; fixtures set it for isolation.
 - The embedded controller reads `TASK_TIMEOUT` through its existing host configuration.
   Keep this deployment setting in that host rather than copying timeout parsing into
   Playground or changing process environment. Remote Playground does not configure

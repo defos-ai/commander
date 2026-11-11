@@ -46,6 +46,7 @@ func HeadlessEnvironment(t *testing.T) {
 		t.Setenv(name, "")
 	}
 	t.Setenv("API_LISTEN_ADDRESS", "127.0.0.1:0")
+	t.Setenv("MCP_LISTEN_ADDRESS", "127.0.0.1:0")
 }
 
 func StartHeadless(t *testing.T, directory string, extra ...string) *Headless {

@@ -25,6 +25,8 @@ import (
 func TestBackgroundCommanderStartsOnceAndStopsWithoutLosingSavedWork(t *testing.T) {
 	fixtures.HeadlessEnvironment(t)
 	t.Setenv("COMMANDER_TEMPORARY", "true")
+	t.Setenv("PORT", "1")
+	address := fixtures.FixedMCPAddress(t)
 	directory := fixtures.BackgroundProfile(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
@@ -33,6 +35,9 @@ func TestBackgroundCommanderStartsOnceAndStopsWithoutLosingSavedWork(t *testing.
 
 	if instance.PID == os.Getpid() || instance.PID < 1 || instance.ID == "" {
 		t.Fatal("start did not launch a distinct background process")
+	}
+	if instance.MCPURL != "http://"+address+"/mcp" {
+		t.Fatal("background startup did not honor the configured MCP address")
 	}
 	if status, discovered := headlessStatus(t, ctx, directory); status != "running" || discovered != instance {
 		t.Fatal("the background process was not discoverable after start returned")
@@ -87,9 +92,15 @@ func TestBackgroundCommanderStartsOnceAndStopsWithoutLosingSavedWork(t *testing.
 	if restarted.ID == instance.ID {
 		t.Fatal("restart reused the previous process identity")
 	}
+	if restarted.MCPURL != instance.MCPURL {
+		t.Fatal("restart changed the configured MCP endpoint")
+	}
 	savedAPI, savedMCP, err := local.SavedCredentials(filepath.Join(directory, "local"))
 	if err != nil || savedAPI != apiCredentials || savedMCP != mcpCredentials {
 		t.Fatal("background restart replaced saved credentials")
+	}
+	if _, err := bridge.Verify(ctx, instance.MCPURL, mcpCredentials); err != nil {
+		t.Fatalf("the original MCP URL and credentials no longer worked after restart: %v", err)
 	}
 	savedKey, err := os.ReadFile(filepath.Join(directory, "local", "secrets.key"))
 	if err != nil || !bytes.Equal(savedKey, key) {
@@ -107,32 +118,36 @@ func TestBackgroundCommanderStartsOnceAndStopsWithoutLosingSavedWork(t *testing.
 }
 
 func TestBackgroundStartupFailureDoesNotReportReadinessOrHoldState(t *testing.T) {
-	fixtures.HeadlessEnvironment(t)
-	directory := fixtures.BackgroundProfile(t)
-	fixtures.OccupyAPIAddress(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
-	var output bytes.Buffer
+	for _, service := range []string{"API", "MCP"} {
+		t.Run(service, func(t *testing.T) {
+			fixtures.HeadlessEnvironment(t)
+			directory := fixtures.BackgroundProfile(t)
+			fixtures.OccupyHostAddress(t, service+"_LISTEN_ADDRESS")
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			defer cancel()
+			var output bytes.Buffer
 
-	err := cli.Run(ctx, []string{"start", "--json", "--state-dir", directory}, nil, &output, io.Discard)
+			err := cli.Run(ctx, []string{"start", "--json", "--state-dir", directory}, nil, &output, io.Discard)
 
-	if err == nil || output.Len() != 0 {
-		t.Fatalf("failed startup reported a ready backend: %v", err)
-	}
-	if status, _ := headlessStatus(t, ctx, directory); status != "stopped" {
-		t.Fatal("failed startup left a discoverable backend")
-	}
-	root, err := os.OpenRoot(filepath.Join(directory, "local"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer root.Close()
-	lease, err := state.LockFile(root, ".lock")
-	if err != nil {
-		t.Fatalf("failed startup retained backend ownership: %v", err)
-	}
-	if err := lease.Close(); err != nil {
-		t.Fatal(err)
+			if err == nil || output.Len() != 0 {
+				t.Fatalf("occupied %s address did not prevent ready startup: %v", service, err)
+			}
+			if status, _ := headlessStatus(t, ctx, directory); status != "stopped" {
+				t.Fatal("failed startup left a discoverable backend")
+			}
+			root, err := os.OpenRoot(filepath.Join(directory, "local"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer root.Close()
+			lease, err := state.LockFile(root, ".lock")
+			if err != nil {
+				t.Fatalf("failed startup retained backend ownership: %v", err)
+			}
+			if err := lease.Close(); err != nil {
+				t.Fatal(err)
+			}
+		})
 	}
 }
 

@@ -107,8 +107,19 @@ Startup failures point to `~/.commander/startup.log`; host details are in
 `~/.commander/local/hosts.log`.
 
 Background hosts always use persistent state and run until stopped or the
-machine shuts down. They do not start automatically after reboot. Read current
-endpoints with `status` after each restart; MCP's local port can change.
+machine shuts down. They do not start automatically after reboot. Local MCP
+defaults to `http://127.0.0.1:4273/mcp`, keeping the same address across restarts.
+The API defaults to `http://127.0.0.1:4274`.
+
+Choose different fixed ports when another deployment already uses those ports:
+
+```sh
+MCP_LISTEN_ADDRESS=127.0.0.1:5273 API_LISTEN_ADDRESS=127.0.0.1:5274 ./commander start
+```
+
+Use the same listener settings on each restart. A busy configured port fails
+startup; Commander does not silently choose another. Port `0` explicitly requests
+an available port and is useful for isolated tests.
 
 ### Connect a coding agent
 
@@ -145,8 +156,9 @@ For remote Commander, supply `--mcp-url https://your-host/mcp` and its
 `COMMANDER_MCP_TOKEN`. Setup does not reuse local credentials for that address.
 Setup reads and verifies the server connection without changing client settings.
 Its connection description is not a client configuration file. Follow your
-client's reload procedure and check that its tools are loaded. After a backend
-restart, rerun setup and update the client if the MCP address changed.
+client's reload procedure and check that its tools are loaded. The default local
+MCP address stays the same across restarts. Rerun setup when changing listener
+settings or explicitly using port `0`.
 
 ### Saved state
 

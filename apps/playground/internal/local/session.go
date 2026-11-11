@@ -102,9 +102,13 @@ func StartWithOptions(ctx context.Context, options Options) (session *Session, e
 	}
 	mcpReady := make(chan struct{})
 	s.start("MCP", func(ctx context.Context) error {
-		args := append(append([]string{}, common...), database, "--listen-address=127.0.0.1:0")
+		address := os.Getenv("MCP_LISTEN_ADDRESS")
+		if address == "" {
+			address = "127.0.0.1:4273"
+		}
+		args := append(append([]string{}, common...), database, "--listen-address="+address)
 		return mcpcli.RunWithOptions(ctx, args, s.log, mcpcli.Options{Application: "commander", InstanceID: s.InstanceID, Credentials: &s.MCPCredentials, Ready: func(address net.Addr) {
-			s.MCPURL = "http://" + address.String() + "/mcp"
+			s.MCPURL = localHTTPURL(address) + "/mcp"
 			close(mcpReady)
 		}})
 	})

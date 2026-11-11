@@ -36,14 +36,28 @@ func BackgroundProfile(t *testing.T) string {
 	return directory
 }
 
-func OccupyAPIAddress(t *testing.T) {
+func FixedMCPAddress(t *testing.T) string {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	address := listener.Addr().String()
+	if err := listener.Close(); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("MCP_LISTEN_ADDRESS", address)
+	return address
+}
+
+func OccupyHostAddress(t *testing.T, environment string) {
 	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = listener.Close() })
-	t.Setenv("API_LISTEN_ADDRESS", listener.Addr().String())
+	t.Setenv(environment, listener.Addr().String())
 }
 
 func HoldBackendLease(t *testing.T, directory string) *os.File {
