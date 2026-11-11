@@ -42,6 +42,10 @@ func TestSpawnerRegistersAnAgentAndExecutesItsAction(t *testing.T) {
 	if !id.ValidAgent(spawned.AgentID) || spawned.AgentType != "fixture-agent" || spawned.Package != reference || len(spawned.Actions) != 1 || spawned.Actions[0].Name != "fixture-echo" || spawned.Actions[0].Status != actions.Ready {
 		t.Fatalf("spawn result lost the registered identity or capability: %+v", spawned)
 	}
+	summary := spawned.Actions[0]
+	if summary.Description != "" || len(summary.InputSchema) != 0 || len(summary.OutputSchema) != 0 {
+		t.Fatalf("spawn result repeated the full action definition: %+v", summary)
+	}
 	switch spawned.Runtime {
 	case "native":
 		var details struct {
@@ -80,6 +84,11 @@ func TestSpawnerRegistersAnAgentAndExecutesItsAction(t *testing.T) {
 		t.Fatalf("spawned with runtime %q, expected %q", spawned.Runtime, expectedRuntime)
 	}
 	waitFixtureAgent(t, a, spawned.AgentID)
+	var definition actions.Action
+	a.Call("describe_action", fixtures.Object{"agent_id": spawned.AgentID, "action_name": summary.Name}, &definition)
+	if definition.Name != summary.Name || definition.Status != summary.Status || definition.Description == "" || !json.Valid(definition.InputSchema) || !json.Valid(definition.OutputSchema) {
+		t.Fatalf("compact spawn result changed the registered action definition: %+v", definition)
+	}
 	decision := fixtures.ModelDecision(a.Wait(provision.ID, func(op fixtures.OperationDetail) bool { return fixtures.ModelDecision(op) != nil }))
 	if decision.ID != assigned.ID {
 		t.Fatalf("install mission requested a decision for a different task: %+v", decision)

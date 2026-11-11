@@ -16,8 +16,14 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
   [Kubernetes Manager](runtimes/kubernetes/manager.go) implement the interface.
   CLI factories select the runtime; `cli.go` stays independent of concrete clients.
 - [`spawn-agent`](actions/spawn_agent.go) accepts `count` from 1–100 (default 1).
-  A single request launches directly and retains its runtime result. Larger
-  counts return requested batch metadata and propose individual `spawn-agent`
+  A single request launches directly and returns runtime identity with compact
+  action readiness: name, session mode, status, reason, missing requirements and
+  declared secret names. Omit descriptions and input/output schemas from the
+  action result; full contracts remain in registration and the action catalog.
+  Preserve complete `runtimes.Result.Actions` internally for validation and retry
+  observations. Registration may succeed while actions are unavailable; report
+  their requirements without installing dependencies or claiming they are ready.
+  Larger counts return requested batch metadata and propose individual `spawn-agent`
   tasks with count omitted; planning does not launch a child or access secrets.
   Preserve each child's controller
   execution, deadline, source approval and checkpoints; never reuse one command

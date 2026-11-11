@@ -16,7 +16,7 @@ import (
 )
 
 const SpawnAgentName = "spawn-agent"
-const SpawnAgentDescription = "Launch compatible agent releases; count defaults to 1 and must be between 1 and 100. For count 1, wait for the assigned agent's registration and return its identity, actions and readiness. For larger counts, return the requested batch and propose one spawn-agent task per instance for controller dispatch; review child results for actual launches. Each launch has its own deadline, checkpoints and source approval. Use an exact version when all instances must use the same release. A source-list entry is not required. github.com/defos-ai sources proceed automatically. For other owners each running launch asks an installation question: operator first, model allowed after fallback_at. Yes resumes that execution; No prevents its launch. Answer the saved question rather than assigning replacement work. No approval ID or boolean belongs in input and no owner trust is saved. A GitHub URL, omitted version or @stable selects the promoted Latest release; exact @vMAJOR.MINOR.PATCH is also accepted. Each launch saves its resolved version for retries. Preserve the supplied repository visibility; private packages use the host's GITHUB_TOKEN or managed secrets, never tokens in input. The controller independently persists registration. Launch settings remain controlled by the spawner host. Read the spawner agent's responsibilities for the installation workflow."
+const SpawnAgentDescription = "Launch compatible agent releases; count defaults to 1 and must be between 1 and 100. For count 1, wait for the assigned agent's registration and return its identity and per-action readiness without full schemas. Registration can succeed while actions have missing requirements. For larger counts, return the requested batch and propose one spawn-agent task per instance for controller dispatch; review child results for actual launches. Each launch has its own deadline, checkpoints and source approval. Use an exact version when all instances must use the same release. A source-list entry is not required. github.com/defos-ai sources proceed automatically. For other owners each running launch asks an installation question: operator first, model allowed after fallback_at. Yes resumes that execution; No prevents its launch. Answer the saved question rather than assigning replacement work. No approval ID or boolean belongs in input and no owner trust is saved. A GitHub URL, omitted version or @stable selects the promoted Latest release; exact @vMAJOR.MINOR.PATCH is also accepted. Each launch saves its resolved version for retries. Preserve the supplied repository visibility; private packages use the host's GITHUB_TOKEN or managed secrets, never tokens in input. The controller independently persists registration. Launch settings remain controlled by the spawner host. Read the spawner agent's responsibilities for the installation workflow."
 
 // Spawner uses execution checkpoints for action launches. A retry observes the
 // saved launch for the same command rather than starting another agent.
@@ -59,7 +59,6 @@ func NewSpawnAgent(launcher Spawner) (*action.Func[SpawnAgentInput, map[string]a
 				"required":["package"],
 				"additionalProperties":false
 			}`),
-			// Registered action schemas are raw JSON objects, not byte arrays.
 			OutputSchema: json.RawMessage(`{
 				"type":"object",
 				"oneOf":[{
@@ -69,7 +68,26 @@ func NewSpawnAgent(launcher Spawner) (*action.Func[SpawnAgentInput, map[string]a
 					"package":{"type":"string"},
 					"runtime":{"type":"string","enum":["native","docker","kubernetes"]},
 					"runtime_details":{"type":"object"},
-					"actions":{"type":"array","items":{"type":"object"}}
+					"actions":{"type":"array","items":{
+						"type":"object",
+						"properties":{
+							"name":{"type":"string"},
+							"session_mode":{"type":"string","enum":["open","use"]},
+							"status":{"type":"string","enum":["unknown","ready","unavailable"]},
+							"status_reason":{"type":"string"},
+							"missing_requirements":{"type":"array","items":{
+								"type":"object",
+								"properties":{
+									"kind":{"type":"string","enum":["executable","configuration","secret"]},
+									"name":{"type":"string"},
+									"sensitive":{"type":"boolean"}
+								},
+								"required":["kind","name"],"additionalProperties":false
+							}},
+							"required_secrets":{"type":"array","items":{"type":"string"}}
+						},
+						"required":["name","status"],"additionalProperties":false
+					}}
 				},
 				"required":["agent_id","agent_type","package","runtime","runtime_details","actions"],
 				"oneOf":[
@@ -117,7 +135,7 @@ func NewSpawnAgent(launcher Spawner) (*action.Func[SpawnAgentInput, map[string]a
 			}
 			return map[string]any{
 				"agent_id": result.AgentID, "agent_type": result.AgentType, "package": result.Package,
-				"runtime": result.Runtime, "runtime_details": result.RuntimeDetails, "actions": result.Actions,
+				"runtime": result.Runtime, "runtime_details": result.RuntimeDetails, "actions": summarizeActions(result.Actions),
 			}, nil
 		},
 		NextActions: func(_ context.Context, input SpawnAgentInput, _ map[string]any) ([]action.NextAction, error) {

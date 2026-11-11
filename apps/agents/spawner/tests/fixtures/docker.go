@@ -81,6 +81,17 @@ func NewDockerManager(t *testing.T) DockerManager {
 	return DockerManager{Manager: manager, Config: config, Engine: engine, Bus: bus}
 }
 
+func NewDockerManagerWithUnavailableAction(t *testing.T) DockerManager {
+	t.Helper()
+	fixture := NewDockerManager(t)
+	fixture.Engine.SetOnStart(func(ctx context.Context, current docker.Container) error {
+		return PublishDockerRegistration(ctx, fixture.Bus, current, func(snapshot *agent.AgentSnapshot) {
+			snapshot.Actions = []actionmodel.Action{UnavailableSpawnAction()}
+		})
+	})
+	return fixture
+}
+
 func PublishDockerRegistration(ctx context.Context, bus *fscomms.FsBus, current docker.Container, change func(*agent.AgentSnapshot)) error {
 	agentID := strings.TrimPrefix(current.Name, "commander-")
 	agentType, valid := id.RuntimeType(agentID, id.Agent)

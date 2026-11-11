@@ -32,6 +32,10 @@ func TestSpawnedAgentExecutesOperation(t *testing.T) {
 	if launched.AgentID == "" || launched.AgentType != "fixture-agent" || launched.Package != reference || launched.Runtime != fixtures.Environment("COMMANDER_TEST_SPAWNER_RUNTIME", "native") || !slices.Equal(fixtures.ActionNames(launched.Actions), []string{"fixture-echo"}) {
 		t.Fatalf("spawn result lost package, runtime or registered capability: %+v", launched)
 	}
+	summary := launched.Actions[0]
+	if summary.Status != "ready" || summary.Description != "" || len(summary.InputSchema) != 0 || len(summary.OutputSchema) != 0 {
+		t.Fatalf("spawn result did not summarize action readiness without its definition: %+v", summary)
+	}
 	switch launched.Runtime {
 	case "native":
 		var details struct {
@@ -72,6 +76,10 @@ func TestSpawnedAgentExecutesOperation(t *testing.T) {
 		if result.Status == http.StatusOK {
 			agent := fixtures.Decode[models.AgentResponse](t, result, http.StatusOK)
 			if agent.ID == launched.AgentID && agent.Type == launched.AgentType && agent.Status == "ready" && !agent.Stale && slices.Equal(fixtures.ActionNames(agent.Actions), []string{"fixture-echo"}) {
+				definition := agent.Actions[0]
+				if definition.Status != summary.Status || definition.Description == "" || !json.Valid(definition.InputSchema) || !json.Valid(definition.OutputSchema) {
+					t.Fatalf("compact spawn result changed the registered action definition: %+v", definition)
+				}
 				break
 			}
 		} else if result.Status != http.StatusNotFound {

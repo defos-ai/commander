@@ -91,6 +91,10 @@ Review the result and the new agent's action readiness, then complete installati
 Install agents in a separate operation before starting missions that need them.
 Only run packages from authors you trust.
 
+The result lists action readiness and missing requirements. An agent can be
+installed while its actions still need host tools or configuration; follow the
+agent's setup instructions. Use `describe_action` for its full schemas.
+
 To request multiple instances, use `spawn-agent` with `count` from 1 to 100
 (default 1):
 
