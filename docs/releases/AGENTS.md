@@ -17,5 +17,5 @@ For documentation moves, check incoming links, anchors and README/AGENTS pairing
 Validate note selection from the repository root with:
 
 ```sh
-RELEASE_VERSION=v0.4.1 go test -count=1 -timeout=1m -run '^TestReleaseNotes$' ./.github/tests/release_test.go
+RELEASE_VERSION=v0.5.0 go test -count=1 -timeout=1m -run '^TestReleaseNotes$' ./.github/tests/release_test.go
 ```
