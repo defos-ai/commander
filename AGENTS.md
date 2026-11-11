@@ -60,6 +60,18 @@ The user's current instructions take precedence over repository guidance.
   use `releases/latest/download` for quick start and version URLs for pinning.
   Web/browser images are released by their standalone repositories; keep them
   out of Commander's image publishing and `stable` promotion.
+- Root `install.sh` and `install.ps1` install released Commander binaries to
+  user-owned locations, without running them or changing profiles, persistent
+  PATH, state, services or MCP client configuration. Resolve latest once to a
+  validated release tag, then fetch the binary and checksum file from that tag
+  over HTTPS. Require exactly one valid checksum for the selected filename.
+  Verify before staging a replacement; preserve existing files on failure and
+  require explicit force for different bytes. Never replace symlink/reparse or
+  directory targets. Release publication includes both scripts in the root
+  checksum/asset set, from the same checkout as the binaries; agent package assets
+  remain separate. Test installers with local download fakes in `.github/tests`,
+  and gate them on native release runners. Do not advertise installer download
+  URLs before a release actually contains the scripts.
 - `framework/` defines runtimes/contracts; `providers/` implements them; `apps/`
   hosts them. App `cli/factory.go` files select concrete providers and inject
   interfaces. Unsupported schemes must fail explicitly.

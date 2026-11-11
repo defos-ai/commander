@@ -64,6 +64,11 @@ Windows filenames end in `.exe`; macOS uses `darwin`. `LICENSE` and
 `checksums.txt` accompany the binaries. Binaries are unsigned; macOS builds are
 not notarized.
 
+The next release also publishes `install.sh` and `install.ps1` in the root assets
+and checksum file. They select the native Commander binary and install it to a
+user-owned directory. See the [installer guide](../installation.md); existing
+releases keep their original assets.
+
 Commander and Admin embed the built frontend; `commander-admin serve` starts
 the standalone UI. For Commander download and run commands, use
 the [quick start](../../README.md#binary). Use `releases/latest/download/<filename>`

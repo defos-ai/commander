@@ -84,6 +84,8 @@ func NewNative(t *testing.T) *Native {
 		"RELEASES": "", "GH_STATUS": "0",
 	}
 	f.Write(t, "LICENSE", "Commander test license\n")
+	f.Write(t, "install.sh", "#!/bin/sh\nprintf 'Commander shell installer fixture\\n'\n")
+	f.Write(t, "install.ps1", "Write-Output 'Commander PowerShell installer fixture'\n")
 	for _, path := range []string{"docs/releases", ".github/scripts"} {
 		if err := os.MkdirAll(filepath.Join(f.dir, path), 0700); err != nil {
 			t.Fatal(err)

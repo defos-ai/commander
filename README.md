@@ -56,6 +56,9 @@ powershell -c "iwr -UseBasicParsing https://github.com/defos-ai/commander/releas
 
 Other architectures: [Releases](https://github.com/defos-ai/commander/releases/latest).
 
+From a checkout, use the [native installers](docs/installation.md) to preview the
+platform-specific download and verify its checksum before installation.
+
 Type `/admin serve` to start Admin UI, or add `--serve-admin-ui` when launching. Playground saves settings and chat history in `~/.commander` by default. Use `--temporary` for a disposable session.
 
 ### Source

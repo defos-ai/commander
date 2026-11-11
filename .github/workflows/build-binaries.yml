@@ -68,6 +68,11 @@ jobs:
           "./dist/commander-admin_$suffix" --help
           "./dist/commander-spawner-agent_$suffix" --help
           "./dist/commander-builder-agent_$suffix" --help
+      - name: Test native installers
+        working-directory: .github/tests
+        env:
+          GOWORK: 'off'
+        run: go test -count=1 -timeout=3m -run '^TestCIInstallers' .
       - uses: actions/upload-artifact@v4
         with:
           name: commander-native-${{ matrix.goos }}-${{ matrix.goarch }}

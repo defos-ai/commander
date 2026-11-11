@@ -216,7 +216,15 @@ jobs:
             done
           done
           cp ../LICENSE LICENSE
-          sha256sum "${binaries[@]}" LICENSE > checksums.txt
+          for installer in install.sh install.ps1; do
+            if [[ ! -s "../$installer" || ! -f "../$installer" || -L "../$installer" ]]; then
+              echo "Missing installer: $installer" >&2
+              exit 1
+            fi
+            cp "../$installer" "$installer"
+          done
+          assets=("${binaries[@]}" LICENSE install.sh install.ps1)
+          sha256sum "${assets[@]}" > checksums.txt
 
           notes_file=$(mktemp)
           trap 'rm -f "$notes_file"' EXIT
@@ -236,7 +244,7 @@ jobs:
               trap 'rm -f "$notes_file"; rm -rf "$published_dir"' EXIT
               gh release download "$VERSION" --dir "$published_dir"
               published=("$published_dir"/*)
-              expected=("${binaries[@]}" LICENSE checksums.txt)
+              expected=("${assets[@]}" checksums.txt)
               if (( ${#published[@]} != ${#expected[@]} )); then
                 echo "Published release $VERSION has a different asset set; refusing to overwrite it." >&2
                 exit 1
@@ -255,5 +263,5 @@ jobs:
               exit 1
               ;;
           esac
-          gh release upload "$VERSION" "${binaries[@]}" LICENSE checksums.txt --clobber
+          gh release upload "$VERSION" "${assets[@]}" checksums.txt --clobber
           gh release edit "$VERSION" --draft=false --latest=false

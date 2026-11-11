@@ -73,7 +73,7 @@ func TestCINativeBinaryPublication(t *testing.T) {
 			if got := f.Read(t, "notes.md"); got != "### Improvements\n\nCommander fixture notes.\n" {
 				t.Errorf("root release notes = %q", got)
 			}
-			assets := append(append([]string{}, fixtures.RootBinaryNames()...), "LICENSE")
+			assets := append(append([]string{}, fixtures.RootBinaryNames()...), "LICENSE", "install.sh", "install.ps1")
 			var checksums strings.Builder
 			for _, name := range assets {
 				got := f.Read(t, "uploaded/"+name)
@@ -87,8 +87,8 @@ func TestCINativeBinaryPublication(t *testing.T) {
 				t.Errorf("checksums = %q, want %q", got, checksums.String())
 			}
 			entries, err := os.ReadDir(filepath.Join(f.Dir(), "uploaded"))
-			if err != nil || len(entries) != len(fixtures.RootBinaryNames())+2 {
-				t.Fatalf("root release must contain Commander and Admin binaries, license and checksums: %v, %v", entries, err)
+			if err != nil || len(entries) != len(assets)+1 {
+				t.Fatalf("root release must contain Commander and Admin binaries, installers, license and checksums: %v, %v", entries, err)
 			}
 			if !strings.HasSuffix(log, "release edit v0.1.0 --draft=false --latest=false\n") {
 				t.Errorf("release must await final latest promotion: %s", log)
@@ -98,12 +98,18 @@ func TestCINativeBinaryPublication(t *testing.T) {
 }
 
 func TestCINativeBinaryPublicationRejectsInvalidAssets(t *testing.T) {
-	for _, mode := range []string{"missing", "empty", "directory", "symlink", "extra", "wrong name", "missing Admin"} {
+	for _, mode := range []string{"missing", "empty", "directory", "symlink", "extra", "wrong name", "missing Admin", "missing shell installer", "missing PowerShell installer", "symlink installer"} {
 		t.Run(mode, func(t *testing.T) {
 			f := fixtures.NewNative(t)
 			path := filepath.Join(f.Artifacts(), fixtures.CommanderBinaryNames()[0])
 			if mode == "missing Admin" {
 				path = filepath.Join(f.Artifacts(), "commander-admin_linux_amd64")
+			}
+			if mode == "missing shell installer" || mode == "symlink installer" {
+				path = filepath.Join(f.Dir(), "install.sh")
+			}
+			if mode == "missing PowerShell installer" {
+				path = filepath.Join(f.Dir(), "install.ps1")
 			}
 			if mode != "extra" {
 				if err := os.Remove(path); err != nil {
@@ -118,6 +124,8 @@ func TestCINativeBinaryPublicationRejectsInvalidAssets(t *testing.T) {
 				err = os.Mkdir(path, 0700)
 			case "symlink":
 				err = os.Symlink("../LICENSE", path)
+			case "symlink installer":
+				err = os.Symlink("LICENSE", path)
 			case "extra":
 				f.Write(t, "artifacts/commander_linux_386", "unexpected")
 			case "wrong name":
@@ -240,7 +248,11 @@ func TestCIPublishedReleaseRetry(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			for _, mode := range []string{"identical", "changed bytes", "changed checksums", "missing asset", "extra asset", "download failure"} {
+			modes := []string{"identical", "changed bytes", "changed checksums", "missing asset", "extra asset", "download failure"}
+			if name == "root" {
+				modes = append(modes, "changed installer")
+			}
+			for _, mode := range modes {
 				t.Run(mode, func(t *testing.T) {
 					f := newFixture(t)
 					f.SetEnvironment("RELEASES", fmt.Sprintf(`{"tag_name":%q,"draft":false}`, f.Environment("RELEASE_TAG")))
@@ -259,6 +271,8 @@ func TestCIPublishedReleaseRetry(t *testing.T) {
 						f.Write(t, "published/"+asset, "different release bytes")
 					case "changed checksums":
 						f.Write(t, "published/checksums.txt", "different checksums")
+					case "changed installer":
+						f.Write(t, "published/install.sh", "different installer bytes")
 					case "missing asset":
 						if err := os.Remove(filepath.Join(f.Dir(), "published", entries[0].Name())); err != nil {
 							t.Fatal(err)
