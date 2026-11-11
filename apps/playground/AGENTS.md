@@ -451,6 +451,10 @@
   a model answer; the controller's atomic check remains authoritative if an
   operator answers concurrently. Keep accepted answers in the existing review
   flow and never label a model answer as operator consent.
+  MCP operation commands return compact confirmations, not full snapshots.
+  After an accepted model answer, refresh the operation through the query client
+  before updating review state. A failed readback must not retry the answer or
+  replace the last full snapshot with the confirmation; watching may retry reads.
 - Show readable errors by default and redacted provider details with `--debug`.
   Keep credentials and secret forms outside model context and saved transcripts.
   Persist full chat/model history per logical backend (`local` or exact remote MCP

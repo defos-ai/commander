@@ -146,7 +146,7 @@ func addOperationTools(server *mcp.Server, config Config) {
 				return missions.Mission{}, errors.New("mission update failed; read describe_mission before retrying")
 			}
 		})
-	addTool(server, "start_operation", "Start a tracked operation from a registered mission. Optionally supply operation_id as a canonical lowercase UUID to track it before the response arrives; otherwise one is generated. Existing IDs return a conflict; use get_operation to inspect them. Returns preflight coverage: planning when ready, waiting when requirements are missing. Tasks remain queued until the mission's required_actions and queued optional actions are ready. Unscheduled optional actions do not block mission preflight.", objectSchema(map[string]any{"operation_id": map[string]any{"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"}, "mission_name": stringProperty, "input": map[string]any{}}, "mission_name", "input"),
+	addTool(server, "start_operation", "Start a tracked operation from a registered mission. Optionally supply operation_id as a canonical lowercase UUID to track it before the response arrives; otherwise one is generated. Existing IDs return a conflict; use get_operation to inspect them. Returns a compact confirmation with id, status, progress and preflight coverage: planning when ready, waiting when requirements are missing. Read get_operation for the full saved operation. Tasks remain queued until the mission's required_actions and queued optional actions are ready. Unscheduled optional actions do not block mission preflight.", objectSchema(map[string]any{"operation_id": map[string]any{"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"}, "mission_name": stringProperty, "input": map[string]any{}}, "mission_name", "input"),
 		func(ctx context.Context, request StartOperationRequest) (operationResult, error) {
 			return commandOperation(execution.Start(ctx, commands.StartOperationCommand(request)))
 		})
@@ -247,14 +247,14 @@ func addOperationTools(server *mcp.Server, config Config) {
 			})
 			return commandOperation(operation, questionAnswerError(ctx, query, request, err))
 		})
-	addTool(server, "complete_operation", "Submit final output after active tasks and questions are resolved. Output must match output_schema; describe remaining limitations and unknown outcomes. With omitted/model policies.completion, saves a final report and completes immediately, returning report_id for get_report. With policies.completion.decision_by=operator, saves completion_draft and returns awaiting operator approval without creating a report. Direct the operator to review or edit it and choose Complete operation in Admin UI or use the authenticated HTTP API; never invent an Admin URL. MCP has model origin and cannot approve operator completion; question fallback never grants that approval. While awaiting review, read get_operation instead of repeatedly submitting the same output. After an uncertain response, inspect saved state before another mutation.", objectSchema(map[string]any{"operation_id": stringProperty, "output": map[string]any{}}, "operation_id", "output"),
+	addTool(server, "complete_operation", "Submit final output after active tasks and questions are resolved. Output must match output_schema; describe remaining limitations and unknown outcomes. With omitted/model policies.completion, saves a final report and completes immediately, returning report_id for get_report. With policies.completion.decision_by=operator, saves completion_draft and returns awaiting operator approval without creating a report. Read get_operation for that draft. Direct the operator to review or edit it and choose Complete operation in Admin UI or use the authenticated HTTP API; never invent an Admin URL. MCP has model origin and cannot approve operator completion; question fallback never grants that approval. While awaiting review, read get_operation instead of repeatedly submitting the same output. After an uncertain response, inspect saved state before another mutation.", objectSchema(map[string]any{"operation_id": stringProperty, "output": map[string]any{}}, "operation_id", "output"),
 		func(ctx context.Context, request CompleteOperationRequest) (operationResult, error) {
 			operation, err := execution.Complete(ctx, commands.CompleteOperationCommand{
 				OperationID: request.OperationID, Output: request.Output, CompletedBy: operations.CompletionModel,
 			})
 			result, err := commandOperation(operation, err)
 			if err == nil && !operation.Status.Terminal() && len(operation.CompletionDraft) > 0 {
-				result.Message = "Awaiting operator approval. Review completion_draft and choose Complete operation in Admin UI or use the authenticated HTTP API."
+				result.Message = "Awaiting operator approval. Read completion_draft with get_operation, then review or edit it and choose Complete operation in Admin UI or use the authenticated HTTP API."
 			}
 			return result, err
 		})

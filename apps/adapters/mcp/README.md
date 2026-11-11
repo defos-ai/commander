@@ -8,6 +8,11 @@ artifacts across distributed agent work.
 Follow the [MCP setup and workflow guide](https://github.com/defos-ai/commander/blob/main/apps/adapters/README.md#quick-start)
 for authentication, client configuration and tool usage.
 
+`start_operation`, `resolve_continuation`, `answer_question`, `complete_operation`,
+`fail_operation` and `cancel_operation` return concise confirmations with the
+operation ID, status and progress. Use `get_operation` for saved state and questions,
+`get_task` for task results and artifacts, and `get_report` for final output.
+
 See [Operations](../../../docs/features/operations.md) and
 [Questions](../../../docs/features/questions.md) for the operator workflows.
 
@@ -24,8 +29,9 @@ uncertain update, read the saved definition before retrying.
 Call `complete_operation` with output matching the saved mission schema. With
 omitted/model completion policy, it saves the final report and completes
 immediately. With `policies.completion.decision_by: operator`, it saves `completion_draft`
-and returns **awaiting operator approval** without a final report. Ask the
-operator to review or edit the output and choose **Complete operation** in
+and returns **awaiting operator approval** without a final report. Read the draft
+with `get_operation`. Ask the operator to review or edit the output and choose
+**Complete operation** in
 [Admin UI](../../admin/ui/README.md#review-operations), or submit it through the
 authenticated HTTP API. MCP cannot approve completion, and question fallback
 does not grant approval. While awaiting review, inspect `get_operation` instead

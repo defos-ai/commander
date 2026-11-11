@@ -104,7 +104,8 @@ func TestMissionSharingPolicy(t *testing.T) {
 	}
 	var first operations.Operation
 	a.Call("start_operation", fixtures.Object{"mission_name": definition.Name, "input": fixtures.Object{}}, &first)
-	if !reflect.DeepEqual(first.Mission.Policies, created.Policies) || len(first.Tasks) != 0 {
+	firstDetail := a.Get(first.ID)
+	if !reflect.DeepEqual(firstDetail.Mission.Policies, created.Policies) || len(firstDetail.Tasks) != 0 {
 		t.Fatal("operation lost mission policies or policies started work")
 	}
 	definition.Policies.Completion.DecisionBy = policies.Model
@@ -122,7 +123,7 @@ func TestMissionSharingPolicy(t *testing.T) {
 	}
 	var second operations.Operation
 	a.Call("start_operation", fixtures.Object{"mission_name": definition.Name, "input": fixtures.Object{}}, &second)
-	if !reflect.DeepEqual(second.Mission.Policies, definition.Policies) {
+	if !reflect.DeepEqual(a.Get(second.ID).Mission.Policies, definition.Policies) {
 		t.Fatal("new operation did not retain updated policies")
 	}
 

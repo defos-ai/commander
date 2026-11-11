@@ -29,6 +29,16 @@ type OperationDetail struct {
 	RemainingQuestions int                  `json:"remaining_questions"`
 }
 
+type CommandReceipt struct {
+	ID        string                `json:"id"`
+	Status    operations.Status     `json:"status"`
+	Progress  operationProgress     `json:"progress"`
+	Preflight *operations.Preflight `json:"preflight,omitempty"`
+	ReportID  string                `json:"report_id,omitempty"`
+	Error     string                `json:"error,omitempty"`
+	Message   string                `json:"message,omitempty"`
+}
+
 type operationProgress struct {
 	TaskCounts       map[string]int `json:"task_counts"`
 	TotalTasks       int            `json:"total_tasks"`
@@ -264,6 +274,20 @@ func (a *Client) Call(name string, args Object, out any) {
 		for _, field := range []string{"task_counts", "total_tasks", "finished_tasks", "pending_decisions", "pending_questions", "settled"} {
 			if value := payload.Progress[field]; len(value) == 0 || string(value) == "null" {
 				a.t.Fatalf("%s omitted progress.%s", name, field)
+			}
+		}
+	}
+	switch name {
+	case "start_operation", "resolve_continuation", "answer_question", "complete_operation", "fail_operation", "cancel_operation":
+		var fields map[string]json.RawMessage
+		if err := json.Unmarshal(raw, &fields); err != nil {
+			a.t.Fatal(err)
+		}
+		for field := range fields {
+			switch field {
+			case "id", "status", "progress", "preflight", "report_id", "error", "message":
+			default:
+				a.t.Fatalf("%s echoed operation detail field %s; read get_operation for full state", name, field)
 			}
 		}
 	}

@@ -79,6 +79,12 @@
   tool execution failures use text content with `IsError`.
 - Successful tool results carry JSON in text `content`. File references use
   resource-link blocks; do not duplicate result payloads in `structuredContent`.
+- MCP operation commands (`start_operation`, `resolve_continuation`,
+  `answer_question`, `complete_operation`, `fail_operation`, `cancel_operation`)
+  return compact confirmations: required `id`, `status`, `progress`, and optional
+  `preflight`, `report_id`, `error`, `message`. Do not embed the operation, mission,
+  tasks, questions, events, output or completion draft. Keep full evidence in
+  `get_operation`, `get_task` and `get_report`; HTTP responses are unchanged.
 - `create_mission` accepts a flat `missions.Mission` and shares its validation
   with the API and stores. Root `objectives` is a required ordered array of one
   or more nonblank strings.
@@ -122,7 +128,9 @@
   operator approval and creates no report. Direct the operator to review/edit it
   and explicitly complete in Admin or through the authenticated HTTP API, without
   inventing URLs. Question answers and fallback never approve completion.
-  Preserve raw completion draft in responses. Saving it supplies no approval;
+  Preserve raw completion draft in full operation reads and HTTP responses.
+  Compact MCP completion replies direct callers to `get_operation` for the draft.
+  Saving it supplies no approval;
   clients should read saved state while awaiting review instead of submitting
   identical output repeatedly. Re-read after ambiguous writes, without automatic retry.
 - `update_mission` accepts that same complete flat definition. Read
@@ -184,7 +192,8 @@
 
 ## Validation
 
-- Retained service-backed API host tests live in `api/tests/host/`; public HTTP/MCP scenarios
+- Local host scenarios live in `api/tests/host/` and `mcp/tests/host/` and run in
+  focused CI without Docker. Public HTTP/MCP stack scenarios
   live in `tests/` and use the running test stack. Group behavior by feature and
   exercise commands, saved queries and resulting evidence through public routes.
 - [Integration CI](../../.github/workflows/test-integration.yml) runs API and MCP

@@ -266,13 +266,14 @@ func TestOperationCancellationAndFailure(t *testing.T) {
 			if method == "fail_operation" {
 				args["reason"] = "operator ended test"
 			}
-			var ended fixtures.OperationDetail
-			a.Call(method, args, &ended)
+			var receipt fixtures.CommandReceipt
+			a.Call(method, args, &receipt)
+			ended := a.Get(op.ID)
 			expected := operations.Cancelled
 			if method == "fail_operation" {
 				expected = operations.Failed
 			}
-			if ended.Status != expected || len(ended.Tasks) != 1 || ended.Tasks[0].Status != operations.TaskCancelled || !ended.Progress.Settled || ended.Progress.FinishedTasks != 1 || ended.Progress.TotalTasks != 1 {
+			if receipt.ID != op.ID || receipt.Status != expected || !receipt.Progress.Settled || receipt.Progress.FinishedTasks != 1 || receipt.Progress.TotalTasks != 1 || ended.Status != expected || len(ended.Tasks) != 1 || ended.Tasks[0].Status != operations.TaskCancelled {
 				t.Fatalf("terminal operation: %+v", ended)
 			}
 			a.Fails("get_report", fixtures.Object{"operation_id": op.ID}, "report")
@@ -445,27 +446,23 @@ func TestCompletionUsesSavedMissionPolicy(t *testing.T) {
 		t.Fatal("editing completion policy changed the running operation snapshot")
 	}
 	output := json.RawMessage(`{"summary":"Review\u0020required"}`)
-	var pending struct {
-		operations.Operation
-		Message string `json:"message"`
-	}
+	var pending fixtures.CommandReceipt
 
 	a.Call("complete_operation", fixtures.Object{"operation_id": operation.ID, "output": output}, &pending)
 
-	if pending.Status.Terminal() || pending.ReportID != "" || len(pending.Output) != 0 || pending.CompletedBy != "" ||
-		!bytes.Equal(pending.CompletionDraft, output) || !strings.Contains(pending.Message, "Awaiting operator approval") {
+	if pending.ID != operation.ID || pending.Status.Terminal() || pending.ReportID != "" || !strings.Contains(pending.Message, "Awaiting operator approval") {
 		t.Fatalf("operator policy did not retain unapproved output without a report: %+v", pending)
 	}
-	if saved := a.Get(operation.ID); !bytes.Equal(saved.CompletionDraft, output) || saved.Status.Terminal() || saved.ReportID != "" {
+	if saved := a.Get(operation.ID); !bytes.Equal(saved.CompletionDraft, output) || len(saved.Output) != 0 || saved.CompletedBy != "" || saved.Status.Terminal() || saved.ReportID != "" {
 		t.Fatalf("pending completion was not retained by detail reads: %+v", saved)
 	}
 	a.Fails("get_report", fixtures.Object{"operation_id": operation.ID}, "report")
 	a.Call("complete_operation", fixtures.Object{"operation_id": operation.ID, "output": output}, &pending)
-	if pending.Status.Terminal() || pending.ReportID != "" || !bytes.Equal(pending.CompletionDraft, output) {
+	if pending.Status.Terminal() || pending.ReportID != "" || !bytes.Equal(a.Get(operation.ID).CompletionDraft, output) {
 		t.Fatalf("repeated model completion approved operator output: %+v", pending)
 	}
 	a.Call("complete_operation", fixtures.Object{"operation_id": operation.ID, "output": json.RawMessage("null")}, &pending)
-	if pending.Status.Terminal() || pending.ReportID != "" || string(pending.CompletionDraft) != "null" || !strings.Contains(pending.Message, "Awaiting operator approval") {
+	if pending.Status.Terminal() || pending.ReportID != "" || !strings.Contains(pending.Message, "Awaiting operator approval") {
 		t.Fatalf("explicit null was treated as missing completion draft: %+v", pending)
 	}
 	if saved := a.Get(operation.ID); string(saved.CompletionDraft) != "null" {
@@ -476,9 +473,10 @@ func TestCompletionUsesSavedMissionPolicy(t *testing.T) {
 	var modelOperation operations.Operation
 	a.Call("start_operation", fixtures.Object{"mission_name": operatorDefinition.Name, "input": fixtures.StoryBatch("Model completes final output")}, &modelOperation)
 	defer a.CancelActiveOperation(modelOperation.ID)
-	var completed operations.Operation
+	var completed fixtures.CommandReceipt
 	a.Call("complete_operation", fixtures.Object{"operation_id": modelOperation.ID, "output": output}, &completed)
-	if completed.Status != operations.Completed || completed.ReportID == "" || completed.CompletedBy != operations.CompletionModel || len(completed.CompletionDraft) != 0 {
+	modelDetail := a.Get(modelOperation.ID)
+	if completed.Status != operations.Completed || completed.ReportID == "" || modelDetail.CompletedBy != operations.CompletionModel || len(modelDetail.CompletionDraft) != 0 {
 		t.Fatalf("model policy did not complete immediately: %+v", completed)
 	}
 	var report reports.Report

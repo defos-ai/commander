@@ -41,7 +41,7 @@ func (e *Engine) call(ctx context.Context, call llm.Call) bridge.Result {
 	}
 	e.reportCall(call, result)
 	if !result.IsError {
-		e.follow(call, result)
+		e.follow(ctx, call, result)
 	} else if call.Name == "start_operation" {
 		if id := operationID(call.Arguments); id != "" {
 			e.emit(Event{Kind: "notice", Text: "Check operation " + id + " before starting it again."})
@@ -95,7 +95,7 @@ func operationID(arguments json.RawMessage) string {
 	return input.ID
 }
 
-func (e *Engine) follow(call llm.Call, result bridge.Result) {
+func (e *Engine) follow(ctx context.Context, call llm.Call, result bridge.Result) {
 	if call.Name == "get_report" {
 		return
 	}
@@ -116,13 +116,16 @@ func (e *Engine) follow(call llm.Call, result bridge.Result) {
 		}
 	}
 	if call.Name == "answer_question" {
-		var operation bridge.Operation
-		if json.Unmarshal(result.Data, &operation) == nil && operation.ID == id {
-			operation.Raw = result.Data
-			select {
-			case e.updates <- operation:
-			case <-e.ctx.Done():
+		operation, err := e.commander.Operation(ctx, id)
+		if err != nil || operation.ID != id {
+			if ctx.Err() == nil {
+				e.emit(Event{Kind: "notice", Text: "Answer accepted; operation refresh unavailable. Background updates will retry."})
 			}
+			return
+		}
+		select {
+		case e.updates <- operation:
+		case <-ctx.Done():
 		}
 	}
 }

@@ -28,11 +28,19 @@ func describeProgress(progress operations.Progress) operationProgress {
 }
 
 type operationResult struct {
-	operations.Operation
-	Progress operationProgress `json:"progress"`
-	Message  string            `json:"message,omitempty"`
+	ID        string                `json:"id"`
+	Status    operations.Status     `json:"status"`
+	Progress  operationProgress     `json:"progress"`
+	Preflight *operations.Preflight `json:"preflight,omitempty"`
+	ReportID  string                `json:"report_id,omitempty"`
+	Error     string                `json:"error,omitempty"`
+	Message   string                `json:"message,omitempty"`
 }
 
 func commandOperation(operation operations.Operation, err error) (operationResult, error) {
-	return operationResult{Operation: operation, Progress: describeProgress(operation.AssessProgress(time.Now().UTC()))}, err
+	return operationResult{
+		ID: operation.ID, Status: operation.Status,
+		Progress:  describeProgress(operation.AssessProgress(time.Now().UTC())),
+		Preflight: operation.Preflight, ReportID: operation.ReportID, Error: operation.Error,
+	}, err
 }
