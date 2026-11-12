@@ -2,6 +2,7 @@ package fixtures
 
 import (
 	"context"
+	"errors"
 	"os"
 	"testing"
 	"time"
@@ -85,6 +86,30 @@ func (f *Broker) Subscribe(bus comms.Bus, inbox comms.Inbox) comms.Subscription 
 	}
 	f.inboxes[inbox] = struct{}{}
 	return sub
+}
+
+func (f *Broker) Reopen(bus comms.Bus, inbox comms.Inbox) comms.Subscription {
+	f.t.Helper()
+	ctx, cancel := context.WithTimeout(f.ctx, 5*time.Second)
+	defer cancel()
+	retry := time.NewTicker(10 * time.Millisecond)
+	defer retry.Stop()
+	// The close handshake can finish before RabbitMQ deletes the exclusive queue.
+	for {
+		sub, err := bus.Subscribe(ctx, inbox)
+		if err == nil {
+			f.inboxes[inbox] = struct{}{}
+			return sub
+		}
+		if !errors.Is(err, comms.ErrInboxInUse) {
+			f.t.Fatalf("reopen RabbitMQ inbox after close: %v", err)
+		}
+		select {
+		case <-ctx.Done():
+			f.t.Fatalf("closed RabbitMQ inbox was not released: %v", ctx.Err())
+		case <-retry.C:
+		}
+	}
 }
 
 func (f *Broker) Publish(bus comms.Bus, topic string, message messages.Message) {

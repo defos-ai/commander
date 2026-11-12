@@ -140,7 +140,7 @@ func TestRabbitMQTransientInboxHasOneOwnerAndNoReplay(t *testing.T) {
 			} else {
 				closeSubscription(t, original)
 			}
-			reopened := f.Subscribe(other, inbox)
+			reopened := f.Reopen(other, inbox)
 
 			assertNoDelivery(t, f.Context(), reopened)
 			if err := outstanding.Ack(f.Context()); !errors.Is(err, comms.ErrClosed) {
