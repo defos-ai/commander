@@ -4,9 +4,8 @@ Choose [native installers](#native-installers), [direct downloads](#direct-downl
 or a [source build](#build-from-source). For Containers, Compose and Kubernetes,
 use the [deployment guide](deployment.md).
 
-Background hosting and generic MCP setup are prepared for v0.5.0. To use them
-before that release, build this checkout; downloading an earlier release does
-not include the checkout's new commands.
+Background hosting and generic MCP setup require v0.5.0 or later, or a build of
+this checkout. Earlier releases do not include these commands.
 
 ## Native installers
 
@@ -42,8 +41,9 @@ or `-Force`. Failed downloads or checksum checks preserve existing files.
 Installers do not change shell profiles, persistent `PATH`, Commander state or
 MCP client settings, and do not start services.
 
-The next release will publish `install.sh` and `install.ps1` as root release
-assets. Until then, use the checked-out scripts or direct downloads below.
+Check the selected release's asset list before downloading `install.sh` or
+`install.ps1`. If that release does not include the scripts, use the checked-out
+scripts or direct downloads below.
 
 ## Direct downloads
 
@@ -129,6 +129,5 @@ running in a long-lived tool session and run setup from another tool call with
 the same state directory. After configuring the MCP client, verify it by calling
 `list_missions` through that client.
 
-These commands require a release containing the v0.5.0 changes, or a build of
-this checkout. Follow the [coding-agent connection guide](../apps/playground/README.md#connect-a-coding-agent)
+Follow the [coding-agent connection guide](../apps/playground/README.md#connect-a-coding-agent)
 and [background lifecycle guide](../apps/playground/README.md#background-local-hosts).

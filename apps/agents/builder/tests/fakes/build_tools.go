@@ -60,7 +60,7 @@ func runLocalGo(self string, config GitState) int {
 		return 9
 	}
 	work := filepath.Join(filepath.Dir(self), "go.work")
-	if err := os.WriteFile(work, []byte(fmt.Sprintf("go 1.26.7\nuse (\n%q\n%q\n)\n\nreplace github.com/defos-ai/commander/framework v0.5.0 => %q\n", source, config.Framework, config.Framework)), 0600); err != nil {
+	if err := os.WriteFile(work, []byte(fmt.Sprintf("go 1.26.7\nuse (\n%q\n%q\n)\n\nreplace github.com/defos-ai/commander/framework v0.5.1 => %q\n", source, config.Framework, config.Framework)), 0600); err != nil {
 		return 9
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
