@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 )
@@ -58,14 +59,25 @@ func NewPowerShellInstaller(t *testing.T, architecture string, shell PowerShellR
 
 func (f *PowerShellInstaller) Run(t *testing.T, architecture string, args ...string) (string, error) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
 	defer cancel()
 	arguments := []string{"-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File",
 		filepath.Join(f.repository, ".github", "tests", "fixtures", "install_powershell.ps1"),
 		"-Repository", f.repository, "-Fixture", f.Directory, "-Architecture", architecture}
 	command := exec.CommandContext(ctx, f.executable, append(arguments, args...)...)
+	// Let each PowerShell edition reconstruct its own built-in module paths.
+	command.Env = []string{}
+	for _, entry := range os.Environ() {
+		name, _, _ := strings.Cut(entry, "=")
+		if !strings.EqualFold(name, "PSModulePath") {
+			command.Env = append(command.Env, entry)
+		}
+	}
 	command.WaitDelay = time.Second
 	output, err := command.CombinedOutput()
+	if ctx.Err() != nil {
+		return string(output), fmt.Errorf("PowerShell installer fixture stopped: %w", ctx.Err())
+	}
 	return string(output), err
 }
 

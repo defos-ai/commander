@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -11,6 +12,7 @@ import (
 )
 
 func TestCIInstallersPowerShellPreviewAndVerifiedInstallation(t *testing.T) {
+	t.Setenv("PSModulePath", filepath.Join(t.TempDir(), "parent-shell-modules"))
 	for _, shell := range fixtures.PowerShellRuntimes(t) {
 		for _, architecture := range []string{"AMD64", "ARM64"} {
 			t.Run(shell.Name+"/"+architecture, func(t *testing.T) {
