@@ -14,6 +14,15 @@ Session-aware continuations retain their direct parent's session. Session IDs
 are metadata for inspection and control; do not put them in action inputs.
 Mission policies do not supply session bindings.
 
+After finishing a branch, reuse its resource with `assign_task` (or HTTP task
+assignment) and `session_task_id` set to a finished session task in the same
+operation. This creates independent work using the same resource and owner;
+it does not reopen the earlier continuation. Keep action input free of session IDs.
+
+```json
+{"operation_id":"<operation-id>","action_name":"<use-action>","session_task_id":"<finished-task-id>","input":{}}
+```
+
 Session-capable actions declare `session_mode` in their definition:
 
 | Action mode | Behavior |

@@ -227,6 +227,10 @@ func openAPICommandSchemas(components map[string]any) error {
 			name: "AssignOperationTaskRequest", typeOf: reflect.TypeFor[models.AssignTaskRequest](),
 			constraints: map[string]map[string]any{
 				"action_name": nonblank, "input": taskInput,
+				"session_task_id": {
+					"format": "uuid", "pattern": "^" + openAPIUUIDPattern + "$",
+					"description": "Optional finished session-aware task in this operation whose saved session the new action will use. The controller retains its exact session and owner without reopening the source continuation. Existing question, readiness and session lifecycle checks still apply; never supply routing session IDs in action input.",
+				},
 			},
 		},
 		{name: "CancelOperationRequest", typeOf: reflect.TypeFor[models.CancelOperationRequest]()},
@@ -331,8 +335,8 @@ func openAPICommandPaths(paths map[string]any) {
 		},
 		{
 			path: operation + "/tasks", id: "assignOperationTask", summary: "Assign an operation task",
-			description: "Returns the full assigned task. action_name must be nonblank. The path supplies operation_id; operation_id and agent_id are not accepted in the body. The controller selects the agent, and an unknown action can remain queued. Repeated assignment creates another task.",
-			request:     "AssignOperationTaskRequest", response: "Task", status: "201", missing: "operation_not_found", conflict: "operation_conflict, operation_finished or question_pending",
+			description: "Returns the full assigned task. action_name must be nonblank. Optional session_task_id selects a finished session-aware task in this operation to reuse its saved session, including after its continuation has resolved. This creates an independent assignment without changing the source continuation. The path supplies operation_id; operation_id and agent_id are not accepted in the body. The controller selects the agent, and an unknown action can remain queued. Repeated assignment creates another task.",
+			request:     "AssignOperationTaskRequest", response: "Task", status: "201", missing: "operation_not_found or task_not_found", conflict: "operation_conflict, operation_finished or question_pending",
 			location: "/api/v1/operations/{operation_id}/tasks/{task_id}", bodyRequired: true, validationError: "invalid_input",
 		},
 		{

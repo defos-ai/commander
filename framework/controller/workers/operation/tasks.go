@@ -25,16 +25,23 @@ func (r *Worker) Assign(ctx context.Context, command commands.AssignTaskCommand)
 		if err != nil {
 			return operations.Task{}, err
 		}
+		source, err := assignmentSessionSource(s.operation, command.SessionTaskID)
+		if err != nil {
+			return operations.Task{}, err
+		}
 		records, err := r.catalog.Agents(ctx)
 		if err != nil {
 			return operations.Task{}, err
 		}
 
-		resolved, err := r.normalize(ctx, s.operation, nil, []actionmodel.NextAction{{ActionName: task.ActionName, Input: task.Input}}, records)
+		resolved, err := r.normalize(ctx, s.operation, source, []actionmodel.NextAction{{ActionName: task.ActionName, Input: task.Input}}, records)
 		if err != nil {
 			return operations.Task{}, err
 		}
 		normalized := resolved[0]
+		if source != nil && normalized.SessionIntent == nil {
+			return operations.Task{}, fmt.Errorf("%w: session_task_id requires a session-aware action", domain.ErrInvalidInput)
+		}
 		task.Input = normalized.Input
 		task.SessionIntent = normalized.SessionIntent.Clone()
 		if task.SessionIntent != nil && task.SessionIntent.Mode == "open" {
@@ -61,6 +68,34 @@ func (r *Worker) Assign(ctx context.Context, command commands.AssignTaskCommand)
 		r.signalScheduler()
 		return s.operation.Clone().Tasks[taskIndex(&s.operation, task.ID)], nil
 	})
+}
+
+func assignmentSessionSource(operation operations.Operation, taskID string) (*operations.Task, error) {
+	if taskID == "" {
+		return nil, nil
+	}
+	index := taskIndex(&operation, taskID)
+	if index < 0 {
+		return nil, operations.ErrUnknownTask
+	}
+	source := operation.Tasks[index]
+	switch source.Status {
+	case operations.TaskSucceeded, operations.TaskFailed, operations.TaskCancelled:
+	default:
+		return nil, fmt.Errorf("%w: session_task_id must reference a finished task with a known outcome", domain.ErrInvalidInput)
+	}
+	if source.SessionIntent == nil {
+		return nil, fmt.Errorf("%w: session_task_id must reference a session-aware task", domain.ErrInvalidInput)
+	}
+	if err := source.SessionIntent.Validate(); err != nil {
+		return nil, fmt.Errorf("%w: session_task_id references an invalid session: %w", domain.ErrInvalidInput, err)
+	}
+	for _, question := range operation.Questions {
+		if question.TaskID == source.ID && question.Pending() {
+			return nil, operations.ErrQuestionPending
+		}
+	}
+	return &source, nil
 }
 
 func (r *Worker) runTask(task operations.Task, call actionmodel.ActionCall) {

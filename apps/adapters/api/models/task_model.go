@@ -6,8 +6,9 @@ import (
 )
 
 type AssignTaskRequest struct {
-	ActionName string          `json:"action_name"`
-	Input      json.RawMessage `json:"input,omitempty"`
+	ActionName    string          `json:"action_name"`
+	SessionTaskID string          `json:"session_task_id,omitempty"`
+	Input         json.RawMessage `json:"input,omitempty"`
 }
 
 type SessionIntentResponse struct {

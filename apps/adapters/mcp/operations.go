@@ -84,7 +84,7 @@ type OperationTasksResult struct {
 	NextCursor string        `json:"next_cursor"`
 }
 
-const sessionGuidance = "The controller assigns session identity and owner before dispatch. Open actions can start a new session; session-aware continuation actions inherit their direct parent's session. Queue use actions through that parent's continuation, not as unrelated root tasks. Never put routing session IDs in action input or infer a latest session. Inspect runtime session state, ownership and readiness; close or abandon an existing claim explicitly before replacement."
+const sessionGuidance = "The controller assigns session identity and owner before dispatch. Open actions can start a new session; session-aware continuation actions inherit their direct parent's session. For independent work, assign_task.session_task_id reuses a finished session-aware task's saved session in the same operation, even after its continuation resolves. Use actions require one of these binding paths. Never put routing session IDs in action input or infer a latest session. Inspect runtime session state, ownership and readiness; close or abandon an existing claim explicitly before replacement."
 
 func addOperationTools(server *mcp.Server, config Config) {
 	execution := config.Operations
@@ -188,10 +188,11 @@ func addOperationTools(server *mcp.Server, config Config) {
 		func(ctx context.Context, request OperationRequest) (reports.Report, error) {
 			return query.GetReport(ctx, request.OperationID)
 		})
-	addTool(server, "assign_task", "Queue an action task; the controller selects a ready agent with available capacity and routes session work to its recorded owner. Clients do not select or rebind agents. Returns immediately; inspect operation events for completion. Action input must match its advertised schema. Available in nonterminal operations, including under operator completion policy or with a saved completion_draft; operator completion is not required to continue requested work. Existing question, readiness and session checks still apply. "+sessionGuidance, objectSchema(map[string]any{
-		"operation_id": stringProperty,
-		"action_name":  map[string]any{"type": "string", "minLength": 1, "description": "Action to execute, such as discover-pages."},
-		"input":        map[string]any{"type": "object"},
+	addTool(server, "assign_task", "Queue an action task; the controller selects a ready agent with available capacity and routes session work to its recorded owner. Clients do not select or rebind agents. Returns immediately; inspect operation events for completion. Action input must match its advertised schema. Set session_task_id to reuse a finished task's session in this operation without changing its previous continuation. Available in nonterminal operations, including under operator completion policy or with a saved completion_draft; operator completion is not required to continue requested work. Existing question, readiness and session checks still apply. "+sessionGuidance, objectSchema(map[string]any{
+		"operation_id":    stringProperty,
+		"session_task_id": map[string]any{"type": "string", "format": "uuid", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", "description": "Optional finished session-aware task in this operation whose saved session will be reused. The controller checks its exact owner and lifecycle; the previous continuation remains unchanged."},
+		"action_name":     map[string]any{"type": "string", "minLength": 1, "description": "Action to execute, such as discover-pages."},
+		"input":           map[string]any{"type": "object"},
 	}, "operation_id", "action_name"),
 		func(ctx context.Context, request AssignTaskRequest) (operations.Task, error) {
 			return execution.Assign(ctx, commands.AssignTaskCommand(request))

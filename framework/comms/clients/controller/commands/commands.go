@@ -55,14 +55,18 @@ func (r StartOperationCommand) Validate() error {
 }
 
 type AssignTaskCommand struct {
-	OperationID string          `json:"operation_id"`
-	ActionName  string          `json:"action_name"`
-	Input       json.RawMessage `json:"input,omitempty"`
+	OperationID   string          `json:"operation_id"`
+	ActionName    string          `json:"action_name"`
+	Input         json.RawMessage `json:"input,omitempty"`
+	SessionTaskID string          `json:"session_task_id,omitempty"`
 }
 
 func (r AssignTaskCommand) Validate() error {
 	if err := validateOperationID(r.OperationID); err != nil {
 		return err
+	}
+	if r.SessionTaskID != "" && !id.Valid(r.SessionTaskID) {
+		return errors.New("session_task_id must be a canonical lowercase UUID")
 	}
 	return (actionmodel.ActionCall{ActionName: r.ActionName, Input: r.Input}).Validate()
 }

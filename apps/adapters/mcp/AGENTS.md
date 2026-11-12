@@ -50,6 +50,11 @@ start without redundant confirmation. Operator completion does not gate startup;
 explicit approval requirements for the requested work still apply. Missing
 readiness can create a waiting operation instead of preventing its creation.
 
+`assign_task.session_task_id` reuses the saved session of a finished task in the
+same operation, including after that task's continuation resolves. It creates an
+independent assignment; never reopen the prior decision, accept routing session
+IDs in action input or infer a latest session. Keep lifecycle and question guards.
+
 Stack-test teardown answers leftover questions through the authenticated operator
 HTTP API before cancelling operations. Use the test API connection settings
 (`COMMANDER_TEST_API_*`), never relabel MCP submissions as operator answers or

@@ -38,6 +38,10 @@
   Discovery accepts optional intersecting scope/owner filters and ID lookup.
   Reject unknown, repeated or empty filters. Pass criteria to the query store;
   HTTP handlers must not load scope collections to filter them themselves.
+- Task assignment accepts optional `session_task_id`, a finished session-aware
+  task in the same operation. Map it explicitly into the controller command;
+  resolved session intent and exact-owner checks stay in the controller. Reuse
+  creates independent work without reopening or modifying a prior continuation.
 - `POST /api/v1/missions` strictly decodes a flat API request, maps it explicitly
   to a mission and uses the shared validator before `MissionStore.Create`.
   Root `objectives` is a required ordered array of nonblank strings. Preserve

@@ -64,7 +64,13 @@ limits, see [Sessions](../../docs/features/sessions.md).
   session bindings or inject routing fields.
 - Root `open` assignments receive a fresh scope and session ID from their fixed
   command identity. Root `use` assignments require a trusted host-supplied binding;
-  public operation commands currently acquire it through a continuation instead.
+  public operation commands acquire it through a continuation or optional
+  `AssignTaskCommand.SessionTaskID` assignment metadata. The latter references a
+  finished task with a known outcome in the same operation and copies only its
+  accepted session intent. Reject unresolved execution outcomes, missing/invalid
+  donor intent, pending donor questions and stateless target actions. Keep the new
+  task independent of the donor's continuation and batch; neither reopen nor edit
+  the earlier decision. Existing admission, owner and lifecycle checks still apply.
   Business input never selects a session or scope, even if fields have those names.
 - Session-aware continuations inherit their direct parent's saved session identity.
   The child's contract selects `open` or `use`. Stateless children remain
@@ -164,8 +170,9 @@ Mongo's document limit); archival must preserve release and identity evidence.
 Run from the repository root; these tests launch real hosts and a resource fixture
 and assert public HTTP outcomes. Use only E2E checks for session changes.
 These scenarios acquire controller-owned identities and consume them through
-direct-parent continuations. Root `use` calls, including those supplying IDs in
-business input, are rejected. Builder's
+direct-parent continuations or explicit references to finished tasks in the same
+operation. Root `use` calls without `session_task_id`, including those supplying
+IDs in business input, are rejected. Builder's
 [workspace E2Es](../../apps/agents/builder/tests/e2e/workspaces_test.go) cover trusted
 standalone binding reuse beyond operation tasks.
 

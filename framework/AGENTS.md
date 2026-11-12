@@ -127,7 +127,9 @@
   accepted session intent. Stateless tasks and new session reservations without an owner
   select ready eligible agents. Resolve session intent from the accepted action
   contract and controller-owned binding; session-aware continuations inherit the
-  direct parent's saved identity. Missions do not supply bindings. Follow
+  direct parent's saved identity. Independent assignments may supply
+  `session_task_id` to copy a finished same-operation task's accepted session;
+  earlier continuation decisions stay unchanged. Missions do not supply bindings. Follow
   the [session guide](sessions/AGENTS.md). Reject removed `policies.session`, `policies.placement`
   and root `rules` fields instead of silently dropping constraints on reads.
 - Operation startup validates the stored mission/input and clones the mission

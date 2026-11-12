@@ -12,9 +12,10 @@ import (
 
 func ToAssignTaskCommand(operationID string, request models.AssignTaskRequest) controllercommands.AssignTaskCommand {
 	return controllercommands.AssignTaskCommand{
-		OperationID: operationID,
-		ActionName:  request.ActionName,
-		Input:       bytes.Clone(request.Input),
+		OperationID:   operationID,
+		ActionName:    request.ActionName,
+		SessionTaskID: request.SessionTaskID,
+		Input:         bytes.Clone(request.Input),
 	}
 }
 
