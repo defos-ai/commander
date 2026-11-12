@@ -59,7 +59,8 @@ func NewPowerShellInstaller(t *testing.T, architecture string, shell PowerShellR
 
 func (f *PowerShellInstaller) Run(t *testing.T, architecture string, args ...string) (string, error) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
+	// Include cold PowerShell/.NET initialization in the bounded process lifetime.
+	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
 	defer cancel()
 	arguments := []string{"-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File",
 		filepath.Join(f.repository, ".github", "tests", "fixtures", "install_powershell.ps1"),
@@ -74,9 +75,14 @@ func (f *PowerShellInstaller) Run(t *testing.T, architecture string, args ...str
 		}
 	}
 	command.WaitDelay = time.Second
+	started := time.Now()
 	output, err := command.CombinedOutput()
 	if ctx.Err() != nil {
-		return string(output), fmt.Errorf("PowerShell installer fixture stopped: %w", ctx.Err())
+		requests := "no fake download requests recorded"
+		if data, readErr := os.ReadFile(filepath.Join(f.Directory, "requests.log")); readErr == nil && len(data) > 0 {
+			requests = "fake download request log:\n" + string(data)
+		}
+		return string(output), fmt.Errorf("PowerShell installer fixture stopped after %s: %w; %s", time.Since(started).Round(time.Millisecond), ctx.Err(), requests)
 	}
 	return string(output), err
 }

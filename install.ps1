@@ -127,7 +127,9 @@ $destination = Join-Path $installDirectory 'commander.exe'
 $existing = Get-InstallerTarget -Path $destination
 
 [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
-Add-Type -AssemblyName System.Net.Http
+if ($PSVersionTable.PSVersion.Major -lt 6) {
+    Add-Type -AssemblyName System.Net.Http
+}
 $releaseRoot = 'https://github.com/defos-ai/commander/releases'
 $selectedVersion = $Version
 if ($Version -eq 'latest') {

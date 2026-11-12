@@ -23,6 +23,8 @@ of a completion draft for operator review.
   work then resumes automatically without another assignment.
 - Add public HTTP/MCP coverage for session reuse after branch closure and
   controller restart, and for capability registration resuming the original task.
+- Avoid an unnecessary HTTP assembly load in PowerShell 7 installers. Installer
+  checks allow a bounded cold-start window and retain timing/request diagnostics.
 
 ### Upgrading from v0.5.0
 
