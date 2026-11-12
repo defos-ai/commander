@@ -9,6 +9,13 @@ param(
 
 [Console]::Error.WriteLine('Installer fixture started (PowerShell ' + $PSVersionTable.PSVersion.ToString() + ')')
 $ErrorActionPreference = 'Stop'
+# Load this shell's built-ins before overriding architecture or triggering module discovery.
+foreach ($module in @('Microsoft.PowerShell.Management', 'Microsoft.PowerShell.Utility')) {
+    [Console]::Error.WriteLine('Installer fixture loading built-in module ' + $module)
+    $manifest = [IO.Path]::Combine($PSHOME, 'Modules', $module, "$module.psd1")
+    Import-Module -Name $manifest -ErrorAction Stop
+}
+[Console]::Error.WriteLine('Installer fixture loaded built-in modules')
 $env:OS = 'Windows_NT'
 $env:PROCESSOR_ARCHITECTURE = $Architecture
 $env:PROCESSOR_ARCHITEW6432 = ''
