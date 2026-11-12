@@ -39,6 +39,17 @@ question, then await that task's result; do not ask a duplicate, resolve its
 continuation or queue replacement work while it runs. The action resumes after
 answer delivery and retains its execution deadline.
 
+Completion policy controls finalization only. Keep MCP guidance and completion
+receipts explicit that finished tasks and a saved `completion_draft` leave the
+operation open for requested assignments and model continuations. An empty
+continuation decision finishes its branch, not the operation. Retain normal
+question, session, readiness and terminal-state guards; never require operator
+completion before continuing work in a nonterminal operation.
+For a clear user request with known mission input and scope, guide the model to
+start without redundant confirmation. Operator completion does not gate startup;
+explicit approval requirements for the requested work still apply. Missing
+readiness can create a waiting operation instead of preventing its creation.
+
 Stack-test teardown answers leftover questions through the authenticated operator
 HTTP API before cancelling operations. Use the test API connection settings
 (`COMMANDER_TEST_API_*`), never relabel MCP submissions as operator answers or

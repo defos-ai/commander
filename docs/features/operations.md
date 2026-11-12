@@ -50,11 +50,17 @@ an external side effect finished or that repeating it is safe. Use
 
 ## Complete and settle
 
+Finishing a scan or another task keeps the operation open. Continue work in the
+same operation with `resolve_continuation` for follow-up actions or `assign_task`
+for independent actions. An empty continuation decision ends only that branch.
+
 Review task outcomes and answer pending questions, then submit output matching
 the mission's output schema. With omitted/model completion policy,
 `complete_operation` saves the final report immediately. With operator policy,
 the model saves a completion draft; an operator reviews or edits it in Admin and
 explicitly chooses **Complete operation**. Questions cannot grant this approval.
+Operator completion policy and a saved draft do not block further work; only
+terminal operations require starting a new operation.
 
 `completed` means a final report was accepted. It can document limitations or
 unknown outcomes; it does not certify that every objective or task succeeded.

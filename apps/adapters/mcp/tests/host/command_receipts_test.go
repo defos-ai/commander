@@ -74,6 +74,33 @@ func TestCompactCommandReceiptsKeepSavedEvidenceAndOperatorApproval(t *testing.T
 		t.Fatalf("operator draft was completed or lost on detail read: receipt=%+v operation=%+v", receipt, pending)
 	}
 	a.Fails("get_report", fixtures.Object{"operation_id": operatorID}, "report")
+	scan := a.Task(operatorID, "inspect", fixtures.Object{})
+	scanned := a.Wait(operatorID, func(op fixtures.OperationDetail) bool {
+		return len(op.Tasks) == 1 && op.Tasks[0].ID == scan.ID && op.Tasks[0].Status == operations.TaskSucceeded && fixtures.ModelDecision(op) != nil
+	})
+	if scanned.Status.Terminal() || scanned.ReportID != "" || !bytes.Equal(scanned.CompletionDraft, output) {
+		t.Fatalf("completion draft prevented new work or changed during execution: %+v", scanned)
+	}
+
+	a.Resolve(operatorID, *fixtures.ModelDecision(scanned), []fixtures.Object{{"action_name": "inspect", "input": fixtures.Object{}, "reason": "Inspect a follow-up finding"}})
+	continued := a.Wait(operatorID, func(op fixtures.OperationDetail) bool {
+		return len(op.Tasks) == 2 && op.Tasks[1].Status == operations.TaskSucceeded && fixtures.ModelDecision(op) != nil
+	})
+	followUp := fixtures.ModelDecision(continued)
+	if followUp.ParentTaskID != scan.ID || continued.Status.Terminal() || continued.ReportID != "" || !bytes.Equal(continued.CompletionDraft, output) {
+		t.Fatalf("operator completion review prevented the follow-up branch: %+v", continued)
+	}
+	a.Resolve(operatorID, *followUp, []fixtures.Object{})
+	receipt = fixtures.CommandReceipt{}
+
+	a.Call("complete_operation", fixtures.Object{"operation_id": operatorID, "output": output}, &receipt)
+	pending = a.Get(operatorID)
+
+	if receipt.Status.Terminal() || receipt.ReportID != "" || receipt.Progress.FinishedTasks != 2 || receipt.Progress.PendingDecisions != 0 ||
+		!strings.Contains(receipt.Message, "Awaiting operator approval") || !bytes.Equal(pending.CompletionDraft, output) || pending.CompletedBy != "" {
+		t.Fatalf("follow-up work let the model approve operator completion: receipt=%+v operation=%+v", receipt, pending)
+	}
+	a.Fails("get_report", fixtures.Object{"operation_id": operatorID}, "report")
 	receipt = fixtures.CommandReceipt{}
 	a.Call("cancel_operation", fixtures.Object{"operation_id": operatorID}, &receipt)
 	if receipt.Status != operations.Cancelled || !receipt.Progress.Settled {
