@@ -48,6 +48,17 @@ an external side effect finished or that repeating it is safe. Use
 [data sharing](data-sharing.md) to forward evidence to active analysis tasks and
 [sessions](sessions.md) to manage resources that survive individual actions.
 
+## Install missing capabilities
+
+If a required agent is not installed, use a separate installation operation
+(normally the registered `install-agent` mission). A waiting operation's preflight
+blocks every queued task, including installation tasks added to it.
+
+Keep the original operation open. After installation, check its preflight and
+registered action readiness; queued work resumes when its requirements are ready.
+Continue using the original operation ID. Missing secrets, configuration or an
+unavailable session owner need their existing setup/recovery path, not reinstallation.
+
 ## Complete and settle
 
 Finishing a scan or another task keeps the operation open. Continue work in the
@@ -59,8 +70,8 @@ the mission's output schema. With omitted/model completion policy,
 `complete_operation` saves the final report immediately. With operator policy,
 the model saves a completion draft; an operator reviews or edits it in Admin and
 explicitly chooses **Complete operation**. Questions cannot grant this approval.
-Operator completion policy and a saved draft do not block further work; only
-terminal operations require starting a new operation.
+Operator completion policy and a saved draft do not block further work.
+Further work after a terminal operation needs a new operation.
 
 `completed` means a final report was accepted. It can document limitations or
 unknown outcomes; it does not certify that every objective or task succeeded.

@@ -49,6 +49,12 @@ For a clear user request with known mission input and scope, guide the model to
 start without redundant confirmation. Operator completion does not gate startup;
 explicit approval requirements for the requested work still apply. Missing
 readiness can create a waiting operation instead of preventing its creation.
+When a required capability is not installed, guide installation through a separate
+operation using registered mission and installer metadata. The original mission's
+preflight blocks every queued task, including installer actions. Preserve its ID
+and wait for registration and a ready original preflight before continuing.
+Missing secrets/configuration, owner availability and capacity follow their own
+handoff/recovery paths; false preflight alone does not justify reinstallation.
 
 `assign_task.session_task_id` reuses the saved session of a finished task in the
 same operation, including after that task's continuation resolves. It creates an
