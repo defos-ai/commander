@@ -9,6 +9,8 @@ export const password = process.env.COMMANDER_TEST_API_PASSWORD ?? 'api-fixture-
 const terminal = new Set(['completed', 'cancelled', 'failed']);
 const fixtureMissions = ['hacker-news-test', 'build-agent', 'fixture-use-agent', 'install-agent'];
 
+type OperationCommandReceipt = Pick<Operation, 'id' | 'status' | 'progress' | 'preflight' | 'report_id' | 'error'> & { message?: string };
+
 export function storyBatch(title = 'Commander integration example') {
   return { feed: 'top', topics: [], stories: [{
     id: 1, title, url: 'https://example.invalid/story', score: 42, comments: 7,
@@ -30,7 +32,7 @@ export class CommanderAPI {
     return response.json();
   }
 
-  async completeAsModel(operationID: string, output: string): Promise<Operation> {
+  async completeAsModel(operationID: string, output: string): Promise<OperationCommandReceipt> {
     JSON.parse(output);
     const response = await this.request.post(process.env.COMMANDER_TEST_MCP_URL ?? 'http://127.0.0.1:14273/mcp', {
       headers: {

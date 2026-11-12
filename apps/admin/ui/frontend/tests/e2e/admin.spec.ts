@@ -341,9 +341,12 @@ test('operation questions, automatic work, graph and downloads use the real stac
 
   const decision = finished.tasks!.find(task => task.id === root.id)!.continuation!;
   await api.post(`${path}/tasks/${root.id}/continuation/resolve`, { version: decision.version, actions: [] });
-  const pending = await api.completeAsModel(operation.id, '{"summary":"Ranked the supplied stories and saved their digest."}');
-  expect(pending.status).not.toBe('completed');
-  expect(pending.report_id).toBeUndefined();
+  const confirmation = await api.completeAsModel(operation.id, '{"summary":"Ranked the supplied stories and saved their digest."}');
+  expect(confirmation.id).toBe(operation.id);
+  expect(confirmation.status).not.toBe('completed');
+  expect(confirmation.report_id).toBeUndefined();
+  expect(confirmation.message).toContain('Awaiting operator approval');
+  const pending = await api.get<Operation>(path);
   expect(pending.completion_draft).toEqual({ summary: 'Ranked the supplied stories and saved their digest.' });
   await page.getByRole('button', { name: 'Details', exact: true }).click();
   await page.getByRole('button', { name: 'Refresh', exact: true }).click();
