@@ -122,7 +122,7 @@ func ExpectedAgentActions(agentType string) []string {
 	case "example-agent":
 		return []string{"choose-hn-topics", "fetch-hn-stories", "filter-hn-stories", "rank-hn-stories", "write-hn-digest"}
 	case "spawner-agent":
-		return []string{"spawn-agent"}
+		return []string{"inspect-agent", "spawn-agent"}
 	case "builder-agent":
 		return []string{"build-agent", "checkout-template", "publish-agent", "release-agent"}
 	case "fixture-agent":

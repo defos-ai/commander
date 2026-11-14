@@ -15,6 +15,10 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
   [docker.Manager](runtimes/docker/manager.go) and the injected
   [Kubernetes Manager](runtimes/kubernetes/manager.go) implement the interface.
   CLI factories select the runtime; `cli.go` stays independent of concrete clients.
+- Supporting helpers live under `internal/`: [package access](internal/packageaccess/access.go)
+  prepares credentials for inspection and spawning; [readiness](internal/readiness/readiness.go)
+  projects registration into compact action summaries. Keep registered executors
+  and their input/output contracts in `actions/`.
 - [`spawn-agent`](actions/spawn_agent.go) accepts `count` from 1–100 (default 1).
   A single request launches directly and returns runtime identity with compact
   action readiness: name, session mode, status, reason, missing requirements and
@@ -28,12 +32,26 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
   Preserve each child's controller
   execution, deadline, source approval and checkpoints; never reuse one command
   identity for several launches or expand the framework's checkpoint limit for
-  batching. Keep one registered action in runtime and static package metadata.
+  batching. Keep `spawn-agent` and `inspect-agent` in runtime and static package metadata.
   `install-agent` includes the batch action in `policies.continuation.aggregate_results`
   so direct children reach one review. Do not add it to `model_review`, which blocks this
   fan-out; single results without proposals still require model review. Each
   child pins its own selector; callers needing a consistent
   release across the batch must supply an exact version.
+- [`inspect-agent`](actions/inspect_agent.go) reads the selected release manifest
+  through the factory-owned resolver, shared with the launch runtime. It resolves
+  an exact package reference and returns declarations, never launch state: sorted
+  native platforms, optional Docker image, dependencies and configured runtime.
+  Include the current native platform only for native mode; Docker daemon and
+  Kubernetes node platforms are not established by the spawner process. Native
+  all-in-one children execute inside its environment. Preserve explicit custom or
+  empty action catalogs in `NewAgent`; the default catalog creates fresh instances
+  of both actions. Keep inspection clients in factory ownership, not actions.
+  Inspection may read any valid GitHub owner without an installation question.
+  It neither grants source approval nor uses `runtimes.PinPackage`, writes launch
+  checkpoints, downloads executables, pulls images or starts workloads. Spawning
+  still authorizes its own execution. Pass the inspected exact reference to a
+  later spawn; inspecting `stable` does not reserve that mutable selector.
 - Results use `RuntimeKind` and one sealed `RuntimeDetails` value:
   `NativeRuntimeDetails`, `DockerRuntimeDetails` or `KubernetesRuntimeDetails`.
   JSON places the selected payload directly under `runtime_details`, with no
@@ -74,24 +92,24 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
   explicitly empty flag. Validate nonempty values with `id.AgentIDFromSuffix`
   before opening providers; empty values generate a fresh host ID. This setting
   identifies the spawner itself; the runtime assigns each child's ID separately.
-  The spawner action has no executable discovery requirements or search-path flag.
+  Spawner actions have no executable discovery requirements or search-path flag.
 - Actions get command identity from `action.ExecutionFromContext`, supplied
   by the framework runtime. Use `command:<UUID>` for runtime requests so different
   executions of a task cannot share in-memory child ownership. Standalone
   `Agent.Work` cannot run `spawn-agent`; it has no controller execution.
   Never accept a spawn key, agent ID, environment,
   command arguments or deployment privileges in model-provided action input.
-- Source lookup belongs to the Commander client. `spawn-agent` accepts the
+- Source lookup belongs to the Commander client. Package actions accept the
   `package` URL/reference and optional `visibility` (`public` by default). Never load
   source definitions in the spawner or add source configuration to its host. Private input
   uses environment `GITHUB_TOKEN` first, otherwise `action.RequestSecret` within
   the current execution. Keep discovery ready without a token; do not declare
   it as a static requirement for public installs. Clear temporary token bytes
-  after spawning. Public input must remain anonymous even with an inherited
+  after the action. Public input must remain anonymous even with an inherited
   download token. Visibility selects authentication, not authorization or trust.
 - [`packages.AuthorizeSource`](packages/trust.go) admits `defos-ai` owners using
   the shared parser and an exact case-insensitive comparison. For other owners,
-  the running action calls `action.Question` with stable key `install-source`
+  `spawn-agent` calls `action.Question` with stable key `install-source`
   and the canonical selector/visibility, before token access. It waits for the
   controller's saved answer; operator and post-cutoff model answers both count.
   Only Yes grants a private context capability bound to selector, command and
@@ -152,7 +170,7 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
 - `packages/resolver.go` uses a dedicated HTTP client. The default transport does
   not inherit proxies, cookies or credentials. Injected transports are trusted
   deployment configuration and must not add credentials. `packages.WithGitHubToken`
-  supplies a caller-owned token for one spawn context; keep its bytes intact
+  supplies a caller-owned token for one package action; keep its bytes intact
   until downloads and image pulls finish, then clear them. Never retain it in the resolver,
   package metadata, launch records or child environment. Authenticated downloads
   use GitHub's fixed API endpoints to select a named asset from the exact published

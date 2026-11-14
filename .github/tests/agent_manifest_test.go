@@ -59,7 +59,7 @@ func TestCIAgentManifestGeneration(t *testing.T) {
 					t.Error("manifest contains a blank responsibility")
 				}
 			}
-			wantActions := map[string]bool{"spawn-agent": true}
+			wantActions := map[string]bool{"spawn-agent": true, "inspect-agent": true}
 			if name == "builder" {
 				wantActions = map[string]bool{"checkout-template": true, "build-agent": true, "publish-agent": true, "release-agent": true}
 			}

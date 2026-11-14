@@ -5,8 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 
+	"github.com/defos-ai/commander/apps/agents/spawner/internal/packageaccess"
+	"github.com/defos-ai/commander/apps/agents/spawner/internal/readiness"
 	downloads "github.com/defos-ai/commander/apps/agents/spawner/packages"
 	"github.com/defos-ai/commander/apps/agents/spawner/runtimes"
 	"github.com/defos-ai/commander/framework/agent/action"
@@ -135,7 +136,7 @@ func NewSpawnAgent(launcher Spawner) (*action.Func[SpawnAgentInput, map[string]a
 			}
 			return map[string]any{
 				"agent_id": result.AgentID, "agent_type": result.AgentType, "package": result.Package,
-				"runtime": result.Runtime, "runtime_details": result.RuntimeDetails, "actions": summarizeActions(result.Actions),
+				"runtime": result.Runtime, "runtime_details": result.RuntimeDetails, "actions": readiness.SummarizeActions(result.Actions),
 			}, nil
 		},
 		NextActions: func(_ context.Context, input SpawnAgentInput, _ map[string]any) ([]action.NextAction, error) {
@@ -163,29 +164,15 @@ func spawnSingle(ctx context.Context, launcher Spawner, requestID string, input 
 	if err != nil {
 		return runtimes.Result{}, err
 	}
-	var token []byte
-	if input.Visibility == packages.Private {
-		token = []byte(os.Getenv("GITHUB_TOKEN"))
-		if len(token) == 0 {
-			err = action.RunWithProgress(ctx, "Private package access", func() error {
-				var secretErr error
-				token, secretErr = action.RequestSecret(ctx, "GITHUB_TOKEN")
-				return secretErr
-			})
-			if err != nil {
-				return runtimes.Result{}, fmt.Errorf("private package requires GITHUB_TOKEN: %w", err)
-			}
-		}
-		defer clear(token)
-		if len(token) == 0 {
-			return runtimes.Result{}, errors.New("GITHUB_TOKEN must not be empty")
-		}
+	ctx, token, err := packageaccess.Acquire(ctx, input.Visibility)
+	if err != nil {
+		return runtimes.Result{}, err
 	}
+	defer clear(token)
 	if err := ctx.Err(); err != nil {
 		return runtimes.Result{}, err
 	}
-	// Public requests explicitly clear any inherited download token.
-	return launcher.Spawn(downloads.WithGitHubToken(ctx, token), requestID, input.Package)
+	return launcher.Spawn(ctx, requestID, input.Package)
 }
 
 func spawnRequestID(ctx context.Context) (string, error) {

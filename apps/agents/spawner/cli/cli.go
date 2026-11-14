@@ -11,6 +11,7 @@ import (
 	"syscall"
 
 	spawner "github.com/defos-ai/commander/apps/agents/spawner"
+	"github.com/defos-ai/commander/apps/agents/spawner/runtimes"
 	"github.com/defos-ai/commander/framework/agent"
 	"github.com/defos-ai/commander/framework/agent/action"
 	"github.com/defos-ai/commander/framework/host"
@@ -79,7 +80,7 @@ func RunWithOptions(ctx context.Context, args []string, stderr io.Writer, option
 	}()
 	selected := []action.Executor{}
 	if configuration.actionNames == nil || len(configuration.actionNames) > 0 {
-		selected, err = spawner.NewActions(dependencies.Runtime)
+		selected, err = spawner.NewActions(dependencies.Runtime, dependencies.Resolver, runtimes.RuntimeKind(configuration.runtime))
 		if err != nil {
 			return err
 		}
@@ -103,7 +104,7 @@ func RunWithOptions(ctx context.Context, args []string, stderr io.Writer, option
 		Logger:            logger,
 		HeartbeatInterval: &configuration.heartbeatInterval,
 		Secrets:           configuration.secrets,
-	}, dependencies.Runtime)
+	}, dependencies.Runtime, dependencies.Resolver, runtimes.RuntimeKind(configuration.runtime))
 	if err != nil {
 		return err
 	}

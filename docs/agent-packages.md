@@ -35,6 +35,13 @@ starting dependent work.
 The official [agent source list](../sources/README.md) helps discovery through
 MCP. It contains metadata, without saved trust approvals or an installation allowlist.
 
+Before launching, assign Spawner's `inspect-agent` action through the controller
+to read the selected release's dependencies and declared delivery platforms. Use
+its exact `package` reference for the later spawn. Inspection starts no agent and
+does not grant installation approval or establish readiness. Prepare native software
+in the spawner's execution environment; Docker all-in-one children run inside its
+container. Docker/Kubernetes software belongs in the published image and deployment.
+
 ### Private repositories
 
 Pass `visibility: "private"` with the package. The spawner uses its `GITHUB_TOKEN`,

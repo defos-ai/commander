@@ -89,9 +89,9 @@ export class CommanderAPI {
       agents: [
         { type: 'builder-agent', status: 'ready', stale: false, working: false, readyActions: 1 },
         ...Array(2).fill({ type: 'example-agent', status: 'ready', stale: false, working: false, readyActions: 5 }),
-        { type: 'spawner-agent', status: 'ready', stale: false, working: false, readyActions: 1 },
+        { type: 'spawner-agent', status: 'ready', stale: false, working: false, readyActions: 2 },
       ], spawnedReady: true, spawnedCatalog: true,
-      actions: ['build-agent', 'checkout-template', 'choose-hn-topics', 'fetch-hn-stories', 'filter-hn-stories',
+      actions: ['build-agent', 'checkout-template', 'choose-hn-topics', 'fetch-hn-stories', 'filter-hn-stories', 'inspect-agent',
         'publish-agent', 'rank-hn-stories', 'release-agent', 'spawn-agent', 'write-hn-digest'],
       missions: fixtureMissions, controller: true,
     });

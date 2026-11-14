@@ -28,6 +28,7 @@ type dependencies struct {
 	Bus               comms.Bus
 	ArtifactFileStore artifacts.ArtifactFileStore
 	Runtime           runtimes.Runtime
+	Resolver          *packages.Resolver
 	closers           []func() error
 }
 
@@ -84,6 +85,7 @@ func openDependencies(ctx context.Context, configuration config) (result *depend
 
 func (d *dependencies) openRuntime(ctx context.Context, configuration config, podClient *kubernetes.Client) (err error) {
 	resolver := packages.NewResolver(nil)
+	d.Resolver = resolver
 	d.closers = append(d.closers, func() error {
 		resolver.CloseIdleConnections()
 		return nil

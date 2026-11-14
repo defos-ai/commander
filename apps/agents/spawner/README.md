@@ -7,11 +7,11 @@ registered action readiness before assigning work.
 
 In Playground, ask:
 
-> Install the web agent.
+> Inspect the browser agent's dependencies before installing it.
 
 You can also supply a GitHub package URL without a source-list entry.
 Repositories owned by `github.com/defos-ai` proceed automatically. For other
-owners, the running action asks Yes/No before accessing tokens or launching the
+owners, `spawn-agent` asks Yes/No before accessing tokens or launching the
 agent. Answer in Playground or Admin; after the default two-minute window, the
 model may answer. Yes resumes the same execution; No prevents installation.
 No owner trust is saved.
@@ -25,7 +25,7 @@ go run ./apps/agents/spawner/cmd --bus-url ./state/bus --storage-url ./state/sto
 ```
 
 Use the controller's bus and artifact storage. Native mode is the default;
-installed agents need any host dependencies listed in their README.
+installed agents need their declared software dependencies in that execution environment.
 Run with `--help` for flags, or see [release binaries](../../../docs/releases/README.md#native-binaries).
 
 ### Docker
@@ -69,6 +69,17 @@ configured list so admission matches the launch policy. Child API-token mounting
 is disabled. The official Builder package is not supported in Kubernetes yet.
 
 ### During a mission
+
+Use `inspect-agent` through the controller before launching when you need to
+prepare host software or check declared platforms. It accepts the same `package`
+and `visibility` fields as a single spawn, and returns an exact package reference,
+dependency guidance, native platforms and any declared Docker image. Pass that
+exact reference to `spawn-agent` after preparation. Inspection launches nothing
+and does not approve installation; registration and readiness are checked later.
+
+For native mode, prepare the spawner's execution environment. In Docker all-in-one
+this is inside the container. Docker/Kubernetes prerequisites belong in the agent
+image and deployment configuration; inspection does not verify their target platform.
 
 Through MCP, read the `install-agent` mission and `spawn-agent` action schemas.
 Start an `install-agent` operation and assign `spawn-agent` with the same input:
