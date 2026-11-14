@@ -10,6 +10,7 @@ import (
 	"github.com/defos-ai/commander/apps/agents/spawner/runtimes"
 	"github.com/defos-ai/commander/apps/agents/spawner/tests/fixtures"
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/id"
 )
 
@@ -18,6 +19,10 @@ func TestSpawnAgentReportsUnavailableActionsWithoutLosingRegistration(t *testing
 	executor := fixtures.SpawnAction(t, fixture.Manager)
 	ctx, requestID, _ := fixtures.SpawnCheckpoints(t)
 	definition := fixtures.UnavailableSpawnAction()
+	pkg, err := fixture.Config.Resolver.Resolve(ctx, fixtures.Reference)
+	if err != nil || !slices.Equal(pkg.Manifest.Dependencies, []agents.Dependency{{Name: "fixture-runtime", Description: "Runtime for the fixture action.", Version: "v1.2.3"}}) {
+		t.Fatalf("release resolution lost dependency installation guidance: %+v error=%v", pkg.Manifest.Dependencies, err)
+	}
 
 	result, err := executor.Run(ctx, json.RawMessage(`{"package":"`+fixtures.Reference+`"}`))
 

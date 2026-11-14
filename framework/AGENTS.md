@@ -396,9 +396,13 @@
   Optional `responsibilities` and `actions` describe published capabilities before
   installation. Actions contain only name and description, never runtime status
   or schemas. Accept omitted metadata in existing releases; reject explicitly
-  empty lists, invalid text, duplicate names and unsafe YAML. Keep the 64 KiB
-  document limit, 100-entry list bounds and 8 KiB text bounds. Preserve
+  empty responsibilities/actions, invalid text, duplicate names and unsafe YAML.
+  Keep the 64 KiB document limit, 100-entry list bounds and 8 KiB text bounds. Preserve
   responsibility order and sort a cloned action list when rendering.
+  Optional `dependencies` reuses `agents.Dependency` and its shared validation.
+  Accept omission and an empty list; reject null, non-string fields and malformed
+  entries. Preserve declaration order and omit empty versions when rendering.
+  These are installation hints, not executable checks or installation commands.
   `manifest.Action.Validate` shares release-safe name and description constraints
   with callers preparing action contracts before a build.
   See the [package contract](../docs/agent-packages.md#source-template).

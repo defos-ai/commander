@@ -72,7 +72,23 @@ docker:
 - List responsibilities and action summaries so people and models can assess the package.
 - For native delivery, attach the named executable to the same release; do not use an archive.
 - For Docker, publish a digest-pinned image with its entrypoint and dependencies.
-- Provide at least one delivery mode. Native prerequisites belong in the agent's README.
+- Provide at least one delivery mode. Declare external software in optional
+  `dependencies`, with platform-specific setup instructions in the agent's README.
+
+For example, an agent that uses an external browser can declare:
+
+```yaml
+dependencies:
+  - name: lightpanda
+    description: Browser runtime; install a compatible build for the execution host.
+    version: "<supported version or range>"
+```
+
+Use the same declarations in `AgentConfig.Dependencies` and the release manifest.
+Names and descriptions are required; version guidance is optional. Omit the list
+or use `dependencies: []` when there are no declarations. Match executable names
+reported by action discovery. The agent checks actual readiness; installation
+steps depend on the execution host's platform.
 
 ### Source template
 

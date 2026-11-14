@@ -15,6 +15,7 @@ import (
 	"text/template"
 	"unicode/utf8"
 
+	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/id"
 	"github.com/distribution/reference"
 	"go.yaml.in/yaml/v3"
@@ -32,6 +33,7 @@ type Manifest struct {
 	Type             string                 `yaml:"type"`
 	Version          string                 `yaml:"version"`
 	Responsibilities []string               `yaml:"responsibilities,omitempty"`
+	Dependencies     []agents.Dependency    `yaml:"dependencies,omitempty"`
 	Actions          []Action               `yaml:"actions,omitempty"`
 	Native           map[string]NativeAsset `yaml:"native"`
 	Docker           *Docker                `yaml:"docker"`
@@ -160,8 +162,8 @@ func validateYAML(node *yaml.Node, depth int) error {
 				return fmt.Errorf("duplicate key %q", key.Value)
 			}
 			seen[key.Value] = true
-			if depth == 0 && (key.Value == "responsibilities" || key.Value == "actions") {
-				if err := validateDescriptionList(value, key.Value); err != nil {
+			if depth == 0 && (key.Value == "responsibilities" || key.Value == "actions" || key.Value == "dependencies") {
+				if err := validateMetadataList(value, key.Value); err != nil {
 					return fmt.Errorf("%s: %w", key.Value, err)
 				}
 				continue
@@ -186,12 +188,15 @@ func validateYAML(node *yaml.Node, depth int) error {
 	return nil
 }
 
-func validateDescriptionList(node *yaml.Node, field string) error {
-	if node.Kind != yaml.SequenceNode || node.Tag != "!!seq" || node.Anchor != "" || len(node.Content) == 0 || len(node.Content) > maxDescriptionItems {
+func validateMetadataList(node *yaml.Node, field string) error {
+	if node.Kind != yaml.SequenceNode || node.Tag != "!!seq" || node.Anchor != "" || len(node.Content) > maxDescriptionItems {
+		return errors.New("expected a sequence of at most 100 entries")
+	}
+	if len(node.Content) == 0 && field != "dependencies" {
 		return errors.New("expected a nonempty sequence of at most 100 entries")
 	}
 	want := yaml.ScalarNode
-	if field == "actions" {
+	if field == "actions" || field == "dependencies" {
 		want = yaml.MappingNode
 	}
 	for _, item := range node.Content {
@@ -218,6 +223,9 @@ func (m Manifest) Validate() error {
 		return errors.New("agent manifest version must be a nonzero stable vMAJOR.MINOR.PATCH tag")
 	}
 	if err := m.validateDescription(); err != nil {
+		return err
+	}
+	if err := agents.ValidateDependencies(m.Dependencies); err != nil {
 		return err
 	}
 	if m.Native == nil && m.Docker == nil {

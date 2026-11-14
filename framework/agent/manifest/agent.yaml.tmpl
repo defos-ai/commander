@@ -7,6 +7,16 @@ responsibilities:
   - {{ printf "%q" . }}
 {{- end }}
 {{- end }}
+{{- if .Dependencies }}
+dependencies:
+{{- range .Dependencies }}
+  - name: {{ printf "%q" .Name }}
+    description: {{ printf "%q" .Description }}
+{{- if .Version }}
+    version: {{ printf "%q" .Version }}
+{{- end }}
+{{- end }}
+{{- end }}
 {{- if .Actions }}
 actions:
 {{- range .Actions }}

@@ -60,6 +60,7 @@ func NewDockerManager(t *testing.T) DockerManager {
 			return Response(request, http.StatusNotFound, "not found"), nil
 		}
 		manifest := "schema_version: 1\ntype: " + agentType + "\nversion: v0.1.0\ndocker:\n  image: " + DockerImage + "\n"
+		manifest += "dependencies:\n  - name: fixture-runtime\n    description: Runtime for the fixture action.\n    version: v1.2.3\n"
 		return Response(request, http.StatusOK, manifest), nil
 	}))
 	t.Cleanup(resolver.CloseIdleConnections)
