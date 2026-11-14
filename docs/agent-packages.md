@@ -17,7 +17,7 @@ GitHub package directly:
 > Install github.com/defos-ai/commander/apps/agents/builder@stable
 
 Packages owned by `github.com/defos-ai` proceed automatically. For other owners,
-the running action asks an installation question: the operator answers first,
+`spawn-agent` asks an installation question: the operator answers first,
 then the model may answer after `fallback_at`. Installation waits for a saved
 Yes; approval applies only to that execution.
 

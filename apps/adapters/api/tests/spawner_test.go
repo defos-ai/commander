@@ -19,7 +19,54 @@ import (
 func TestSpawnedAgentExecutesOperation(t *testing.T) {
 	a := fixtures.Connect(t)
 	const reference = "github.com/defos-ai/fixture-agent@v0.1.0"
-	provision, spawn := runFixtureAction(t, a, "install-agent", "spawn-agent", fixtures.Object{"package": reference})
+	provision, inspection := runFixtureAction(t, a, "install-agent", "inspect-agent", fixtures.Object{"package": "https://github.com/defos-ai/fixture-agent@stable"})
+	var inspected struct {
+		Package         string                           `json:"package"`
+		AgentType       string                           `json:"agent_type"`
+		Version         string                           `json:"version"`
+		Runtime         string                           `json:"runtime"`
+		NativePlatform  string                           `json:"native_platform,omitempty"`
+		NativePlatforms []string                         `json:"native_platforms"`
+		DockerImage     string                           `json:"docker_image,omitempty"`
+		Dependencies    []models.AgentDependencyResponse `json:"dependencies"`
+	}
+	decodeSpawnOutput(t, inspection.Result.Output, &inspected)
+	wantDependencies := []models.AgentDependencyResponse{{Name: "fixture-tool", Description: "Optional fixture helper; echo remains available without it.", Version: "v1.0.0"}}
+	if inspected.Package != reference || inspected.AgentType != "fixture-agent" || inspected.Version != "v0.1.0" ||
+		inspected.Runtime != fixtures.Environment("COMMANDER_TEST_SPAWNER_RUNTIME", "native") || !slices.Equal(inspected.Dependencies, wantDependencies) {
+		t.Fatalf("inspection lost the exact release, execution runtime or declared installation guidance: %+v", inspected)
+	}
+	if len(inspected.NativePlatforms) != 1 || inspected.NativePlatforms[0] != "linux/amd64" && inspected.NativePlatforms[0] != "linux/arm64" {
+		t.Fatalf("inspection lost the fixture's declared Linux delivery platform: %+v", inspected)
+	}
+	var inspectionFields map[string]json.RawMessage
+	if err := json.Unmarshal(inspection.Result.Output, &inspectionFields); err != nil {
+		t.Fatal(err)
+	}
+	_, hasNativePlatform := inspectionFields["native_platform"]
+	if inspected.Runtime == "native" {
+		if !hasNativePlatform || inspected.NativePlatform != inspected.NativePlatforms[0] {
+			t.Fatalf("native inspection did not identify the spawner's Linux execution environment: %+v", inspected)
+		}
+	} else if hasNativePlatform {
+		t.Fatal("container inspection inferred a native execution platform")
+	}
+	inspectionDecision := fixtures.ModelDecision(a.Wait(provision.ID, func(op models.OperationResponse) bool { return fixtures.ModelDecision(op) != nil }))
+	if inspectionDecision.ID != inspection.ID {
+		t.Fatalf("installation did not retain the inspection's model continuation: %+v", inspectionDecision)
+	}
+
+	a.Resolve(provision.ID, *inspectionDecision, []fixtures.Object{{"action_name": "spawn-agent", "input": fixtures.Object{"package": inspected.Package}}})
+	finishedInstallation := a.Wait(provision.ID, fixtures.TasksSettled)
+	var spawn models.TaskResponse
+	for _, task := range finishedInstallation.Tasks {
+		if task.ParentTaskID == inspection.ID && task.ActionName == "spawn-agent" {
+			spawn = task
+		}
+	}
+	if len(finishedInstallation.Tasks) != 2 || spawn.Status != "succeeded" || spawn.Result == nil {
+		t.Fatalf("reviewing inspection did not launch exactly one pinned package: %+v", finishedInstallation.Tasks)
+	}
 	var launched struct {
 		AgentID        string                  `json:"agent_id"`
 		AgentType      string                  `json:"agent_type"`
@@ -76,6 +123,9 @@ func TestSpawnedAgentExecutesOperation(t *testing.T) {
 		if result.Status == http.StatusOK {
 			agent := fixtures.Decode[models.AgentResponse](t, result, http.StatusOK)
 			if agent.ID == launched.AgentID && agent.Type == launched.AgentType && agent.Status == "ready" && !agent.Stale && slices.Equal(fixtures.ActionNames(agent.Actions), []string{"fixture-echo"}) {
+				if !slices.Equal(agent.Dependencies, inspected.Dependencies) {
+					t.Fatalf("registered dependencies differ from the inspected release: %+v", agent.Dependencies)
+				}
 				definition := agent.Actions[0]
 				if definition.Status != summary.Status || definition.Description == "" || !json.Valid(definition.InputSchema) || !json.Valid(definition.OutputSchema) {
 					t.Fatalf("compact spawn result changed the registered action definition: %+v", definition)
@@ -331,16 +381,20 @@ func assertSpawnProgressLogs(t *testing.T, a *fixtures.Client, operationID strin
 	}
 
 	unfiltered := fixtures.Read[models.PageResponse[models.LogResponse]](a, path+"?limit=1000")
-	if len(unfiltered.Items) < len(logs) || !slices.EqualFunc(unfiltered.Items[:len(logs)], logs, func(left, right models.LogResponse) bool { return left.ID == right.ID }) {
-		t.Fatalf("unfiltered operation logs lost the saved spawn history: %+v", unfiltered)
-	}
+	var spawnHistory []models.LogResponse
 	seen = make(map[string]bool)
 	for _, log := range unfiltered.Items {
-		assertSpawnLogIdentity(t, log, operationID, spawn)
-		if seen[log.ID] {
-			t.Fatalf("operation log query repeated ID %s", log.ID)
+		if seen[log.ID] || log.OperationID != operationID {
+			t.Fatalf("operation log query repeated an ID or crossed operation scope: %+v", log)
 		}
 		seen[log.ID] = true
+		if log.TaskID == spawn.ID {
+			assertSpawnLogIdentity(t, log, operationID, spawn)
+			spawnHistory = append(spawnHistory, log)
+		}
+	}
+	if len(spawnHistory) < len(logs) || !slices.EqualFunc(spawnHistory[:len(logs)], logs, func(left, right models.LogResponse) bool { return left.ID == right.ID }) {
+		t.Fatalf("unfiltered operation logs lost the saved spawn history: %+v", unfiltered)
 	}
 	if unfiltered.NextCursor != unfiltered.Items[len(unfiltered.Items)-1].ID {
 		t.Fatalf("operation log cursor lost its final ID: %+v", unfiltered)

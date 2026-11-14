@@ -18,6 +18,7 @@ import (
 	"github.com/defos-ai/commander/framework/agent/action"
 	"github.com/defos-ai/commander/framework/comms"
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/artifacts"
 	"github.com/defos-ai/commander/framework/id"
 	fsprovider "github.com/defos-ai/commander/providers/fs"
@@ -76,6 +77,7 @@ func run(ctx context.Context) (result error) {
 	}()
 	instance, err := agent.NewAgent(agent.AgentConfig{
 		ID: agentID, Type: agentType, Actions: []action.Executor{executor},
+		Dependencies:      []agents.Dependency{{Name: "fixture-tool", Description: "Optional fixture helper; echo remains available without it.", Version: "v1.0.0"}},
 		ArtifactFileStore: store, HeartbeatInterval: &interval,
 	})
 	if err != nil {

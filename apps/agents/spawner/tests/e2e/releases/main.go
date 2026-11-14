@@ -52,7 +52,7 @@ func run(ctx context.Context) error {
 		return err
 	}
 	asset := "fixture-agent_linux_" + runtime.GOARCH
-	nativeManifest := fmt.Sprintf("schema_version: 1\ntype: fixture-agent\nversion: v0.1.0\nnative:\n  linux/%s:\n    asset: %s\n    sha256: %q\n", runtime.GOARCH, asset, fmt.Sprintf("%x", hash.Sum(nil)))
+	nativeManifest := fmt.Sprintf("schema_version: 1\ntype: fixture-agent\nversion: v0.1.0\ndependencies:\n  - name: fixture-tool\n    description: Optional fixture helper; echo remains available without it.\n    version: v1.0.0\nnative:\n  linux/%s:\n    asset: %s\n    sha256: %q\n", runtime.GOARCH, asset, fmt.Sprintf("%x", hash.Sum(nil)))
 	if _, err := manifest.Parse([]byte(nativeManifest), "v0.1.0"); err != nil {
 		return err
 	}

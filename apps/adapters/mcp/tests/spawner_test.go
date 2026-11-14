@@ -21,14 +21,66 @@ import (
 func TestSpawnerRegistersAnAgentAndExecutesItsAction(t *testing.T) {
 	a := fixtures.Connect(t)
 	const reference = "github.com/defos-ai/fixture-agent@v0.1.0"
+	expectedRuntime := os.Getenv("COMMANDER_TEST_SPAWNER_RUNTIME")
+	if expectedRuntime == "" {
+		expectedRuntime = "native"
+	}
 	var provision operations.Operation
-	input := fixtures.Object{"package": "https://github.com/defos-ai/fixture-agent"}
+	input := fixtures.Object{"package": "https://github.com/defos-ai/fixture-agent@stable"}
 	a.Call("start_operation", fixtures.Object{"mission_name": "install-agent", "input": input}, &provision)
 	if provision.Preflight == nil || !provision.Preflight.Ready {
 		t.Fatalf("spawner is not ready: %+v", provision.Preflight)
 	}
 	var assigned operations.Task
-	a.Call("assign_task", fixtures.Object{"operation_id": provision.ID, "action_name": "spawn-agent", "input": input}, &assigned)
+	a.Call("assign_task", fixtures.Object{"operation_id": provision.ID, "action_name": "inspect-agent", "input": input}, &assigned)
+	inspection := waitSpawnerTask(t, a, provision.ID, assigned.ID)
+	var inspected struct {
+		Package         string              `json:"package"`
+		AgentType       string              `json:"agent_type"`
+		Version         string              `json:"version"`
+		Runtime         string              `json:"runtime"`
+		NativePlatform  string              `json:"native_platform,omitempty"`
+		NativePlatforms []string            `json:"native_platforms"`
+		DockerImage     string              `json:"docker_image,omitempty"`
+		Dependencies    []agents.Dependency `json:"dependencies"`
+	}
+	decodeSpawnOutput(t, inspection.Result.Output, &inspected)
+	wantDependencies := []agents.Dependency{{Name: "fixture-tool", Description: "Optional fixture helper; echo remains available without it.", Version: "v1.0.0"}}
+	if inspected.Package != reference || inspected.AgentType != "fixture-agent" || inspected.Version != "v0.1.0" ||
+		inspected.Runtime != expectedRuntime || !slices.Equal(inspected.Dependencies, wantDependencies) {
+		t.Fatalf("inspection lost the exact release, execution runtime or declared installation guidance: %+v", inspected)
+	}
+	if len(inspected.NativePlatforms) != 1 || inspected.NativePlatforms[0] != "linux/amd64" && inspected.NativePlatforms[0] != "linux/arm64" {
+		t.Fatalf("inspection lost the fixture's declared Linux delivery platform: %+v", inspected)
+	}
+	var inspectionFields map[string]json.RawMessage
+	if err := json.Unmarshal(inspection.Result.Output, &inspectionFields); err != nil {
+		t.Fatal(err)
+	}
+	_, hasNativePlatform := inspectionFields["native_platform"]
+	if inspected.Runtime == "native" {
+		if !hasNativePlatform || inspected.NativePlatform != inspected.NativePlatforms[0] {
+			t.Fatalf("native inspection did not identify the spawner's Linux execution environment: %+v", inspected)
+		}
+	} else if hasNativePlatform {
+		t.Fatal("container inspection inferred a native execution platform")
+	}
+	inspectionDecision := fixtures.ModelDecision(a.Wait(provision.ID, func(op fixtures.OperationDetail) bool { return fixtures.ModelDecision(op) != nil }))
+	if inspectionDecision.ID != inspection.ID {
+		t.Fatalf("installation did not retain the inspection's model continuation: %+v", inspectionDecision)
+	}
+
+	a.Resolve(provision.ID, *inspectionDecision, []fixtures.Object{{"action_name": "spawn-agent", "input": fixtures.Object{"package": inspected.Package}}})
+	continued := a.Wait(provision.ID, func(op fixtures.OperationDetail) bool { return len(op.Tasks) == 2 })
+	assigned = operations.Task{}
+	for _, task := range continued.Tasks {
+		if task.ParentTaskID == inspection.ID && task.ActionName == "spawn-agent" {
+			assigned = task
+		}
+	}
+	if assigned.ID == "" {
+		t.Fatalf("reviewing inspection did not create exactly one pinned launch: %+v", continued.Tasks)
+	}
 	spawnTask := waitSpawnerTask(t, a, provision.ID, assigned.ID)
 	var spawned struct {
 		AgentID        string           `json:"agent_id"`
@@ -76,14 +128,15 @@ func TestSpawnerRegistersAnAgentAndExecutesItsAction(t *testing.T) {
 	default:
 		t.Fatalf("unsupported fixture runtime: %q", spawned.Runtime)
 	}
-	expectedRuntime := os.Getenv("COMMANDER_TEST_SPAWNER_RUNTIME")
-	if expectedRuntime == "" {
-		expectedRuntime = "native"
-	}
 	if spawned.Runtime != expectedRuntime {
 		t.Fatalf("spawned with runtime %q, expected %q", spawned.Runtime, expectedRuntime)
 	}
 	waitFixtureAgent(t, a, spawned.AgentID)
+	var registered agents.Agent
+	a.Call("describe_agent", fixtures.Object{"agent_id": spawned.AgentID}, &registered)
+	if !slices.Equal(registered.Dependencies, inspected.Dependencies) {
+		t.Fatalf("registered dependencies differ from the inspected release: %+v", registered.Dependencies)
+	}
 	var definition actions.Action
 	a.Call("describe_action", fixtures.Object{"agent_id": spawned.AgentID, "action_name": summary.Name}, &definition)
 	if definition.Name != summary.Name || definition.Status != summary.Status || definition.Description == "" || !json.Valid(definition.InputSchema) || !json.Valid(definition.OutputSchema) {
