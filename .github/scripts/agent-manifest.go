@@ -46,6 +46,7 @@ func generate(agent, version, digest, artifacts, output string) error {
 	var descriptions []manifest.Action
 	if agent == "builder" {
 		definition.Responsibilities = builder.Responsibilities()
+		definition.Dependencies = builder.Dependencies()
 		descriptions = builder.ActionDescriptions()
 	} else {
 		definition.Responsibilities = spawner.Responsibilities()

@@ -11,6 +11,14 @@ Read the [agent guide](../AGENTS.md) and [root guide](../../../AGENTS.md) first.
   `AgentConfig` together. Custom actions/providers remain caller-owned; default
   actions cannot use an unrelated provider. Keep catalog construction here;
   individual action constructors belong in `actions/`.
+- `Dependencies()` returns fresh software declarations for both live registration
+  and the built-in release manifest generator. Default `AgentConfig.Dependencies`
+  only when nil; preserve explicit empty/custom declarations. Keep `git`, `go`
+  and `codex` aligned with action discovery's exact executable requirement names.
+  Go's `1.26.7+` is installation guidance; do not claim installed-version checks
+  or invent version ranges for Git/Codex. Node/npm are image build tools, not
+  Builder runtime requirements. Missing software continues to gate only the
+  actions that need it; metadata must not change discovery or managed secrets.
 - [cli](cli/) owns host configuration, provider factories and lifecycle.
   `--workspace-dir` overrides `BUILDER_WORKSPACE_DIR`; the default is
   `state/builder-workspaces`. Providers follow the example-agent template's conventions.

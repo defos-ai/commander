@@ -41,6 +41,7 @@ func TestCIAgentManifestGeneration(t *testing.T) {
 				SchemaVersion    int `yaml:"schema_version"`
 				Type, Version    string
 				Responsibilities []string
+				Dependencies     []struct{ Name, Description, Version string }
 				Actions          []struct{ Name, Description string }
 				Docker           struct{ Image string }
 				Native           map[string]struct{ Asset, SHA256 string }
@@ -57,6 +58,30 @@ func TestCIAgentManifestGeneration(t *testing.T) {
 			for _, responsibility := range definition.Responsibilities {
 				if strings.TrimSpace(responsibility) == "" {
 					t.Error("manifest contains a blank responsibility")
+				}
+			}
+			if name == "builder" {
+				wantDependencies := map[string]string{"git": "", "go": "1.26.7+", "codex": ""}
+				if len(definition.Dependencies) != len(wantDependencies) {
+					t.Fatalf("builder manifest dependencies = %+v, want Git, Go and Codex installation guidance", definition.Dependencies)
+				}
+				for _, dependency := range definition.Dependencies {
+					version, found := wantDependencies[dependency.Name]
+					if !found || strings.TrimSpace(dependency.Description) == "" || dependency.Version != version {
+						t.Errorf("builder manifest dependency lacks its tool name, description or supported version guidance: %+v", dependency)
+					}
+					delete(wantDependencies, dependency.Name)
+				}
+				if len(wantDependencies) != 0 {
+					t.Errorf("builder manifest omitted declared tools: %+v", wantDependencies)
+				}
+			} else {
+				var fields map[string]any
+				if err := yaml.Unmarshal(data, &fields); err != nil {
+					t.Fatal(err)
+				}
+				if _, found := fields["dependencies"]; found {
+					t.Fatal("spawner manifest must omit undeclared dependencies")
 				}
 			}
 			wantActions := map[string]bool{"spawn-agent": true, "inspect-agent": true}

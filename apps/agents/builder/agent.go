@@ -8,11 +8,20 @@ import (
 	"github.com/defos-ai/commander/framework/agent"
 	"github.com/defos-ai/commander/framework/agent/action"
 	"github.com/defos-ai/commander/framework/agent/manifest"
+	agentmodel "github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/artifacts"
 	"github.com/defos-ai/commander/framework/domain/sessions"
 )
 
 const AgentType agent.AgentType = "builder-agent"
+
+func Dependencies() []agentmodel.Dependency {
+	return []agentmodel.Dependency{
+		{Name: "git", Description: "Git CLI for checking out the agent template and publishing generated source."},
+		{Name: "go", Description: "Go toolchain for testing and building generated agents and validating their releases.", Version: "1.26.7+"},
+		{Name: "codex", Description: "OpenAI Codex CLI for implementing generated agents from the requested action contracts."},
+	}
+}
 
 func Responsibilities() []string {
 	return []string{
@@ -28,6 +37,9 @@ func NewAgent(config agent.AgentConfig, workspaceDir string) (*agent.Agent, erro
 	config.Type = AgentType
 	if config.Responsibilities == nil {
 		config.Responsibilities = Responsibilities()
+	}
+	if config.Dependencies == nil {
+		config.Dependencies = Dependencies()
 	}
 	if config.Actions == nil {
 		if config.Sessions != nil {

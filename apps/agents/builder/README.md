@@ -18,11 +18,15 @@ docker compose --profile builder up --build --wait
 
 Its image includes Git, Go and Codex CLI. All-in-one starts only spawner.
 
-For a separate native builder, install those tools and use Go 1.26.7+:
+For a separate native builder, put Git, Go 1.26.7+ and Codex CLI on its executable
+search path:
 
 ```sh
 go run ./apps/agents/builder/cmd
 ```
+
+Spawner's `inspect-agent` reports these prerequisites before launching a released
+Builder. After launch, check its action readiness in Admin for missing tools or secrets.
 
 Use the [controller's](../../controllers/README.md#quick-start) `BUS_URL` and
 `STORAGE_URL`. For other flags, run the command with `--help`.
