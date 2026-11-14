@@ -18,6 +18,9 @@ them alongside its observed action readiness after launch.
   pass its returned exact package reference to `spawn-agent`. Local API/MCP
   integration scenarios cover inspection, continuation, pinned launch and the
   registered dependency metadata.
+- Upgrade indirect OpenTelemetry API modules in Spawner and Playground to
+  v1.47.0, fixing the attribute-length-limit bypass for valid Unicode replacement
+  characters. See the [upstream fix](https://github.com/open-telemetry/opentelemetry-go/releases/tag/v1.47.0).
 
 ### Upgrading from v0.5.1
 
@@ -66,6 +69,8 @@ Package: `github.com/defos-ai/commander/apps/agents/builder@v0.6.0`
   its own execution.
 - Align module requirements with Commander v0.6.0. Restart the spawner to expose
   both actions and reconnect clients that cache the action catalog.
+- Upgrade the Docker client's indirect OpenTelemetry APIs to v1.47.0
+  for the attribute-length-limit security fix; retain the current Docker SDK.
 
 Package: `github.com/defos-ai/commander/apps/agents/spawner@v0.6.0`
 
