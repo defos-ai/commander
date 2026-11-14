@@ -10,6 +10,16 @@ import (
 )
 
 func RegisterOpenAPI(paths, components map[string]any, options *jsonschema.ForOptions) error {
+	dependencyType := reflect.TypeFor[models.AgentDependencyResponse]()
+	dependency, err := jsonschema.ForType(dependencyType, options)
+	if err != nil {
+		return fmt.Errorf("describe API AgentDependency: %w", err)
+	}
+	dependency.Properties["name"].Description = "Software name; matches executable missing_requirements by exact name."
+	dependency.Properties["description"].Description = "Installation guidance for the agent's execution host."
+	dependency.Properties["version"].Description = "Optional supported version or range, declared by the agent. This is not an installed-version observation."
+	components["AgentDependency"] = dependency
+	options.TypeSchemas[dependencyType] = dependency
 	typeOf := reflect.TypeFor[models.AgentResponse]()
 	schema, err := jsonschema.ForType(typeOf, options)
 	if err != nil {
@@ -18,6 +28,7 @@ func RegisterOpenAPI(paths, components map[string]any, options *jsonschema.ForOp
 	schema.Properties["status"].Description = "Observed agent state. A stale lease is reported as unavailable unless the agent has stopped."
 	schema.Properties["stale"].Description = "Whether the heartbeat lease has expired at query time."
 	schema.Properties["work"].Description = "Current execution identifiers and action name; absent when no work is reported."
+	schema.Properties["dependencies"].Description = "Optional external-software installation guidance. Match missing requirements of kind executable by exact name. Declarations do not establish readiness or enforce versions."
 	components["Agent"] = schema
 	options.TypeSchemas[typeOf] = schema
 	registerAgentPaths(paths)

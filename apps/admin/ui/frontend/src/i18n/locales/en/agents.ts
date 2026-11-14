@@ -63,6 +63,10 @@ export default {
   actions: 'Reported actions',
   actionsDescription: 'Readiness reported by this agent, including missing dependencies.',
   noActions: 'No actions reported.',
+  dependencies: 'Dependencies',
+  dependenciesDescription: 'Declared software and supported versions. Action readiness shows current availability.',
+  noDependencies: 'No dependencies declared.',
+  dependencyVersion: 'Supported version: {{version}}',
   missingRequirements: 'Missing requirements',
   sensitive: 'Sensitive configuration',
   requirementKinds: {

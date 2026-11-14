@@ -123,6 +123,10 @@
   from client cancellation.
 - Project agent/controller lease expiry when reading without rewriting saved
   records. Keep tasks/events paginated and reports immutable.
+- Agent list/detail responses explicitly map optional dependency installation
+  guidance into independent DTOs. Match only executable missing requirements by
+  exact dependency name. Version declarations do not verify installed versions or
+  readiness; keep secret/configuration requirements separate.
 - Operation preflight preserves the controller's saved `agent_type` and
   `missing_requirements` metadata. Requirements with `kind: secret` identify
   managed declarations for assessed live candidates, not sensitive host

@@ -62,6 +62,11 @@
   upstream; reject structural traversal and keep other route checks intact.
 - Do not automatically retry mutating commands after timeouts. Query the operation
   to inspect its outcome. Update TypeScript response validation with API changes.
+- Agent details show declared software dependencies and optional supported versions
+  independently of action readiness. Inline guidance matches only executable
+  missing requirements by exact name. Omitted/empty declarations mean none were
+  reported, not proof that the agent needs no software. Render metadata as text;
+  declarations do not establish installation or successful version checks.
 - **Sessions** lists retained runtime resources through authenticated `/api/v1/sessions`
   and ID detail reads. Keep scope/owner filters in the route across history and
   reload. Link agent details by exact owner and task details by typed session

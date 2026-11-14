@@ -54,6 +54,12 @@ export interface ActionRequirement {
   sensitive?: boolean;
 }
 
+export interface AgentDependency {
+  name: string;
+  description: string;
+  version?: string;
+}
+
 export interface Agent {
   id: string;
   type: string;
@@ -61,6 +67,7 @@ export interface Agent {
   work?: AgentWork | null;
   server: { ip_address: string; hostname: string };
   responsibilities: string[] | null;
+  dependencies?: AgentDependency[];
   actions: Action[] | null;
   discovery_scope: { paths: string[] | null; services: string[] | null } | null;
   config: unknown;

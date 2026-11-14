@@ -24,6 +24,11 @@ func ToAgentResponse(agent agents.Agent) models.AgentResponse {
 		LeaseExpiresAt:   agent.LeaseExpiresAt,
 		Stale:            agent.Stale,
 	}
+	for _, dependency := range agent.Dependencies {
+		response.Dependencies = append(response.Dependencies, models.AgentDependencyResponse{
+			Name: dependency.Name, Description: dependency.Description, Version: dependency.Version,
+		})
+	}
 	if agent.Work != nil {
 		response.Work = &models.AgentWorkResponse{
 			OperationID:         agent.Work.OperationID,

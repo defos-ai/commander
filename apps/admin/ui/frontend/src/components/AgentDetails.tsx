@@ -1,4 +1,4 @@
-import type { Agent } from '../api/types';
+import type { Agent, AgentDependency } from '../api/types';
 import { useTranslation } from '../i18n';
 import { ActionStatus } from './ActionDetails';
 
@@ -22,6 +22,14 @@ function Labels({ values }: { values: string[] | null | undefined }) {
   const { t } = useTranslation();
   return values?.length ? <ul className="catalog-tags">{values.map((value, index) => <li key={`${index}:${value}`}>{value}</li>)}</ul>
     : <p className="catalog-muted">{t($ => $.agents.notReported)}</p>;
+}
+
+function DependencyGuidance({ dependency }: { dependency: AgentDependency }) {
+  const { t } = useTranslation();
+  return <>
+    <p>{dependency.description}</p>
+    {dependency.version && <p className="catalog-muted">{t($ => $.agents.dependencyVersion, { version: dependency.version })}</p>}
+  </>;
 }
 
 export function AgentDetails({ agent }: { agent: Agent }) {
@@ -57,13 +65,23 @@ export function AgentDetails({ agent }: { agent: Agent }) {
           {Boolean(action.missing_requirements?.length) && <div><h3>{t($ => $.agents.missingRequirements)}</h3>
             <ul className="catalog-tags">{action.missing_requirements?.map((requirement, index) => {
               const kind = requirement.kind;
+              const dependency = kind === 'executable' ? agent.dependencies?.find(item => item.name === requirement.name) : undefined;
               return <li key={`${index}:${kind}:${requirement.name}`}>
               {kind === 'executable' || kind === 'configuration' || kind === 'secret' ? t($ => $.agents.requirementKinds[kind]) : kind}: <code>{requirement.name}</code>
               {kind === 'configuration' && requirement.sensitive && <> · {t($ => $.agents.sensitive)}</>}
+              {dependency && <DependencyGuidance dependency={dependency} />}
             </li>; })}</ul>
           </div>}
         </details>
       </li>)}</ul> : <p className="catalog-muted">{t($ => $.agents.noActions)}</p>}
+    </section>
+    <section className="catalog-section" aria-label={t($ => $.agents.dependencies)}>
+      <h2>{t($ => $.agents.dependencies)}</h2>
+      <p className="catalog-muted">{t($ => $.agents.dependenciesDescription)}</p>
+      {agent.dependencies?.length ? <ul className="agent-dependency-list">{agent.dependencies.map(dependency => <li key={dependency.name}>
+        <h3><code>{dependency.name}</code></h3>
+        <DependencyGuidance dependency={dependency} />
+      </li>)}</ul> : <p className="catalog-muted">{t($ => $.agents.noDependencies)}</p>}
     </section>
     <section className="catalog-section"><h2>{t($ => $.agents.responsibilities)}</h2><Labels values={agent.responsibilities} /></section>
   </div>;

@@ -10,6 +10,7 @@ import (
 	missionsmcp "github.com/defos-ai/commander/apps/adapters/mcp"
 	"github.com/defos-ai/commander/framework/agent/packages"
 	"github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/domain/missions/policies"
 	operationfakes "github.com/defos-ai/commander/framework/tests/fakes/operation"
@@ -35,6 +36,12 @@ func HostMission() missions.Mission {
 }
 
 func Host(t *testing.T) *Client {
+	t.Helper()
+	client, _ := HostWithInventory(t)
+	return client
+}
+
+func HostWithInventory(t *testing.T) (*Client, agents.AgentStore) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	t.Cleanup(cancel)
@@ -79,7 +86,7 @@ func Host(t *testing.T) *Client {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { session.Close() })
-	return &Client{t: t, Context: ctx, Session: session}
+	return &Client{t: t, Context: ctx, Session: session}, config.AgentStore
 }
 
 func hostStore[T any](t *testing.T, root string, open func(string) (T, error)) T {

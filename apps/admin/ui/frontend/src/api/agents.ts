@@ -1,7 +1,7 @@
 import type { Session } from '../connections/types';
 import { isAction, isActionRequirement } from './actions';
 import { ApiError, getJSON } from './client';
-import type { Agent, AgentWork } from './types';
+import type { Agent, AgentDependency, AgentWork } from './types';
 import { encodeIdentifier, isIdentifier, isNullableStringArray, isObject, isOptionalString } from './validation';
 
 function isWork(value: unknown): value is AgentWork {
@@ -16,12 +16,18 @@ function isTimestamp(value: unknown): value is string {
   return typeof value === 'string' && Number.isFinite(Date.parse(value));
 }
 
+function isDependency(value: unknown): value is AgentDependency {
+  return isObject(value) && typeof value.name === 'string' && typeof value.description === 'string' &&
+    isOptionalString(value.version);
+}
+
 function isAgent(value: unknown): value is Agent {
   return isObject(value) && isIdentifier(value.id) && typeof value.type === 'string' &&
     typeof value.status === 'string' && typeof value.stale === 'boolean' &&
     (value.work === undefined || value.work === null || isWork(value.work)) &&
     isObject(value.server) && typeof value.server.ip_address === 'string' && typeof value.server.hostname === 'string' &&
     isNullableStringArray(value.responsibilities) &&
+    (value.dependencies === undefined || (Array.isArray(value.dependencies) && value.dependencies.every(isDependency))) &&
     (value.actions === null || (Array.isArray(value.actions) && value.actions.every(isAction))) &&
     (value.discovery_scope === null || (isObject(value.discovery_scope) &&
       isNullableStringArray(value.discovery_scope.paths) && isNullableStringArray(value.discovery_scope.services))) &&

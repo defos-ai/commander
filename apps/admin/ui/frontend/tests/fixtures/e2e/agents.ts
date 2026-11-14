@@ -1,0 +1,30 @@
+import type { Agent } from '../../../src/api/types';
+import type { AgentDependencySnapshots } from '../../fakes/agent-dependencies';
+
+export function agentDependencySnapshots(agent: Agent, legacy: Agent): AgentDependencySnapshots {
+  const action = agent.actions?.[0];
+  if (!action) throw new Error('Agent dependency browser fixture needs a reported action.');
+  const blockedAction = {
+    ...action, status: 'unavailable', status_reason: 'Host prerequisites are missing.',
+    required_secrets: [...new Set([...(action.required_secrets ?? []), 'fixture-runtime'])],
+    missing_requirements: [
+      { kind: 'executable', name: 'fixture-runtime' },
+      { kind: 'configuration', name: 'fixture-runtime' },
+      { kind: 'secret', name: 'fixture-runtime' },
+      { kind: 'executable', name: 'Fixture-runtime' },
+    ],
+  };
+  const blocked: Agent = {
+    ...agent,
+    dependencies: [
+      { name: 'fixture-runtime', description: 'Install the runtime for this host platform.', version: 'v1.2.3' },
+      { name: 'helper-runtime', description: 'Auxiliary software used by optional actions.' },
+    ],
+    actions: [blockedAction, ...agent.actions!.slice(1)],
+  };
+  return {
+    blocked,
+    ready: { ...blocked, actions: [{ ...blockedAction, status: 'ready', status_reason: undefined, missing_requirements: [] }, ...agent.actions!.slice(1)] },
+    legacy: { ...legacy, dependencies: undefined },
+  };
+}

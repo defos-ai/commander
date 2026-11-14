@@ -13,6 +13,7 @@ type AgentResponse struct {
 	Work             *AgentWorkResponse           `json:"work,omitempty"`
 	Server           AgentServerResponse          `json:"server"`
 	Responsibilities []string                     `json:"responsibilities"`
+	Dependencies     []AgentDependencyResponse    `json:"dependencies,omitempty"`
 	Actions          []ActionResponse             `json:"actions"`
 	DiscoveryScope   *AgentDiscoveryScopeResponse `json:"discovery_scope"`
 	Config           json.RawMessage              `json:"config"`
@@ -21,6 +22,12 @@ type AgentResponse struct {
 	LastHeartbeat    time.Time                    `json:"last_heartbeat"`
 	LeaseExpiresAt   time.Time                    `json:"lease_expires_at,omitzero"`
 	Stale            bool                         `json:"stale"`
+}
+
+type AgentDependencyResponse struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Version     string `json:"version,omitempty"`
 }
 
 type AgentWorkResponse struct {

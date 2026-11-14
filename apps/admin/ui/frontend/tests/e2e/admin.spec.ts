@@ -5,6 +5,8 @@ import type { Operation, OperationQuestion, OperationTask } from '../../src/api/
 import type { Report } from '../../src/api/reports';
 import type { Action, Agent, Mission } from '../../src/api/types';
 import { connect, password, publicAPIURL, startOperation, storyBatch, test, username } from '../fixtures/e2e';
+import { agentDependencySnapshots } from '../fixtures/e2e/agents';
+import { AgentDependencyResponses } from '../fakes/agent-dependencies';
 
 test('Playground operation links survive sign-in, reload and explicit API selection', async ({ page, api }) => {
   const operation = await api.post<{ id: string }>('/operations', {
@@ -263,6 +265,49 @@ test('custom-port API catalogs survive navigation and restore server sign-in acr
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   expect(browserRequests.every(request => !request.authorization)).toBe(true);
   expect(browserRequests.filter(request => new URL(request.url).pathname.startsWith('/api/'))).toEqual([]);
+});
+
+test('agent dependencies explain missing executables and remain after readiness refresh', async ({ page, api }) => {
+  const agents = (await api.get<{ items: Agent[] }>('/agents')).items.filter(agent => agent.type === 'example-agent');
+  expect(agents).toHaveLength(2);
+  const snapshots = agentDependencySnapshots(agents[0], agents[1]);
+  const responses = new AgentDependencyResponses(snapshots);
+  await page.route(url => url.pathname === '/ui/proxy' && url.searchParams.get('url') === publicAPIURL
+    && /^\/api\/v1\/agents(?:\/|$)/.test(url.searchParams.get('path') ?? ''), responses.handle);
+
+  await connect(page, { name: 'Dependency guidance API', url: publicAPIURL });
+  await page.getByRole('navigation', { name: 'Workspace navigation' }).getByRole('button', { name: 'Agents', exact: true }).click();
+  await page.getByRole('button', { name: `View agent ${snapshots.blocked.id}`, exact: true }).click();
+
+  const dependencies = page.getByRole('region', { name: 'Dependencies', exact: true });
+  await expect(dependencies.getByText('Declared software and supported versions. Action readiness shows current availability.', { exact: true })).toBeVisible();
+  await expect(dependencies.getByRole('listitem')).toHaveCount(2);
+  await expect(dependencies.getByText('fixture-runtime', { exact: true })).toBeVisible();
+  await expect(dependencies.getByText('Install the runtime for this host platform.', { exact: true })).toBeVisible();
+  await expect(dependencies.getByText('helper-runtime', { exact: true })).toBeVisible();
+  await expect(dependencies.getByText(/^Supported version:/)).toHaveText(['Supported version: v1.2.3']);
+  const action = page.locator('details.agent-action').filter({ has: page.getByText(snapshots.blocked.actions![0].name, { exact: true }) });
+  await action.locator('summary').click();
+  const executable = action.getByRole('listitem').filter({ hasText: /Executable:\s*fixture-runtime/ });
+  await expect(executable.getByText('Install the runtime for this host platform.', { exact: true })).toBeVisible();
+  await expect(executable.getByText('Supported version: v1.2.3', { exact: true })).toBeVisible();
+  for (const label of [/Configuration:\s*fixture-runtime/, /Secret:\s*fixture-runtime/, /Executable:\s*Fixture-runtime/]) {
+    const requirement = action.getByRole('listitem').filter({ hasText: label });
+    await expect(requirement).toHaveCount(1);
+    await expect(requirement.getByText('Install the runtime for this host platform.', { exact: true })).toHaveCount(0);
+  }
+
+  responses.restore();
+  await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+
+  await expect(action.getByText('Ready', { exact: true })).toBeVisible();
+  await expect(action.getByRole('heading', { name: 'Missing requirements', exact: true })).toHaveCount(0);
+  await expect(dependencies.getByRole('listitem')).toHaveCount(2);
+  await expect(dependencies.getByText('Supported version: v1.2.3', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'All agents', exact: true }).click();
+  await page.getByRole('button', { name: `View agent ${snapshots.legacy.id}`, exact: true }).click();
+  await expect(dependencies.getByText('No dependencies declared.', { exact: true })).toBeVisible();
+  await expect(dependencies.getByRole('list')).toHaveCount(0);
 });
 
 test('operation questions, automatic work, graph and downloads use the real stack', async ({ page, api }) => {

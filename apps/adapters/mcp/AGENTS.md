@@ -26,6 +26,13 @@ fetch during startup or accept source URLs/credentials as tool input. Reads are
 bounded, and remote failures stay tool-local without exposing response bodies or
 connection details. Source discovery grants no permissions and stores no state.
 
+`describe_agent` preserves optional dependency declarations from saved inventory;
+`list_agents` omits them to keep discovery compact. Match only executable
+`missing_requirements` to dependency names exactly. Declarations and version hints
+do not establish installed software or action readiness. Keep secret/configuration
+handoffs separate and leave release inspection and installation to their existing
+boundaries.
+
 Question fallback is available to every MCP client through the same
 `ask_question`, `get_operation` and `answer_question` tools. Clients schedule their
 own fresh read at or after saved `fallback_at`; crossing it emits no durable event.
