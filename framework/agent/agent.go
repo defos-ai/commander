@@ -9,6 +9,7 @@ import (
 	"github.com/defos-ai/commander/framework/domain/sessions"
 	"io"
 	"log/slog"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -18,6 +19,7 @@ import (
 	"github.com/defos-ai/commander/framework/agent/environment"
 	"github.com/defos-ai/commander/framework/domain"
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
+	agentmodel "github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/artifacts"
 	"github.com/defos-ai/commander/framework/id"
 )
@@ -30,6 +32,7 @@ type AgentConfig struct {
 	// and SERVER_HOSTNAME, then local discovery, once at construction.
 	Server            ServerInfo
 	Responsibilities  []string
+	Dependencies      []agentmodel.Dependency
 	Actions           []action.Executor
 	PublicConfig      json.RawMessage
 	Environment       environment.Environment
@@ -90,6 +93,9 @@ func NewAgent(config AgentConfig) (*Agent, error) {
 		return nil, errors.New("heartbeat interval must not be negative")
 	}
 	config.HeartbeatInterval = nil
+	if err := agentmodel.ValidateDependencies(config.Dependencies); err != nil {
+		return nil, err
+	}
 	seen := make(map[string]bool)
 	for _, t := range config.Actions {
 		if t == nil {
@@ -122,6 +128,7 @@ func NewAgent(config AgentConfig) (*Agent, error) {
 	}
 	config.Actions = append([]action.Executor(nil), config.Actions...)
 	config.Responsibilities = append([]string(nil), config.Responsibilities...)
+	config.Dependencies = slices.Clone(config.Dependencies)
 	config.PublicConfig = append(json.RawMessage(nil), config.PublicConfig...)
 	secretRuntime, err := newSecretRuntime(config.Secrets, config.ID, string(config.Type), config.Actions)
 	if err != nil {
@@ -150,6 +157,7 @@ func (a *Agent) Describe() AgentSnapshot {
 		Work:             state.work.Clone(),
 		Server:           a.config.Server,
 		Responsibilities: append([]string(nil), a.config.Responsibilities...),
+		Dependencies:     slices.Clone(a.config.Dependencies),
 		DiscoveryScope:   state.scope.Clone(), Config: append(json.RawMessage(nil), a.config.PublicConfig...),
 		Actions: make([]actionmodel.Action, 0, len(a.config.Actions)),
 	}

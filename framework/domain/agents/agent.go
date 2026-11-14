@@ -50,6 +50,7 @@ func (record Agent) Clone() Agent {
 	record.Sessions = sessions.CloneAll(record.Sessions)
 	record.Work = record.Work.Clone()
 	record.Responsibilities = slices.Clone(record.Responsibilities)
+	record.Dependencies = slices.Clone(record.Dependencies)
 	if record.DiscoveryScope != nil {
 		scope := *record.DiscoveryScope
 		scope.Paths = slices.Clone(scope.Paths)

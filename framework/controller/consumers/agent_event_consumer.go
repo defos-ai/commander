@@ -177,6 +177,9 @@ func descriptionReply(message messages.Message) (agentmodel.AgentSnapshot, error
 	default:
 		return agentmodel.AgentSnapshot{}, errors.New("agent description has an invalid status")
 	}
+	if err := agentmodel.ValidateDependencies(description.Dependencies); err != nil {
+		return agentmodel.AgentSnapshot{}, err
+	}
 	sessionIDs := map[string]bool{}
 	for _, item := range description.Sessions {
 		if err := item.Validate(); err != nil {

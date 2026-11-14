@@ -30,6 +30,7 @@ The [Agent], [Controller], [Operation worker], [Queries], [Secret service] and
 | --- | --- | --- |
 | [`AgentSnapshot`](agents/agent_snapshot.go) | Advertises an instance's identity, responsibilities, capabilities, sessions and current work. | Agent state publishing, Controller registration and heartbeat consumers. |
 | [`Agent`](agents/agent.go) | Retains received inventory plus controller-owned observation times, heartbeat lease and derived freshness. | Controller selection, Operation worker preflight, Session coordinator, Queries, Adapters. |
+| [`Dependency`](agents/dependency.go) | Describes external software and supported versions; executable requirements link to this installation guidance by name. | Agent configuration, advertised snapshots and Controller inventory. |
 | [`Work`](agents/agent_snapshot.go) | Correlates current action activity and managed-secret waits with a saved assignment. | Agent runtime, Controller observations, operation requirement queries. |
 | [`DiscoveryScope`](agents/discovery_scope.go) | Constrains executable search locations and named services during discovery. | Discovery commands, agent environments, inventory snapshots. |
 | [`ServerInfo`](agents/server_info.go) | Identifies the agent's host or container network namespace. | Host discovery, registration, inventory queries and Adapters. |

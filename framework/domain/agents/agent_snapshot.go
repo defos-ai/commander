@@ -50,6 +50,7 @@ type AgentSnapshot struct {
 	Work             *Work                `json:"work,omitempty"`
 	Server           ServerInfo           `json:"server"`
 	Responsibilities []string             `json:"responsibilities"`
+	Dependencies     []Dependency         `json:"dependencies,omitempty"`
 	Actions          []actionmodel.Action `json:"actions"`
 	DiscoveryScope   *DiscoveryScope      `json:"discovery_scope"`
 	Config           json.RawMessage      `json:"config"`

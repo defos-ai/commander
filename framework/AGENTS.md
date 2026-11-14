@@ -425,6 +425,14 @@
 - Discover executables and configuration through [`Environment`](agent/environment/environment.go).
   Missing requirements make only the affected action unavailable. Advertise
   secret names, never values, and recheck configuration during execution.
+- Optional `AgentConfig.Dependencies` advertises external-software installation
+  guidance through agent snapshots. Names/descriptions are required trimmed UTF-8
+  text; version guidance is optional. Keep at most 100 unique exact names and
+  clone the slice at configuration, description and inventory boundaries. Validate
+  declarations at construction and controller ingress. `AgentSnapshot.DependencyFor`
+  matches only executable requirements by exact name; secrets/configuration do not
+  match software declarations. Dependencies neither gate every action nor enforce
+  installed versions; action discovery still owns readiness checks.
 - `Action.RequiredSecrets` declares names even when discovery succeeds;
   `MissingRequirements` describes only current blockers. Requirement kind `secret`
   identifies managed secrets; the `Sensitive` flag on `configuration` identifies
