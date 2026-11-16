@@ -8,18 +8,18 @@ Build, connect, orchestrate, and govern distributed AI agents across complex mis
 
 Run missions and operations lasting months, orchestrating agents with different models and levels of intelligence.
 
-What are the use cases for Commander? [Ask ChatGPT](https://chatgpt.com/?q=What%20are%20the%20use%20cases%20for%20defos-ai/commander?)
+What are the use cases for Commander? <a href="https://chatgpt.com/?q=What%20are%20the%20use%20cases%20for%20defos-ai/commander?" target="_blank" rel="noopener noreferrer">Ask ChatGPT</a>
 
 ## Quick start
-
-Follow [Installation](docs/installation.md) for native setup, or
-[Deployment](docs/deployment.md) for Containers, Compose and Kubernetes.
 
 Ask your coding agent:
 
 > Install Commander (`defos-ai/commander`) and connect it to this coding agent using `commander start` and `commander setup --json`. Show me the setup plan for approval, then verify the installation and suggest how Commander can help with my work and projects.
 
-Or open Playground, choose a model, enter its API key, and ask:
+For manual setup, follow [Installation](docs/installation.md), or
+[Deployment](docs/deployment.md) for containers, Docker Compose, and Kubernetes.
+
+Then open Playground, choose a model, enter its API key, and ask:
 
 > Create a Hacker News digest
 
@@ -27,6 +27,4 @@ The demo installs `example` agent, saves a topic-focused reading list as Markdow
 
 ## Learn more
 
-[Documentation](docs/README.md) · [Use cases](docs/use-cases.md) · [Releases](docs/releases/README.md) · [Contributing](CONTRIBUTING.md)
-
-[Security](SECURITY.md) · [Code of Conduct](CODE_OF_CONDUCT.md) · [AGPL-3.0-only](LICENSE)
+[Documentation](docs/README.md) · [Use cases](docs/use-cases.md) · [Releases](docs/releases/README.md) · [Contributing](CONTRIBUTING.md) [Security](SECURITY.md) · [Code of Conduct](CODE_OF_CONDUCT.md) · [AGPL-3.0-only](LICENSE)
