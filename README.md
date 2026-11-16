@@ -27,4 +27,4 @@ The demo installs `example` agent, saves a topic-focused reading list as Markdow
 
 ## Learn more
 
-[Documentation](docs/README.md) · [Use cases](docs/use-cases.md) · [Releases](docs/releases/README.md) · [Contributing](CONTRIBUTING.md) [Security](SECURITY.md) · [Code of Conduct](CODE_OF_CONDUCT.md) · [AGPL-3.0-only](LICENSE)
+[Documentation](docs/README.md) · [Use cases](docs/use-cases.md) · [Releases](docs/releases/README.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Code of Conduct](CODE_OF_CONDUCT.md) · [AGPL-3.0-only](LICENSE)
