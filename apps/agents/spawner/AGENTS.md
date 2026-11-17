@@ -352,8 +352,8 @@ changes must not rename an existing launch.
   survives action cancellation; a new host requires a fresh announcement.
   `Close` cancels observers and leaves Pods/checkpoints intact. The controller
   decides graceful stop through its existing protocol. Operators own Pod cleanup,
-  checking recorded UID and spawn ownership before removal. Draining and managed
-  termination/cleanup remain separate future features.
+  checking recorded UID and spawn ownership before removal. Stop selection and
+  draining belong to the controller; managed resource cleanup remains separate.
 - Ownership must survive spawner replacement. Keep label values within 63
   characters; put full package references and digests in annotations. Distinguish
   dynamic `commander-spawner` ownership from static infrastructure workloads.
@@ -380,6 +380,8 @@ model calls. Keep CLI tests focused on configuration and help; exercise host
 startup, registration and spawned-agent execution through API/MCP stack scenarios.
 Strict manifest contract tests live in the framework's tests.
 Keep the child executable fixture under tests for native runtime edge cases.
+Keep its reported package version aligned with the local release manifest;
+the API/MCP install scenarios verify that version through agent readback.
 Use fake Engine/HTTP transports for Docker outcomes and safety checks; keep live
 Docker resource lifecycle in external setup, outside Go tests.
 

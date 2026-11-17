@@ -134,6 +134,9 @@ func TestSpawnerRegistersAnAgentAndExecutesItsAction(t *testing.T) {
 	waitFixtureAgent(t, a, spawned.AgentID)
 	var registered agents.Agent
 	a.Call("describe_agent", fixtures.Object{"agent_id": spawned.AgentID}, &registered)
+	if registered.Version != inspected.Version {
+		t.Fatalf("running agent version differs from the inspected release: got %q, want %q", registered.Version, inspected.Version)
+	}
 	if !slices.Equal(registered.Dependencies, inspected.Dependencies) {
 		t.Fatalf("registered dependencies differ from the inspected release: %+v", registered.Dependencies)
 	}

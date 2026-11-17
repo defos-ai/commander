@@ -32,6 +32,9 @@ stable version marked Latest; it does not fall back to other tags. Each new
 installation creates an instance. Check the result and action readiness before
 starting dependent work.
 
+To upgrade a running instance, follow [stop and replace](features/agents.md#replace-an-agent),
+then install the desired pinned release in a new operation.
+
 The official [agent source list](../sources/README.md) helps discovery through
 MCP. It contains metadata, without saved trust approvals or an installation allowlist.
 

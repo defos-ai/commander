@@ -6,6 +6,7 @@ After [setting up Commander](../deployment.md), choose the workflow you need:
 | --- | --- |
 | [Missions](missions.md) | Create reusable objectives, define needed actions and configure execution policies. |
 | [Operations](operations.md) | Run a mission, inspect progress and evidence, and review or recover work. |
+| [Agents](agents.md) | Inspect versions and readiness, gracefully stop instances and install replacements. |
 | [Questions](questions.md) | Answer an operator-first question and understand model fallback. |
 | [Secrets](secrets.md) | Provide shared credentials and unblock agents without putting values in chat. |
 | [Sessions](sessions.md) | Reuse agent-owned resources and manage their lifecycle. |

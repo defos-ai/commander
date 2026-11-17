@@ -123,6 +123,9 @@ func TestSpawnedAgentExecutesOperation(t *testing.T) {
 		if result.Status == http.StatusOK {
 			agent := fixtures.Decode[models.AgentResponse](t, result, http.StatusOK)
 			if agent.ID == launched.AgentID && agent.Type == launched.AgentType && agent.Status == "ready" && !agent.Stale && slices.Equal(fixtures.ActionNames(agent.Actions), []string{"fixture-echo"}) {
+				if agent.Version != inspected.Version {
+					t.Fatalf("running agent version differs from the inspected release: got %q, want %q", agent.Version, inspected.Version)
+				}
 				if !slices.Equal(agent.Dependencies, inspected.Dependencies) {
 					t.Fatalf("registered dependencies differ from the inspected release: %+v", agent.Dependencies)
 				}

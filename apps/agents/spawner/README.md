@@ -161,13 +161,17 @@ for ownership and recovery behavior.
 
 ## Stop or replace agents
 
+Use [Admin, MCP or the HTTP API](../../../docs/features/agents.md) to request a
+graceful stop. Wait for confirmed `stopped`, then install a pinned release in a
+new operation and verify its fresh ID, reported version and action readiness.
+Stopping leaves deployment resources and restart policies under host control.
+
 - Native children stop with the spawner. In all-in-one, temporary state is
   removed on exit.
 - Docker children keep running when the spawner stops. Follow
   [scoped teardown](../../../docs/deployment.md#stopping-and-resetting-agents)
   before `docker compose down`.
-- Kubernetes Pods also survive spawner shutdown. The existing controller
-  `StopAgent` protocol requests graceful shutdown; operators remove stopped Pods
+- Kubernetes Pods also survive spawner shutdown. Operators remove stopped Pods
   after verifying the saved namespace/name/UID and spawn ownership labels.
 - Keep controller execution records while children exist. If launch status is
   uncertain, inspect the process or container before requesting a replacement.

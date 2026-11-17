@@ -8,6 +8,9 @@ operators use Commander; [README.md](README.md) is the feature index.
 - Put mission authoring and policy configuration in `missions.md`; put running,
   inspecting and settling work in `operations.md`. Questions, secrets, sessions
   and data sharing have their own guides. Avoid repeating their full workflows.
+- `agents.md` owns the operator stop-and-replace workflow. Keep package resolution
+  in `../agent-packages.md` and deployment teardown in `../deployment.md`;
+  reported versions, stop acceptance and confirmed shutdown remain distinct.
 - Use current `policies.continuation`, `policies.completion` and
   `policies.sharing` shapes. Session-aware actions declare `open` or `use`.
   Root open calls receive controller-assigned identities;

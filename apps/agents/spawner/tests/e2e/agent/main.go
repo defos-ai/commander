@@ -76,7 +76,7 @@ func run(ctx context.Context) (result error) {
 		executor.client.CloseIdleConnections()
 	}()
 	instance, err := agent.NewAgent(agent.AgentConfig{
-		ID: agentID, Type: agentType, Actions: []action.Executor{executor},
+		ID: agentID, Type: agentType, Version: "v0.1.0", Actions: []action.Executor{executor},
 		Dependencies:      []agents.Dependency{{Name: "fixture-tool", Description: "Optional fixture helper; echo remains available without it.", Version: "v1.0.0"}},
 		ArtifactFileStore: store, HeartbeatInterval: &interval,
 	})
