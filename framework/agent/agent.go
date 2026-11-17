@@ -28,6 +28,7 @@ type AgentConfig struct {
 	Sessions sessions.Provider
 	ID       string
 	Type     AgentType
+	Version  string
 	// Server overrides host information. Missing fields use SERVER_IP_ADDRESS
 	// and SERVER_HOSTNAME, then local discovery, once at construction.
 	Server            ServerInfo
@@ -68,6 +69,9 @@ func NewAgent(config AgentConfig) (*Agent, error) {
 	}
 	if !id.ValidType(string(config.Type)) {
 		return nil, errors.New("agent type must be valid")
+	}
+	if err := agentmodel.ValidateVersion(config.Version); err != nil {
+		return nil, err
 	}
 	if config.ID == "" {
 		var err error
@@ -153,7 +157,7 @@ func (a *Agent) ArtifactFileStore() artifacts.ArtifactFileStore {
 func (a *Agent) Describe() AgentSnapshot {
 	state := a.state.Load()
 	description := AgentSnapshot{
-		ID: a.ID(), Type: a.config.Type, Status: state.status,
+		ID: a.ID(), Type: a.config.Type, Version: a.config.Version, Status: state.status,
 		Work:             state.work.Clone(),
 		Server:           a.config.Server,
 		Responsibilities: append([]string(nil), a.config.Responsibilities...),

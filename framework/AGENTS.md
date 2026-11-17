@@ -426,6 +426,11 @@
 - Hosts accepting a preassigned agent ID from outside accept only an eight-digit
   lowercase hex suffix. `id.AgentIDFromSuffix` combines it with the host's fixed
   type; persisted IDs and `AgentConfig.ID` remain complete typed runtime IDs.
+- Optional `AgentConfig.Version` reports the agent package's own version in
+  every snapshot. Empty means unreported and is omitted from JSON; never infer it
+  from the framework or enclosing host. Validate supplied identifiers at
+  construction and controller ingress: at most 128 UTF-8 bytes, without whitespace
+  or control characters. Explicit prerelease/build identifiers remain valid.
 - Discover executables and configuration through [`Environment`](agent/environment/environment.go).
   Missing requirements make only the affected action unavailable. Advertise
   secret names, never values, and recheck configuration during execution.

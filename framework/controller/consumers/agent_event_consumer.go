@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	controllerevents "github.com/defos-ai/commander/framework/comms/clients/controller/events"
 	"github.com/defos-ai/commander/framework/comms/messages"
@@ -155,6 +156,9 @@ func (c AgentEventConsumer) observe(ctx context.Context, record agentmodel.Agent
 }
 
 func descriptionReply(message messages.Message) (agentmodel.AgentSnapshot, error) {
+	if !utf8.Valid(message.Payload) {
+		return agentmodel.AgentSnapshot{}, errors.New("agent description must be valid UTF-8 JSON")
+	}
 	var description agentmodel.AgentSnapshot
 	if err := domain.Decode(message.Payload, &description); err != nil {
 		return agentmodel.AgentSnapshot{}, err
@@ -168,6 +172,9 @@ func descriptionReply(message messages.Message) (agentmodel.AgentSnapshot, error
 	kind, ok := id.RuntimeType(description.ID, id.Agent)
 	if !ok || kind != strings.TrimSuffix(string(description.Type), "-agent") {
 		return agentmodel.AgentSnapshot{}, errors.New("agent ID must match its type")
+	}
+	if err := agentmodel.ValidateVersion(description.Version); err != nil {
+		return agentmodel.AgentSnapshot{}, err
 	}
 	if err := description.Server.Validate(); err != nil {
 		return agentmodel.AgentSnapshot{}, err

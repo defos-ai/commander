@@ -26,15 +26,26 @@ type DependencyAgent struct {
 	observedAt  time.Time
 }
 
-func NewDependencyAgent(t *testing.T, dependencies []agents.Dependency) *DependencyAgent {
+type DependencyAgentOptions struct {
+	Version string
+}
+
+func NewDependencyAgent(t *testing.T, dependencies []agents.Dependency, options ...DependencyAgentOptions) *DependencyAgent {
 	t.Helper()
+	if len(options) > 1 {
+		t.Fatal("dependency agent accepts at most one options value")
+	}
+	var version string
+	if len(options) == 1 {
+		version = options[0].Version
+	}
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	t.Cleanup(cancel)
 	fixture := &DependencyAgent{Context: ctx, Environment: &fakes.ExecutableEnvironment{},
 		Inventory: &controllerfakes.Inventory{}, bus: fakes.NewResultBus(), observedAt: time.Now().UTC().Add(-time.Second)}
 	var err error
 	fixture.Runtime, err = agent.NewAgent(agent.AgentConfig{
-		Type: "fixture", Dependencies: dependencies, Environment: fixture.Environment,
+		Type: "fixture", Version: version, Dependencies: dependencies, Environment: fixture.Environment,
 		Server:            agent.ServerInfo{IPAddress: "127.0.0.1", Hostname: "dependency-fixture"},
 		Actions:           []action.Executor{fakes.NewExecutableAction("browse", "lightpanda"), fakes.NewExecutableAction("inspect", "")},
 		ArtifactFileStore: fakes.UnusedArtifacts{},

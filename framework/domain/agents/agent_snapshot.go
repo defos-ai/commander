@@ -46,6 +46,7 @@ type AgentSnapshot struct {
 	Sessions         []sessions.Session   `json:"sessions,omitempty"`
 	ID               string               `json:"id"`
 	Type             AgentType            `json:"type"`
+	Version          string               `json:"version,omitempty"`
 	Status           AgentStatus          `json:"status"`
 	Work             *Work                `json:"work,omitempty"`
 	Server           ServerInfo           `json:"server"`

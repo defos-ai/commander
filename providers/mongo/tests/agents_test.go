@@ -22,6 +22,7 @@ func TestAgentMongoStore(t *testing.T) {
 		t.Fatal(err)
 	}
 	original := fixtures.Agent(2, time.Date(2026, 9, 30, 12, 0, 0, 123456789, time.UTC))
+	original.Version = "v1.2.3"
 	original.Status = agents.AgentWorking
 	original.Server = agents.ServerInfo{IPAddress: "2001:db8::1", Hostname: "review-pod-1"}
 	original.Responsibilities = []string{"Review websites"}
@@ -34,6 +35,7 @@ func TestAgentMongoStore(t *testing.T) {
 	original.LeaseExpiresAt = original.LastHeartbeat.Add(45 * time.Second)
 	other := original.Clone()
 	other.ID, other.Status, other.Stale = "browser-agent-00000001", agents.AgentStopped, true
+	other.Version = ""
 	other.DiscoveryScope.Paths = nil
 	items, err := catalog.List(t.Context())
 	if err != nil || items == nil || len(items) != 0 {
@@ -84,6 +86,7 @@ func TestAgentMongoStoreOrdersObservationsAcrossRestart(t *testing.T) {
 	}
 	observed := time.Date(2026, 9, 30, 12, 0, 0, 123456789, time.UTC)
 	original := fixtures.Agent(1, observed.Add(-time.Hour))
+	original.Version = "v1.2.3"
 	if err := catalog.Upsert(t.Context(), original); err != nil {
 		t.Fatal(err)
 	}
@@ -114,12 +117,17 @@ func TestAgentMongoStoreOrdersObservationsAcrossRestart(t *testing.T) {
 		}
 	}
 	updated := original.Clone()
+	updated.Version = "v1.2.4"
 	updated.ObservedAt = observed.Add(time.Nanosecond)
 	updated.LastSeen = original.LastSeen.Add(-time.Second)
 	updated.LastHeartbeat = original.LastHeartbeat.Add(-time.Second)
 	updated.Status = agents.AgentStopped
 	if err := catalog.Upsert(t.Context(), updated); err != nil {
 		t.Fatalf("strictly newer observation rejected: %v", err)
+	}
+	catalog, err = mongoagents.NewAgentMongoStore(t.Context(), database)
+	if err != nil {
+		t.Fatal(err)
 	}
 	items, err := catalog.List(t.Context())
 	if err != nil || !reflect.DeepEqual(items, []agents.Agent{updated}) {
