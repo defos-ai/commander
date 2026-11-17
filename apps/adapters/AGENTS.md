@@ -40,6 +40,19 @@
 - A client disconnect or adapter shutdown does not cancel accepted controller
   work. Do not add automatic command retries; query saved state after an uncertain
   response because repeating an assignment can create another task.
+- Agent stop controls use the separately injected `AgentCommands` capability and
+  `StopAgents` command. API `/api/v1/agents/stop` and MCP `stop_agent` accept a
+  `selector` with exact `id`, `type` and/or reported `version`; supplied criteria
+  intersect. Reject missing/empty selectors, empty/null supplied values and
+  unknown fields. Adapters validate and forward criteria; only the controller
+  captures the matching inventory once and requests stops. Do not list, match
+  or loop over targets in adapter mutation code. Preserve per-agent failures and
+  empty match results without claiming atomic success or confirmed shutdown.
+  Keep saved queries available when the command capability is absent.
+  `stop_requested` means accepted intent while previously accepted work drains;
+  only `stopped` confirms shutdown. Preserve flat stop command ID/time in API
+  readback and MCP agent details. Never infer shutdown from timeout/stale heartbeat,
+  retry controls automatically or alter host restart/deployment policy.
 
 ## MCP contracts
 

@@ -15,6 +15,8 @@ func ToAgentResponse(agent agents.Agent) models.AgentResponse {
 		Type:             string(agent.Type),
 		Version:          agent.Version,
 		Status:           string(agent.Status),
+		StopCommandID:    agent.StopCommandID,
+		StopRequestedAt:  agent.StopRequestedAt,
 		Server:           models.AgentServerResponse{IPAddress: agent.Server.IPAddress, Hostname: agent.Server.Hostname},
 		Responsibilities: slices.Clone(agent.Responsibilities),
 		Actions:          ToActionResponses(agent.Actions),
@@ -57,4 +59,16 @@ func ToAgentResponses(agents []agents.Agent) []models.AgentResponse {
 		responses[i] = ToAgentResponse(agent)
 	}
 	return responses
+}
+
+func ToAgentSelector(request models.AgentSelectorRequest) agents.Selector {
+	return agents.Selector{ID: request.ID, Type: agents.AgentType(request.Type), Version: request.Version}
+}
+
+func ToStopAgentsResponse(result agents.StopResult) models.StopAgentsResponse {
+	response := models.StopAgentsResponse{Items: ToAgentResponses(result.Agents)}
+	for _, failure := range result.Errors {
+		response.Errors = append(response.Errors, models.AgentStopErrorResponse{ID: failure.ID, Error: failure.Error})
+	}
+	return response
 }

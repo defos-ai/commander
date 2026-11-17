@@ -34,8 +34,12 @@ applies to all domain packages below this directory.
   [Agent](agents/agent.go) adds received observation and lease data. Keep agent
   type separate from exact process identity. Freshness is a read-time assessment,
   not proof that external work stopped. `AgentStopRequested` is controller-owned
-  status; observations cannot clear it. Flat stop command ID/time retain its original identity
-  survives retries and inventory expiry until a stopped observation confirms it.
+  status; observations cannot clear it. Flat stop command ID/time retain the
+  original identity through retries and inventory expiry until confirmation.
+  `agents.Selector` holds nonempty exact ID/type/version criteria combined with
+  AND; controller coordination owns inventory matching. `StopResult` distinguishes
+  accepted/confirmed agents from safe per-ID failures; it is not proof of global
+  atomicity or a persistent selection rule.
 - [Missions](missions/mission.go) are reusable definitions saved into each
   [operation](operations/operation.go). Action coverage does not automatically
   sequence tasks or act as an execution allowlist.

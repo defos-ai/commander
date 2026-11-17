@@ -33,6 +33,7 @@ type Config struct {
 	Deployment         DeploymentConfig
 	SwaggerEnabled     bool
 	Operations         controllercommands.Operations
+	AgentCommands      controllercommands.Controller
 	MissionStore       missions.MissionStore
 	OperationStore     operations.OperationStore
 	ExecutionStore     executions.ExecutionStore
@@ -69,6 +70,7 @@ func NewHandler(config Config) (http.Handler, error) {
 	endpoints.RegisterMissions(mux, config.MissionStore)
 	endpoints.RegisterActions(mux, config.ActionStore)
 	agentendpoints.Register(mux, config.AgentStore)
+	agentendpoints.RegisterCommands(mux, config.AgentCommands)
 	endpoints.RegisterSessions(mux, config.SessionStore, config.AgentStore, config.Operations)
 	endpoints.RegisterControllers(mux, config.ControllerStore)
 	endpoints.RegisterReports(mux, config.ReportStore)

@@ -35,6 +35,11 @@ including workers whose `Run` has not started. No runtime loop starts in assembl
   work but preserve active-work observation and acceptance. A successful publish
   is throttled for one heartbeat interval; only a stopped observation confirms
   shutdown. Provider read failures during uncertainty fence controller admission.
+  Selector stops capture matching IDs once inside this same owner, combine exact
+  ID/type/version filters with AND, and save each intent without publishing in
+  the acceptance loop. Return partial per-ID errors without inventing success.
+  Later agent registrations are outside that captured set. Periodic stop
+  publication shares one five-second budget for the entire reconciliation pass.
 - [Events](event/worker.go) owns the subscription and handlers. Apply observations
   inside coordination before acknowledging a delivery. Fatal observation errors
   fence admission before releasing the mailbox; rejected messages and log write

@@ -3,20 +3,100 @@ package controller_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"reflect"
 	"testing"
 	"time"
 
 	agentcommands "github.com/defos-ai/commander/framework/comms/clients/agent/commands"
+	controllercommands "github.com/defos-ai/commander/framework/comms/clients/controller/commands"
 	controllerevents "github.com/defos-ai/commander/framework/comms/clients/controller/events"
 	"github.com/defos-ai/commander/framework/comms/messages"
+	"github.com/defos-ai/commander/framework/domain"
 	"github.com/defos-ai/commander/framework/domain/actions"
 	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/id"
 	fakes "github.com/defos-ai/commander/framework/tests/fakes/controller"
 	fixtures "github.com/defos-ai/commander/framework/tests/fixtures/controller"
 )
+
+func TestControllerStopSelectorUsesOneExactMatchingInventorySnapshot(t *testing.T) {
+	fixture := fixtures.NewStoppingController(t)
+	fixture.Config.LeaseSweepInterval = time.Hour
+	first := fixtures.StopSelectionRecord("example-agent-00000001", "example-agent", "v1.0.0")
+	second := fixtures.StopSelectionRecord("example-agent-00000002", "example-agent", "v1.0.0")
+	newer := fixtures.StopSelectionRecord("example-agent-00000003", "example-agent", "v2.0.0")
+	other := fixtures.StopSelectionRecord("analyzer-agent-00000001", "analyzer-agent", "v1.0.0")
+	inventory := fakes.NewStopSelectionInventory(second, other, newer, first)
+	fixture.Config.AgentStore = inventory
+	c := fixture.Start(t)
+	client := fixture.CommandClient(t)
+
+	selected, err := client.StopAgents(fixture.Context, agents.Selector{Type: "example-agent", Version: "v1.0.0"})
+
+	if err != nil || selected.Validate() != nil || len(selected.Agents) != 2 || len(selected.Errors) != 0 ||
+		selected.Agents[0].ID != first.ID || selected.Agents[1].ID != second.ID {
+		t.Fatalf("controller did not apply exact AND criteria in stable order: %+v, %v", selected, err)
+	}
+	for _, stopped := range selected.Agents {
+		if stopped.Status != agents.AgentStopRequested {
+			t.Fatalf("batch acceptance claimed shutdown: %+v", stopped)
+		}
+	}
+	for _, untouched := range []agents.Agent{newer, other} {
+		saved, err := inventory.Get(fixture.Context, untouched.ID)
+		if err != nil || saved.Status != agents.AgentReady || saved.StopCommandID != "" {
+			t.Fatalf("selector stopped a nonmatching agent: %+v, %v", saved, err)
+		}
+	}
+	empty, err := c.StopAgents(fixture.Context, agents.Selector{ID: first.ID, Version: "v2.0.0"})
+	if err != nil || empty.Validate() != nil || len(empty.Agents) != 0 || len(empty.Errors) != 0 {
+		t.Fatalf("nonmatching selector was not an explicit empty result: %+v, %v", empty, err)
+	}
+	repeated, err := c.StopAgents(fixture.Context, agents.Selector{ID: first.ID, Type: first.Type, Version: first.Version})
+	if err != nil || len(repeated.Agents) != 1 || !sameStopIdentity(repeated.Agents[0], selected.Agents[0]) {
+		t.Fatalf("exact selector changed a retained stop identity: %+v, %v", repeated, err)
+	}
+	select {
+	case publication := <-fixture.Bus.Commands():
+		t.Fatalf("batch acceptance published instead of deferring to reconciliation: %+v", publication)
+	default:
+	}
+	for _, raw := range []string{
+		`{}`, `{"selector":null}`, `{"selector":{}}`, `{"selector":{"id":"invalid"}}`,
+		`{"selector":{"type":"example-agent","version":""}}`, `{"selector":{"type":"example-agent","id":null}}`,
+		`{"selector":{"version":"v1.0.0","all":true}}`, `{"selector":{"type":7}}`,
+	} {
+		var command controllercommands.StopAgentsCommand
+		if err := domain.Decode(json.RawMessage(raw), &command); err == nil {
+			t.Fatalf("malformed selector was accepted: %s", raw)
+		}
+	}
+}
+
+func TestControllerStopSelectorReportsPartialFailureWithoutEnrollingReplacement(t *testing.T) {
+	fixture := fixtures.NewStoppingController(t)
+	fixture.Config.LeaseSweepInterval = time.Hour
+	first := fixtures.StopSelectionRecord("example-agent-00000001", "example-agent", "v1.0.0")
+	disappeared := fixtures.StopSelectionRecord("example-agent-00000002", "example-agent", "v1.0.0")
+	replacement := fixtures.StopSelectionRecord("example-agent-00000003", "example-agent", "v1.0.0")
+	inventory := fakes.NewStopSelectionInventory(first, disappeared)
+	inventory.ConfigureStopRace(disappeared.ID, replacement)
+	fixture.Config.AgentStore = inventory
+	c := fixture.Start(t)
+
+	result, err := c.StopAgents(fixture.Context, agents.Selector{Version: first.Version})
+
+	if err != nil || result.Validate() != nil || len(result.Agents) != 1 || result.Agents[0].ID != first.ID ||
+		len(result.Errors) != 1 || result.Errors[0].ID != disappeared.ID || result.Errors[0].Error != "agent_not_found" {
+		t.Fatalf("partial stop lost its accepted target or failure: %+v, %v", result, err)
+	}
+	registered, err := inventory.Get(fixture.Context, replacement.ID)
+	if err != nil || registered.Status != agents.AgentReady || registered.StopCommandID != "" {
+		t.Fatalf("a replacement registered after selection was stopped: %+v, %v", registered, err)
+	}
+}
 
 func TestControllerStopFencesNewWorkWithoutLosingAcceptedResults(t *testing.T) {
 	fixture := fixtures.NewStoppingController(t)

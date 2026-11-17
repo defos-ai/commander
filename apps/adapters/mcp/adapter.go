@@ -66,11 +66,11 @@ type agentList struct {
 }
 
 // Config supplies commands and stores independently. Mission writes update
-// the catalog; queries read saved state. Only operation commands require a
-// running controller.
+// the catalog; queries read saved state independently of controller commands.
 type Config struct {
 	SessionStore      sessions.Store
 	Operations        controllercommands.Operations
+	AgentCommands     controllercommands.Controller
 	AgentStore        agentmodel.AgentStore
 	SourceClient      *packages.Client
 	MissionStore      missions.MissionStore
@@ -166,6 +166,7 @@ func NewServer(config Config) (*mcp.Server, error) {
 			return record.Snapshot(time.Now().UTC()), nil
 		})
 	addSourceTools(server, config)
+	addAgentCommands(server, config)
 	addArtifactResources(server, config)
 	addOperationTools(server, config)
 	return server, nil

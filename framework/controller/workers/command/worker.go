@@ -243,12 +243,12 @@ func (c *Worker) dispatch(ctx context.Context, method string, params json.RawMes
 			return nil, err
 		}
 		return c.controller.RunAction(ctx, p.AgentID, p.Call)
-	case controllercommands.MethodStopAgent:
-		var p controllercommands.StopAgentCommand
+	case controllercommands.MethodStopAgents:
+		var p controllercommands.StopAgentsCommand
 		if err := domain.Decode(params, &p); err != nil {
 			return nil, err
 		}
-		return c.controller.StopAgent(ctx, p.AgentID)
+		return c.controller.StopAgents(ctx, p.Selector)
 	case controllercommands.MethodStartOperation:
 		var p controllercommands.StartOperationCommand
 		if err := domain.Decode(params, &p); err != nil {

@@ -25,6 +25,11 @@ func (c *Controller) StopAgent(ctx context.Context, agentID string) (agents.Agen
 		return c.coordination.StopAgent(ctx, agentID)
 	})
 }
+func (c *Controller) StopAgents(ctx context.Context, selector agents.Selector) (agents.StopResult, error) {
+	return request(ctx, c, func(ctx context.Context) (agents.StopResult, error) {
+		return c.coordination.StopAgents(ctx, selector)
+	})
+}
 func (c *Controller) DispatchAction(ctx context.Context, agentID string, call actions.ActionCall) (actions.ActionOutput, error) {
 	return request(ctx, c, func(ctx context.Context) (actions.ActionOutput, error) {
 		return c.actionExecutor().DispatchAction(ctx, agentID, call)

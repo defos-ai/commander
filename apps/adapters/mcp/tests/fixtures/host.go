@@ -41,7 +41,7 @@ func Host(t *testing.T) *Client {
 	return client
 }
 
-func HostWithInventory(t *testing.T) (*Client, agents.AgentStore) {
+func HostWithInventory(t *testing.T, configure ...func(*missionsmcp.Config)) (*Client, agents.AgentStore) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	t.Cleanup(cancel)
@@ -71,6 +71,9 @@ func HostWithInventory(t *testing.T) (*Client, agents.AgentStore) {
 			return operationfixtures.Output(call.ActionName), nil
 		},
 	})
+	for _, apply := range configure {
+		apply(&config)
+	}
 	server, err := missionsmcp.NewServer(config)
 	if err != nil {
 		t.Fatal(err)

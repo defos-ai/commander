@@ -31,6 +31,21 @@ saved inventory. It identifies the agent package/build, independently of the
 Commander framework and software dependency versions. Omit unreported versions;
 never infer them from tags, framework versions or dependency guidance.
 
+`stop_agent` accepts `selector` with at least one exact `id`, `type` or `version`;
+supplied fields intersect. Reject supplied null/empty/unknown selector fields
+through the shared contract, including mixtures with valid fields. Pass it to
+the separately injected `AgentCommands.StopAgents`; only the controller captures
+and selects the fixed match set. MCP never matches or reselects inventory.
+Saved reads remain usable without this capability; the tool reports unavailable.
+Bound acceptance to ten seconds and never publish directly, mutate inventory or
+retry commands. Validate the controller's aggregate result and return compact
+`agents` summaries plus optional per-agent `errors` and a message. Preserve an
+empty agents array for no matches. `stop_requested` is accepted intent while work
+drains; only `stopped` confirms shutdown. Partial errors must not become a claim
+that every target succeeded. Sanitize outer uncertainty, directing readback
+through `list_agents`/`describe_agent` without backend details. Deployment resources
+and restart policies remain host responsibilities.
+
 `describe_agent` preserves optional dependency declarations from saved inventory;
 `list_agents` omits them to keep discovery compact. Match only executable
 `missing_requirements` to dependency names exactly. Declarations and dependency

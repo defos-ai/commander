@@ -22,6 +22,7 @@ import (
 	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/artifacts"
 	"github.com/defos-ai/commander/framework/domain/operations"
+	"github.com/defos-ai/commander/framework/id"
 	fsactions "github.com/defos-ai/commander/providers/fs/actions"
 	fsagents "github.com/defos-ai/commander/providers/fs/agents"
 	fsartifacts "github.com/defos-ai/commander/providers/fs/artifacts"
@@ -34,18 +35,19 @@ import (
 )
 
 type SharingStack struct {
-	Context    context.Context
-	Bus        *fakes.SharingBus
-	Artifacts  *fakes.SharingArtifactStore
-	Producer   *fakes.SharingProducer
-	Controller *controller.Controller
-	analyzers  map[string]*fakes.SharingAnalyzer
-	agents     []sharingAgent
-	server     *httptest.Server
-	client     *http.Client
-	cancel     context.CancelFunc
-	busPath    string
-	files      artifacts.ArtifactFileStore
+	Context       context.Context
+	Bus           *fakes.SharingBus
+	Artifacts     *fakes.SharingArtifactStore
+	Producer      *fakes.SharingProducer
+	Controller    *controller.Controller
+	agentCommands *controllercommands.Client
+	analyzers     map[string]*fakes.SharingAnalyzer
+	agents        []sharingAgent
+	server        *httptest.Server
+	client        *http.Client
+	cancel        context.CancelFunc
+	busPath       string
+	files         artifacts.ArtifactFileStore
 }
 
 type sharingAgent struct {
@@ -105,23 +107,28 @@ func NewSharingStack(t *testing.T) *SharingStack {
 	})
 	require(err)
 	config.Operations = s.Controller.Operations()
+	adapterID, err := id.AdapterID("api")
+	require(err)
+	s.agentCommands, err = controllercommands.NewClient(ctx, s.Bus, adapterID, nil)
+	require(err)
+	config.AgentCommands = s.agentCommands
 	handler, err := api.NewHandler(config)
 	require(err)
 	s.server = httptest.NewServer(handler)
 	s.Producer = fakes.NewSharingProducer()
-	s.startAgent(t, "producer", "producer-agent-00000001", s.Producer, config.ArtifactFileStore)
-	for _, entry := range []struct{ id, name string }{
-		{"analyzer-agent-00000001", fakes.AnalysisAction}, {"analyzer-agent-00000002", fakes.AnalysisAction},
-		{"analyzer-agent-00000003", fakes.EvidenceAction},
+	s.startAgent(t, "producer", "producer-agent-00000001", "v1.0.0", s.Producer, config.ArtifactFileStore)
+	for _, entry := range []struct{ id, name, version string }{
+		{"analyzer-agent-00000001", fakes.AnalysisAction, "v1.0.0"}, {"analyzer-agent-00000002", fakes.AnalysisAction, "v2.0.0"},
+		{"analyzer-agent-00000003", fakes.EvidenceAction, "v1.0.0"},
 	} {
 		executor := fakes.NewSharingAnalyzer(entry.name, config.ArtifactFileStore)
 		s.analyzers[entry.id] = executor
-		s.startAgent(t, "analyzer", entry.id, executor, config.ArtifactFileStore)
+		s.startAgent(t, "analyzer", entry.id, entry.version, executor, config.ArtifactFileStore)
 	}
 	return s
 }
 
-func (s *SharingStack) startAgent(t *testing.T, kind, id string, executor action.Executor, files artifacts.ArtifactFileStore) {
+func (s *SharingStack) startAgent(t *testing.T, kind, id, version string, executor action.Executor, files artifacts.ArtifactFileStore) {
 	t.Helper()
 	bus, err := fscomms.NewFsBus(s.busPath)
 	if err != nil {
@@ -131,7 +138,7 @@ func (s *SharingStack) startAgent(t *testing.T, kind, id string, executor action
 	running := sharingAgent{cancel: cancel, done: make(chan error, 1), bus: bus}
 	s.agents = append(s.agents, running)
 	interval := time.Second
-	runtime, err := agent.NewAgent(agent.AgentConfig{ID: id, Type: agents.AgentType(kind), Actions: []action.Executor{executor},
+	runtime, err := agent.NewAgent(agent.AgentConfig{ID: id, Type: agents.AgentType(kind), Version: version, Actions: []action.Executor{executor},
 		ArtifactFileStore: files, HeartbeatInterval: &interval, Server: agent.ServerInfo{Hostname: "sharing-fixture", IPAddress: "127.0.0.1"}})
 	if err != nil {
 		t.Fatal(err)
@@ -147,7 +154,7 @@ func (s *SharingStack) startAgent(t *testing.T, kind, id string, executor action
 	})
 }
 
-func (s *SharingStack) Request(t *testing.T, method, path string, body any) Response {
+func (s *SharingStack) Request(t *testing.T, method, path string, body any, configure ...func(*http.Request)) Response {
 	t.Helper()
 	var input io.Reader
 	if body != nil {
@@ -164,6 +171,9 @@ func (s *SharingStack) Request(t *testing.T, method, path string, body any) Resp
 	request.SetBasicAuth("sharing", "sharing-fixture-password")
 	if body != nil {
 		request.Header.Set("Content-Type", "application/json")
+	}
+	for _, change := range configure {
+		change(request)
 	}
 	response, err := s.client.Do(request)
 	if err != nil {
@@ -229,7 +239,7 @@ func (s *SharingStack) StartBatchPlanner(t *testing.T) *fakes.SharingBatchPlanne
 	t.Helper()
 	planner := fakes.NewSharingBatchPlanner()
 	t.Cleanup(planner.Gate().Release)
-	s.startAgent(t, "planner", "planner-agent-00000001", planner, s.files)
+	s.startAgent(t, "planner", "planner-agent-00000001", "v1.0.0", planner, s.files)
 	return planner
 }
 
@@ -293,6 +303,11 @@ func (s *SharingStack) close(t *testing.T) {
 	}
 	if s.server != nil {
 		s.server.Close()
+	}
+	if s.agentCommands != nil {
+		if err := s.agentCommands.Close(); err != nil {
+			t.Error(err)
+		}
 	}
 	s.StopAnalyzers()
 	for _, running := range s.agents {

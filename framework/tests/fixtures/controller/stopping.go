@@ -20,6 +20,14 @@ func NewStoppingController(t *testing.T) OwnedOperations {
 	return fixture
 }
 
+func StopSelectionRecord(agentID, kind, version string) agents.Agent {
+	now := time.Now().UTC()
+	return agents.Agent{AgentSnapshot: agents.AgentSnapshot{
+		ID: agentID, Type: agents.AgentType(kind), Version: version, Status: agents.AgentReady,
+		Server: agents.ServerInfo{IPAddress: "127.0.0.1", Hostname: "stop-selection"},
+	}, ObservedAt: now, LastSeen: now, LastHeartbeat: now, LeaseExpiresAt: now.Add(time.Hour)}
+}
+
 func ObserveSnapshot(t *testing.T, ctx context.Context, bus *fakes.Bus, kind messages.MessageType, snapshot agents.AgentSnapshot, correlationID string) {
 	t.Helper()
 	message, err := messages.NewMessage(kind, snapshot.ID, snapshot)

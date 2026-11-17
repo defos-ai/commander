@@ -13,6 +13,14 @@ for authentication, client configuration and tool usage.
 operation ID, status and progress. Use `get_operation` for saved state and questions,
 `get_task` for task results and artifacts, and `get_report` for final output.
 
+Call `stop_agent` with a selector, for example
+`{"selector":{"type":"browser-agent","version":"v1.2.3"}}`.
+Supply at least one exact `id`, `type` or `version`; supplied fields intersect.
+The controller captures matches once. Inspect per-agent errors and use
+`describe_agent` to confirm `stopped`; `stop_requested` lets accepted work drain.
+Read saved state after uncertainty before submitting again. Deployment resources
+and restart policies remain host-managed.
+
 See [Operations](../../../docs/features/operations.md) and
 [Questions](../../../docs/features/questions.md) for the operator workflows.
 

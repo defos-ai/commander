@@ -194,7 +194,7 @@
 - Only one active controller per database is supported. Registration and selector
   capacity do not establish distributed ownership or global capacity.
 - Agent stopping retains controller-owned `AgentStopRequested` status, atomically
-  accepted by `AgentStore.RequestStop` before publication. `StopAgent` returns
+  accepted by `AgentStore.RequestStop` before publication. Stop commands return
   acceptance, not confirmed shutdown. Flat `StopCommandID` and `StopRequestedAt`
   fields preserve retry identity. They survive caller
   cancellation, heartbeats, lease expiry and controller restart. Observation
@@ -208,6 +208,15 @@
   timeout or expired heartbeat. Only accepted stopped observations confirm it.
   Unconfirmed stops retain inventory records and status with stale lease metadata;
   confirmed stops expire normally. Agent-reported snapshots cannot request a stop.
+  `StopAgents` applies a nonempty exact `agents.Selector` to one sorted inventory
+  snapshot inside coordination. Supplied ID/type/version criteria intersect;
+  versions are reported package strings, not tag selectors. The captured IDs are
+  fixed for that submission, so later registrations are not enrolled. Save all
+  selected stop intents before periodic publication; expose successful agents and
+  safe per-agent errors through `StopResult`. No matches is an empty success.
+  Partial acceptance is possible, and a lost response never authorizes automatic
+  resubmission of criteria against a new inventory snapshot. A reconciliation pass
+  shares one publication budget rather than multiplying it by the batch size.
 - Apply operation mutations atomically to the latest saved record through
   [`OperationStore`](domain/operations/operation_store.go). Persist tasks and
   events separately; preserve independent copies at store boundaries.

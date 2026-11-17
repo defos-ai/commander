@@ -96,6 +96,7 @@ func RunWithOptions(ctx context.Context, args []string, stderr io.Writer, option
 		Security: configuration.security, SwaggerEnabled: configuration.swagger,
 		Deployment: configuration.deployment,
 		Operations: controller, MissionStore: deps.MissionStore, OperationStore: deps.OperationStore, SessionStore: deps.SessionStore,
+		AgentCommands:  controller,
 		ExecutionStore: deps.ExecutionStore,
 		AgentStore:     deps.AgentStore, ActionStore: deps.ActionStore, ReportStore: deps.ReportStore,
 		ControllerStore: deps.ControllerStore,

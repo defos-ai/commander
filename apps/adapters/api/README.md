@@ -79,6 +79,29 @@ for review without creating a final report. Review or edit it in Admin and choos
 continue; repeating an assignment creates another task. Cancellation stops queued
 work, while dispatched tasks may finish.
 
+## Stop an agent
+
+Read `/api/v1/agents`, then request graceful stop for an exact selector:
+
+```sh
+curl --user "$API_USERNAME" \
+  --header 'Content-Type: application/json' \
+  --data '{"selector":{"type":"browser-agent","version":"v1.2.3"}}' \
+  http://127.0.0.1:4274/api/v1/agents/stop
+```
+
+Supply at least one of `id`, `type` or `version`; filters intersect and versions
+match reported values exactly. The controller captures the matching agents once.
+The response contains `items` and optional per-agent `errors`; always inspect both.
+`202` means at least one item is `stop_requested`, while `200` also covers no
+matches or per-agent failures. Neither status alone confirms every agent stopped.
+New assignments are blocked while accepted work finishes. Read each returned
+agent at `/api/v1/agents/{id}` until `status: stopped` confirms shutdown. Agent
+reads retain `stop_command_id` and `stop_requested_at` for readback.
+
+After a timeout or `503 agent_stop_uncertain`, read matching agents before
+retrying. This command does not change Docker or Kubernetes restart policies.
+
 ## Execution logs
 
 Read saved progress without a running controller:

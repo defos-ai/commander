@@ -11,7 +11,7 @@ import (
 type Controller interface {
 	DiscoverActions(context.Context, string, *agentmodel.DiscoveryScope) (agentmodel.Agent, error)
 	RunAction(context.Context, string, actionmodel.ActionCall) (actionmodel.ActionOutput, error)
-	StopAgent(context.Context, string) (agentmodel.Agent, error)
+	StopAgents(context.Context, agentmodel.Selector) (agentmodel.StopResult, error)
 }
 
 type SecretRequests interface {

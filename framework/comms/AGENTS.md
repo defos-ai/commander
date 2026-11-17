@@ -46,6 +46,10 @@
   immutable saves reuse their request identity while the action is active.
   Controller replies follow saved-claim validation and durable persistence.
   This does not extend adapter mutation replay or authorize rerunning an action.
+- `agents.stop` carries `StopAgentsCommand.Selector`, never an adapter-selected
+  list of IDs. The controller captures matching instances and returns `StopResult`
+  with accepted agents and per-agent error codes. A new submission reevaluates
+  current inventory; never automatically retry an uncertain selector command.
 - Agent command expiry controls admission of new work, not cancellation of
   running work or replay of cached outcomes. Recovery preserves the deadline.
 - Lifecycle observations use source timestamps, including lease renewal. Late

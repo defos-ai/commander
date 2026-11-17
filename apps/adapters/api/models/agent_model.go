@@ -11,6 +11,8 @@ type AgentResponse struct {
 	Type             string                       `json:"type"`
 	Version          string                       `json:"version,omitempty"`
 	Status           string                       `json:"status"`
+	StopCommandID    string                       `json:"stop_command_id,omitempty"`
+	StopRequestedAt  time.Time                    `json:"stop_requested_at,omitzero"`
 	Work             *AgentWorkResponse           `json:"work,omitempty"`
 	Server           AgentServerResponse          `json:"server"`
 	Responsibilities []string                     `json:"responsibilities"`

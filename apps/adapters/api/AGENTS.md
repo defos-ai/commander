@@ -121,6 +121,23 @@
 - Keep command timeouts and error mapping explicit. An uncertain response does
   not prove rejection; do not retry commands automatically or infer completion
   from client cancellation.
+- `POST /api/v1/agents/stop` accepts a required `selector` with at least one exact
+  `id`, `type` or `version` filter; criteria intersect. Reject missing/null/empty
+  selectors, supplied empty/null criteria, unknown fields and query parameters.
+  Map independent API DTOs explicitly; selection belongs to the controller, never
+  an adapter-side inventory scan. The optional `AgentCommands` capability
+  delegates to the controller through the existing command client; absent
+  capability returns `503 agent_controls_unavailable` without breaking queries.
+  Validate aggregate replies before mapping `items` and optional per-agent `errors`.
+  Return `202` when any accepted item is `stop_requested`, otherwise `200`, including
+  empty matches and per-agent failures. Do not add a batch `Location` or infer
+  all targets stopped from the HTTP status. Expose flat `stop_command_id` and `stop_requested_at`
+  through explicit Agent DTO mappings; neither is a public mutation parameter.
+  Failed or invalid aggregate controller replies become sanitized `503 agent_stop_uncertain`.
+  Keep per-agent failure codes from the validated result. Clients inspect each
+  matching agent before retrying. Never infer shutdown from acceptance or implement
+  inventory writes, direct agent messages or host cleanup here. Remove the old
+  `/agents/{agent_id}/stop` route without an alias.
 - Project agent/controller lease expiry when reading without rewriting saved
   records. Keep tasks/events paginated and reports immutable.
 - Agent list/detail responses explicitly map optional dependency installation
