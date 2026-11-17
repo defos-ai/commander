@@ -11,7 +11,7 @@ import (
 )
 
 // Agents returns independent snapshots sorted by ID. Expired records are removed
-// by the lease registry; stopped records remain only until their lease expires.
+// by the lease registry; unconfirmed stop requests survive lease expiry.
 func (c *Worker) Agents(ctx context.Context) ([]agentmodel.Agent, error) {
 	if err := c.state.CheckOpen(); err != nil {
 		return nil, err

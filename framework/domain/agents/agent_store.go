@@ -13,9 +13,14 @@ import (
 // mark may atomically renew a strictly newer LastHeartbeat on a live, non-stopped
 // record only when the supplied snapshot matches, retaining monotonic LastSeen.
 // Otherwise equal observations are stale. Lease-expiry marks retain the original
-// ordering rule.
+// ordering rule. Upsert preserves controller-owned stop intent independently of
+// the supplied observation.
 type AgentStore interface {
 	Upsert(ctx context.Context, record Agent) error
+	// RequestStop atomically retains the first controller request for a known
+	// agent, or returns its existing request/confirmed stopped state unchanged.
+	// Observation writes cannot create, replace or clear this request.
+	RequestStop(ctx context.Context, agentID, commandID string, requestedAt time.Time) (Agent, error)
 	Get(ctx context.Context, agentID string) (Agent, error)
 	List(ctx context.Context) ([]Agent, error)
 	// DeleteExpired removes records whose last heartbeat is at or before cutoff.
@@ -25,5 +30,6 @@ type AgentStore interface {
 	// Hide expired records from Get/List, retaining their ordering mark until
 	// ObservedAt is at or before cutoff. Lifecycle consumers must discard messages
 	// outside that same heartbeat window before attempting Upsert.
+	// Retain unconfirmed stop requests so lease expiry cannot remove their fence.
 	DeleteExpired(ctx context.Context, cutoff time.Time) ([]Agent, error)
 }

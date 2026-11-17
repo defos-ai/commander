@@ -193,6 +193,21 @@
   and may be retried after a timeout; it does not cancel saved operations.
 - Only one active controller per database is supported. Registration and selector
   capacity do not establish distributed ownership or global capacity.
+- Agent stopping retains controller-owned `AgentStopRequested` status, atomically
+  accepted by `AgentStore.RequestStop` before publication. `StopAgent` returns
+  acceptance, not confirmed shutdown. Flat `StopCommandID` and `StopRequestedAt`
+  fields preserve retry identity. They survive caller
+  cancellation, heartbeats, lease expiry and controller restart. Observation
+  writes cannot create or clear this state, or replace its metadata. Preserve
+  advertised work: active executions still receive secrets, sharing and result acceptance.
+  Exclude pending-stop agents from preflight, selection, new dispatch/discovery
+  and action redelivery; read-only recovery remains available. Stop envelopes
+  retain their identity and have no admission expiry because the serial agent
+  inbox drains previously accepted work first. Retry uncertain publication and
+  unconfirmed stops through coordination; never infer stopped from a broker ACK,
+  timeout or expired heartbeat. Only accepted stopped observations confirm it.
+  Unconfirmed stops retain inventory records and status with stale lease metadata;
+  confirmed stops expire normally. Agent-reported snapshots cannot request a stop.
 - Apply operation mutations atomically to the latest saved record through
   [`OperationStore`](domain/operations/operation_store.go). Persist tasks and
   events separately; preserve independent copies at store boundaries.

@@ -29,7 +29,7 @@ func assemble(c *Controller, bus comms.Bus, config ControllerConfig) (result []w
 	}()
 	coordinator, err := coordination.New(c.coreLifetime, coordination.Dependencies{
 		Bus: bus, Inventory: config.AgentStore, Executions: config.ExecutionStore, Artifacts: config.ArtifactStore,
-		HeartbeatTimeout: config.HeartbeatTimeout, SweepInterval: config.LeaseSweepInterval, Stop: c.fail,
+		HeartbeatTimeout: config.HeartbeatTimeout, SweepInterval: config.LeaseSweepInterval, Stop: c.fail, Logger: config.Logger,
 	})
 	if err != nil {
 		return nil, err

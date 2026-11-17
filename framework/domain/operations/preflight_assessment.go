@@ -85,6 +85,8 @@ func (o Operation) AssessPreflight(records []agents.Agent, sessionScopes ...[]se
 func AssessAgentAction(agent agents.Agent, action actions.Action) AgentReadiness {
 	result := AgentReadiness{AgentID: agent.ID, AgentType: string(agent.Type)}
 	switch {
+	case agent.Status == agents.AgentStopRequested:
+		result.Reason = "Agent stop has been requested"
 	case agent.Stale:
 		result.Reason = "Agent heartbeat has expired"
 	case agent.Status != agents.AgentReady && agent.Status != agents.AgentWorking:

@@ -59,6 +59,9 @@ func (c *Worker) redeliverAction(ctx context.Context, stored executions.Executio
 	}
 	if current.Result == nil {
 		record, err := c.Agent(ctx, current.Command.AgentID)
+		if err == nil && record.Status == agentmodel.AgentStopRequested {
+			return current, nil
+		}
 		if err != nil || record.Stale || (record.Status != agentmodel.AgentReady && record.Status != agentmodel.AgentWorking) {
 			return executions.Execution{}, commandOutcomeError(agentcommands.RunAction, agentmodel.ErrAgentNotRunning)
 		}

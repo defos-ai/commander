@@ -33,7 +33,9 @@ applies to all domain packages below this directory.
 - [AgentSnapshot](agents/agent_snapshot.go) is advertised state;
   [Agent](agents/agent.go) adds received observation and lease data. Keep agent
   type separate from exact process identity. Freshness is a read-time assessment,
-  not proof that external work stopped.
+  not proof that external work stopped. `AgentStopRequested` is controller-owned
+  status; observations cannot clear it. Flat stop command ID/time retain its original identity
+  survives retries and inventory expiry until a stopped observation confirms it.
 - [Missions](missions/mission.go) are reusable definitions saved into each
   [operation](operations/operation.go). Action coverage does not automatically
   sequence tasks or act as an execution allowlist.

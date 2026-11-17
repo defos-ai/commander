@@ -17,6 +17,11 @@ artifact bytes and reports belong to the separate storage provider.
   to partially applied writes on standalone MongoDB.
 - Keep MongoDB documents, BSON conversions and query/index details local. Use the
   existing document mappings where domain values need custom timestamp handling.
+- Agent inventory stores the controller stop command ID and timestamp separately
+  from observation fields and keeps `stop_requested` through non-stopped heartbeats.
+  `RequestStop` accepts the first request atomically; heartbeat updates must never
+  replace or clear it. Preserve its nanoseconds and retain unconfirmed requests
+  through lease expiry; confirmed stopped records remain eligible for cleanup.
 - Request-derived IDs stay strings through `GetByID`. Build BSON keys and
   operators in provider code; never decode client input into a query document.
   JSON or operator-looking strings are literal values, not query syntax.

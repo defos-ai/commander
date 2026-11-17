@@ -16,26 +16,42 @@ import (
 )
 
 type Bus struct {
-	routingMu  sync.Mutex
-	routes     map[string]*routedSubscription
-	closeRules map[string]subscriptionCleanup
-	events     chan messages.Message
-	commands   chan messages.Message
-	acked      chan string
-	rejected   chan string
-	closed     chan struct{}
-	inbox      comms.Inbox
-	closeGate  *Gate
-	closeError error
-	closeCalls atomic.Int32
+	routingMu   sync.Mutex
+	routes      map[string]*routedSubscription
+	closeRules  map[string]subscriptionCleanup
+	events      chan messages.Message
+	commands    chan messages.Message
+	acked       chan string
+	rejected    chan string
+	closed      chan struct{}
+	inbox       comms.Inbox
+	closeGate   *Gate
+	closeError  error
+	closeCalls  atomic.Int32
+	stopFailure atomic.Pointer[stopPublicationFailure]
 }
 
+type stopPublicationFailure struct{ err error }
+
 func (b *Bus) Publish(ctx context.Context, topic string, m messages.Message) error {
+	var failure *stopPublicationFailure
+	if m.Type == messages.StopAgent {
+		failure = b.stopFailure.Swap(nil)
+	}
 	if route := b.route(topic); route != nil {
-		return route.publish(ctx, m)
+		if err := route.publish(ctx, m); err != nil {
+			return err
+		}
+		if failure != nil {
+			return failure.err
+		}
+		return nil
 	}
 	select {
 	case b.commands <- m:
+		if failure != nil {
+			return failure.err
+		}
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
@@ -137,9 +153,44 @@ func (s *Inventory) Upsert(_ context.Context, record agents.Agent) error {
 	if failure := s.upsertFailure.Swap(nil); failure != nil {
 		return failure.err
 	}
-	cloned := record.Clone()
-	s.record.Store(&cloned)
-	return nil
+	for {
+		previous := s.record.Load()
+		cloned := record.Clone()
+		cloned.StopCommandID, cloned.StopRequestedAt = "", time.Time{}
+		if previous != nil {
+			cloned.StopCommandID, cloned.StopRequestedAt = previous.StopCommandID, previous.StopRequestedAt
+			if cloned.StopCommandID != "" && cloned.Status != agents.AgentStopped {
+				cloned.Status = agents.AgentStopRequested
+			}
+		}
+		if s.record.CompareAndSwap(previous, &cloned) {
+			return nil
+		}
+	}
+}
+
+func (s *Inventory) RequestStop(ctx context.Context, agentID, commandID string, requestedAt time.Time) (agents.Agent, error) {
+	if err := agents.ValidateStopRequest(commandID, requestedAt); err != nil {
+		return agents.Agent{}, err
+	}
+	for {
+		if err := ctx.Err(); err != nil {
+			return agents.Agent{}, err
+		}
+		previous := s.record.Load()
+		if previous == nil || previous.ID != agentID {
+			return agents.Agent{}, agents.ErrUnknownAgent
+		}
+		if previous.StopCommandID != "" || previous.Status == agents.AgentStopped {
+			return previous.Clone(), nil
+		}
+		next := previous.Clone()
+		next.Status = agents.AgentStopRequested
+		next.StopCommandID, next.StopRequestedAt = commandID, requestedAt
+		if s.record.CompareAndSwap(previous, &next) {
+			return next.Clone(), nil
+		}
+	}
 }
 func (s *Inventory) Get(context.Context, string) (agents.Agent, error) {
 	if record := s.record.Load(); record != nil {
@@ -160,7 +211,7 @@ func (s *Inventory) DeleteExpired(_ context.Context, cutoff time.Time) ([]agents
 	}
 	for {
 		record := s.record.Load()
-		if record == nil || record.LastHeartbeat.After(cutoff) {
+		if record == nil || record.LastHeartbeat.After(cutoff) || (record.StopCommandID != "" && record.Status != agents.AgentStopped) {
 			return nil, nil
 		}
 		if s.record.CompareAndSwap(record, nil) {
@@ -184,6 +235,9 @@ func (b *Bus) Closed() <-chan struct{}           { return b.closed }
 func (b *Bus) Inbox() comms.Inbox                { return b.inbox }
 func (b *Bus) CloseCalls() int                   { return int(b.closeCalls.Load()) }
 func (b *Bus) BlockClose(gate *Gate, err error)  { b.closeGate, b.closeError = gate, err }
+func (b *Bus) FailNextStopPublication(err error) {
+	b.stopFailure.Store(&stopPublicationFailure{err: err})
+}
 func (b *Bus) Send(ctx context.Context, message messages.Message) error {
 	select {
 	case b.events <- message:

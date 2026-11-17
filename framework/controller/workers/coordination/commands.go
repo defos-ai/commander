@@ -50,17 +50,6 @@ func (c *Worker) runAction(ctx context.Context, agentID string, call actionmodel
 	return output, commandOutcomeError(agentcommands.RunAction, err)
 }
 
-// StopAgent requests a graceful stop and waits for its event. Runtime cleanup
-// belongs to the agent's host and may finish after this acknowledgement.
-func (c *Worker) StopAgent(ctx context.Context, agentID string) (agentmodel.Agent, error) {
-	message, err := agentcommands.NewStopAgent(agentID)
-	if err != nil {
-		return agentmodel.Agent{}, err
-	}
-	reply, err := c.command(ctx, message, controllerevents.AgentStopped, false, nil)
-	return reply.Record, err
-}
-
 type commandDispatch struct {
 	pending *state.PendingCommand
 	stored  *executions.Execution
@@ -118,9 +107,15 @@ func (c *Worker) dispatchCommand(ctx, waiting context.Context, message messages.
 		return commandDispatch{}, fmt.Errorf("read agent inventory: %w", c.inventoryError(err))
 	}
 	record = c.state.Snapshot(record, time.Now().UTC())
+	if record.Status == agentmodel.AgentStopRequested && kind != agentcommands.ControlSession {
+		return commandDispatch{}, agentmodel.ErrAgentNotRunning
+	}
 	available := record.Status == agentmodel.AgentReady || record.Status == agentmodel.AgentWorking
-	if kind == agentcommands.DiscoverActions || kind == agentcommands.StopAgent || kind == agentcommands.ControlSession {
+	if kind == agentcommands.DiscoverActions || kind == agentcommands.ControlSession {
 		available = available || record.Status == agentmodel.AgentUnavailable
+	}
+	if kind == agentcommands.ControlSession && record.Status == agentmodel.AgentStopRequested {
+		available = true
 	}
 	if record.Stale || !available {
 		return commandDispatch{}, agentmodel.ErrAgentNotRunning

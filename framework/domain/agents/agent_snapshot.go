@@ -15,12 +15,13 @@ type AgentType string
 const GenericAgentType AgentType = "generic"
 
 const (
-	AgentIdle        AgentStatus = "idle"
-	AgentDiscovering AgentStatus = "discovering"
-	AgentReady       AgentStatus = "ready"
-	AgentWorking     AgentStatus = "working"
-	AgentUnavailable AgentStatus = "unavailable"
-	AgentStopped     AgentStatus = "stopped"
+	AgentIdle          AgentStatus = "idle"
+	AgentDiscovering   AgentStatus = "discovering"
+	AgentReady         AgentStatus = "ready"
+	AgentWorking       AgentStatus = "working"
+	AgentUnavailable   AgentStatus = "unavailable"
+	AgentStopRequested AgentStatus = "stop_requested"
+	AgentStopped       AgentStatus = "stopped"
 )
 
 // Work identifies the action being executed without exposing its inputs.

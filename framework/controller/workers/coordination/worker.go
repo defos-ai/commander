@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"log/slog"
 	"time"
 
 	"github.com/defos-ai/commander/framework/comms"
@@ -23,6 +25,7 @@ type Dependencies struct {
 	HeartbeatTimeout time.Duration
 	SweepInterval    time.Duration
 	Stop             func(error)
+	Logger           *slog.Logger
 }
 
 type Worker struct {
@@ -36,6 +39,8 @@ type Worker struct {
 	leaseRegistry  *leases.Registry
 	sweepInterval  time.Duration
 	stop           func(error)
+	logger         *slog.Logger
+	stopPublished  map[string]time.Time
 }
 
 func New(ctx context.Context, deps Dependencies) (*Worker, error) {
@@ -53,11 +58,15 @@ func New(ctx context.Context, deps Dependencies) (*Worker, error) {
 		return nil, fmt.Errorf("expire agent leases: %w", err)
 	}
 	lifetime := workers.NewLifecycle(ctx)
+	if deps.Logger == nil {
+		deps.Logger = slog.New(slog.NewTextHandler(io.Discard, nil))
+	}
 	return &Worker{
 		lifecycle: lifetime,
 		state:     state.New(lifetime.Context(), deps.HeartbeatTimeout), requests: make(chan func()),
 		bus: deps.Bus, inventory: deps.Inventory, executionStore: deps.Executions,
-		artifactStore: deps.Artifacts, leaseRegistry: registry, sweepInterval: deps.SweepInterval, stop: deps.Stop,
+		artifactStore: deps.Artifacts, leaseRegistry: registry, sweepInterval: deps.SweepInterval, stop: deps.Stop, logger: deps.Logger,
+		stopPublished: make(map[string]time.Time),
 	}, nil
 }
 
@@ -75,6 +84,9 @@ func (c *Worker) run(ctx context.Context) (err error) {
 		c.Stop(err)
 		c.state.Close()
 	}()
+	if err := c.reconcileStops(ctx); err != nil {
+		return err
+	}
 	ticker := time.NewTicker(c.sweepInterval)
 	defer ticker.Stop()
 	for ctx.Err() == nil {
@@ -90,6 +102,9 @@ func (c *Worker) run(ctx context.Context) (err error) {
 			c.state.PrunePending()
 			if err := c.expireLeases(); err != nil {
 				return fmt.Errorf("expire agent leases: %w", err)
+			}
+			if err := c.reconcileStops(ctx); err != nil {
+				return err
 			}
 		}
 	}

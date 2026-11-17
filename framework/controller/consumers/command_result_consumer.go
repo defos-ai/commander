@@ -40,8 +40,17 @@ func (c CommandResultConsumer) Consume(ctx context.Context, message messages.Mes
 	if !errors.Is(err, executions.ErrUnknownExecution) {
 		return fmt.Errorf("read result execution: %w", err)
 	}
-	// Discovery and stop commands are not action executions. Their failures
-	// are only valid while the matching command is awaiting a response.
+	// A stop is durable controller intent rather than an action execution.
+	if message.Type == controllerevents.CommandFailed {
+		agent, err := c.Inventory.Get(ctx, message.AgentID)
+		if err != nil && !errors.Is(err, agentmodel.ErrUnknownAgent) {
+			return fmt.Errorf("read agent inventory for stop failure: %w", err)
+		}
+		if err == nil && agent.Status == agentmodel.AgentStopRequested && agent.StopCommandID == message.CorrelationID {
+			return (AgentEventConsumer{Inventory: c.Inventory, State: c.State}).Consume(ctx, message)
+		}
+	}
+	// Discovery failures require a matching pending command.
 	pending, pendingExists := c.State.Pending[message.CorrelationID]
 	if message.Type == controllerevents.ActionSucceeded || !pendingExists || pending.AgentID != message.AgentID || pending.Expected == controllerevents.ActionSucceeded {
 		return InvalidMessage(errors.New("command result has no matching execution or pending command"))
@@ -130,7 +139,10 @@ func (c CommandResultConsumer) observeActionCompletion(ctx context.Context, mess
 	if otherCommand {
 		return nil
 	}
-	record.Status, record.Work, record.LastSeen = agentmodel.AgentReady, nil, receivedAt
+	if record.Status != agentmodel.AgentStopRequested {
+		record.Status = agentmodel.AgentReady
+	}
+	record.Work, record.LastSeen = nil, receivedAt
 	record.ObservedAt = message.CreatedAt
 	if err := c.Inventory.Upsert(ctx, record); errors.Is(err, agentmodel.ErrStaleObservation) {
 		return nil

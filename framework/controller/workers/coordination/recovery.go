@@ -54,7 +54,7 @@ func (c *Worker) recoverAction(ctx context.Context, agentID, commandID string, c
 		if err != nil && !errors.Is(err, agentmodel.ErrUnknownAgent) {
 			return actionmodel.ActionOutput{}, recoveryOutcomeError(err)
 		}
-		available := err == nil && !agent.Stale && (agent.Status == agentmodel.AgentReady || agent.Status == agentmodel.AgentWorking)
+		available := err == nil && !agent.Stale && (agent.Status == agentmodel.AgentReady || agent.Status == agentmodel.AgentWorking || agent.Status == agentmodel.AgentStopRequested)
 		if available {
 			unavailableSince = time.Time{}
 		} else if unavailableSince.IsZero() {

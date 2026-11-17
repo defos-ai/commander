@@ -27,14 +27,16 @@ type AgentMongoStore struct {
 var _ agentmodel.AgentStore = (*AgentMongoStore)(nil)
 
 type agentDocument struct {
-	ID             string                   `bson:"_id"`
-	Snapshot       agentmodel.AgentSnapshot `bson:",inline"`
-	ObservedAt     bsonvalue.Timestamp      `bson:"observed_at"`
-	LastSeen       bsonvalue.Timestamp      `bson:"last_seen"`
-	LastHeartbeat  bsonvalue.Timestamp      `bson:"last_heartbeat"`
-	LeaseExpiresAt bsonvalue.Timestamp      `bson:"lease_expires_at"`
-	Stale          bool                     `bson:"stale"`
-	Expired        bool                     `bson:"expired,omitempty"`
+	ID              string                   `bson:"_id"`
+	Snapshot        agentmodel.AgentSnapshot `bson:",inline"`
+	ObservedAt      bsonvalue.Timestamp      `bson:"observed_at"`
+	LastSeen        bsonvalue.Timestamp      `bson:"last_seen"`
+	LastHeartbeat   bsonvalue.Timestamp      `bson:"last_heartbeat"`
+	LeaseExpiresAt  bsonvalue.Timestamp      `bson:"lease_expires_at"`
+	Stale           bool                     `bson:"stale"`
+	Expired         bool                     `bson:"expired,omitempty"`
+	StopCommandID   string                   `bson:"stop_command_id,omitempty"`
+	StopRequestedAt bsonvalue.Timestamp      `bson:"stop_requested_at,omitempty"`
 }
 
 func NewAgentMongoStore(ctx context.Context, database *store.MongoStore) (*AgentMongoStore, error) {
@@ -53,6 +55,7 @@ func (s *AgentMongoStore) Upsert(ctx context.Context, record agentmodel.Agent) e
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	record.StopCommandID, record.StopRequestedAt = "", time.Time{}
 	if err := validateInventoryRecord(record); err != nil {
 		return err
 	}
@@ -63,13 +66,21 @@ func (s *AgentMongoStore) Upsert(ctx context.Context, record agentmodel.Agent) e
 	}
 	filter := timestampBefore("observed_at", record.ObservedAt, false)
 	filter["_id"] = record.ID
+	update := observationUpdate(document)
 	for {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		_, err := s.database.Replace(ctx, collection, filter, document, true)
-		if !duplicateAgentID(err) {
-			return err
+		if record.Status != agentmodel.AgentStopRequested {
+			fastFilter := timestampBefore("observed_at", record.ObservedAt, false)
+			fastFilter["_id"] = record.ID
+			if record.Status != agentmodel.AgentStopped {
+				fastFilter["stop_command_id"] = nil
+			}
+			_, err := s.database.Upsert(ctx, collection, fastFilter, update)
+			if !duplicateAgentID(err) {
+				return err
+			}
 		}
 		// A nonmatching observation attempts an insert with the existing _id.
 		// Read the winner before classifying that conflict: another writer may
@@ -77,6 +88,9 @@ func (s *AgentMongoStore) Upsert(ctx context.Context, record agentmodel.Agent) e
 		var saved agentDocument
 		if readErr := s.database.GetByID(ctx, collection, record.ID, &saved); readErr != nil {
 			if errors.Is(readErr, mongo.ErrNoDocuments) {
+				if record.Status == agentmodel.AgentStopRequested {
+					return errors.New("observation cannot request an agent stop")
+				}
 				continue
 			}
 			return readErr
@@ -85,6 +99,12 @@ func (s *AgentMongoStore) Upsert(ctx context.Context, record agentmodel.Agent) e
 		if decodeErr != nil {
 			return fmt.Errorf("invalid stored agent %q observed_at: %w", saved.ID, decodeErr)
 		}
+		incoming := record.Clone()
+		if saved.StopCommandID != "" && incoming.Status != agentmodel.AgentStopped {
+			incoming.Status = agentmodel.AgentStopRequested
+		} else if incoming.Status == agentmodel.AgentStopRequested {
+			return errors.New("observation cannot request an agent stop")
+		}
 		if !observed.IsZero() && !record.ObservedAt.After(observed) {
 			current, decodeErr := saved.decode()
 			if decodeErr != nil {
@@ -92,7 +112,7 @@ func (s *AgentMongoStore) Upsert(ctx context.Context, record agentmodel.Agent) e
 			}
 			if saved.Expired || current.Status == agentmodel.AgentStopped ||
 				!record.ObservedAt.Equal(observed) || !record.LastHeartbeat.After(current.LastHeartbeat) ||
-				!reflect.DeepEqual(record.AgentSnapshot, current.AgentSnapshot) {
+				!reflect.DeepEqual(incoming.AgentSnapshot, current.AgentSnapshot) {
 				return agentmodel.ErrStaleObservation
 			}
 			// Renew liveness only for the same snapshot at an equal mark.
@@ -108,7 +128,10 @@ func (s *AgentMongoStore) Upsert(ctx context.Context, record agentmodel.Agent) e
 			renewFilter := bson.M{"_id": record.ID, "observed_at": saved.ObservedAt,
 				"last_heartbeat": saved.LastHeartbeat, "last_seen": saved.LastSeen,
 				"expired": bson.M{"$ne": true}, "status": bson.M{"$ne": agentmodel.AgentStopped}}
-			result, err := s.database.Replace(ctx, collection, renewFilter, renewal, false)
+			result, err := s.database.Update(ctx, collection, renewFilter, bson.M{"$set": bson.M{
+				"last_heartbeat": renewal.LastHeartbeat, "lease_expires_at": renewal.LeaseExpiresAt,
+				"last_seen": renewal.LastSeen, "stale": renewal.Stale,
+			}})
 			if err != nil {
 				return err
 			}
@@ -117,14 +140,62 @@ func (s *AgentMongoStore) Upsert(ctx context.Context, record agentmodel.Agent) e
 			}
 			continue
 		}
-		// The current observation is eligible. A conditional replacement avoids
+		// The current observation is eligible. A conditional update avoids
 		// another insert race; if it disappeared or advanced, reconsider it.
-		result, err := s.database.Replace(ctx, collection, filter, document, false)
+		normalized := document
+		normalized.Snapshot = incoming.AgentSnapshot
+		if saved.StopCommandID == "" {
+			filter["stop_command_id"] = nil
+		} else {
+			filter["stop_command_id"] = saved.StopCommandID
+		}
+		result, err := s.database.Update(ctx, collection, filter, observationUpdate(normalized))
 		if err != nil {
 			return err
 		}
 		if result.MatchedCount != 0 {
 			return nil
+		}
+	}
+}
+
+func observationUpdate(document agentDocument) bson.M {
+	snapshot := document.Snapshot
+	return bson.M{"$set": bson.M{
+		"id": snapshot.ID, "type": snapshot.Type, "version": snapshot.Version, "status": snapshot.Status,
+		"work": snapshot.Work, "server": snapshot.Server, "responsibilities": snapshot.Responsibilities,
+		"dependencies": snapshot.Dependencies, "actions": snapshot.Actions,
+		"discovery_scope": snapshot.DiscoveryScope, "config": snapshot.Config, "sessions": snapshot.Sessions,
+		"observed_at": document.ObservedAt, "last_seen": document.LastSeen,
+		"last_heartbeat": document.LastHeartbeat, "lease_expires_at": document.LeaseExpiresAt, "stale": document.Stale,
+	}, "$unset": bson.M{"expired": ""}}
+}
+
+func (s *AgentMongoStore) RequestStop(ctx context.Context, agentID, commandID string, requestedAt time.Time) (agentmodel.Agent, error) {
+	if err := ctx.Err(); err != nil {
+		return agentmodel.Agent{}, err
+	}
+	if err := agentmodel.ValidateStopRequest(commandID, requestedAt); err != nil {
+		return agentmodel.Agent{}, err
+	}
+	if !id.ValidAgent(agentID) {
+		return agentmodel.Agent{}, agentmodel.ErrUnknownAgent
+	}
+	for {
+		record, err := s.Get(ctx, agentID)
+		if err != nil || record.StopCommandID != "" || record.Status == agentmodel.AgentStopped {
+			return record, err
+		}
+		filter := bson.M{"_id": agentID, "expired": bson.M{"$ne": true},
+			"stop_command_id": nil, "status": bson.M{"$ne": agentmodel.AgentStopped}}
+		result, err := s.database.Update(ctx, collection, filter, bson.M{"$set": bson.M{
+			"status": agentmodel.AgentStopRequested, "stop_command_id": commandID, "stop_requested_at": bsonvalue.NewTimestamp(requestedAt),
+		}})
+		if err != nil {
+			return agentmodel.Agent{}, err
+		}
+		if result.MatchedCount != 0 {
+			return s.Get(ctx, agentID)
 		}
 	}
 }
@@ -193,11 +264,13 @@ func (s *AgentMongoStore) DeleteExpired(ctx context.Context, cutoff time.Time) (
 	// Match its current state so a concurrent reactivation is never pruned.
 	prunable := timestampBefore("observed_at", cutoff, true)
 	prunable["expired"] = true
+	prunable["$and"] = bson.A{stopMayExpire()}
 	if _, err := s.database.Delete(ctx, collection, prunable); err != nil {
 		return deleted, err
 	}
 	eligible := timestampBefore("last_heartbeat", cutoff, true)
 	eligible["expired"] = bson.M{"$ne": true}
+	eligible["$and"] = bson.A{stopMayExpire()}
 	for {
 		if err := ctx.Err(); err != nil {
 			return deleted, err
@@ -222,6 +295,7 @@ func (s *AgentMongoStore) DeleteExpired(ctx context.Context, cutoff time.Time) (
 				"_id": document.ID, "expired": bson.M{"$ne": true},
 				"observed_at.time": document.ObservedAt.Time, "observed_at.nanoseconds": document.ObservedAt.Nanoseconds,
 				"last_heartbeat.time": document.LastHeartbeat.Time, "last_heartbeat.nanoseconds": document.LastHeartbeat.Nanoseconds,
+				"$and": bson.A{stopMayExpire()},
 			}
 			result, err := s.database.Update(ctx, collection, filter, bson.M{"$set": bson.M{"expired": true}})
 			if err != nil {
@@ -249,6 +323,10 @@ func (s *AgentMongoStore) DeleteExpired(ctx context.Context, cutoff time.Time) (
 	}
 }
 
+func stopMayExpire() bson.M {
+	return bson.M{"status": bson.M{"$ne": agentmodel.AgentStopRequested}}
+}
+
 // Timestamp fields retain the sub-millisecond remainder separately from BSON
 // dates. Missing or zero observations have no ordering mark; a missing
 // or zero heartbeat has no lease. Both remain eligible independently of cutoff.
@@ -270,7 +348,7 @@ func (d agentDocument) decode() (agentmodel.Agent, error) {
 	if d.ID != d.Snapshot.ID {
 		return agentmodel.Agent{}, errors.New("stored agent ID does not match its snapshot")
 	}
-	record := agentmodel.Agent{AgentSnapshot: d.Snapshot, Stale: d.Stale}
+	record := agentmodel.Agent{AgentSnapshot: d.Snapshot, Stale: d.Stale, StopCommandID: d.StopCommandID}
 	for _, field := range []struct {
 		name  string
 		value bsonvalue.Timestamp
@@ -280,6 +358,7 @@ func (d agentDocument) decode() (agentmodel.Agent, error) {
 		{"last_seen", d.LastSeen, &record.LastSeen},
 		{"last_heartbeat", d.LastHeartbeat, &record.LastHeartbeat},
 		{"lease_expires_at", d.LeaseExpiresAt, &record.LeaseExpiresAt},
+		{"stop_requested_at", d.StopRequestedAt, &record.StopRequestedAt},
 	} {
 		value, err := field.value.Decode()
 		if err != nil {
@@ -299,6 +378,11 @@ func validateInventoryRecord(record agentmodel.Agent) error {
 	}
 	if record.LastSeen.IsZero() {
 		return errors.New("inventory observation must have a receipt timestamp")
+	}
+	if record.StopCommandID != "" || !record.StopRequestedAt.IsZero() {
+		if err := agentmodel.ValidateStopRequest(record.StopCommandID, record.StopRequestedAt); err != nil {
+			return fmt.Errorf("invalid stored agent stop request: %w", err)
+		}
 	}
 	if err := record.Server.Validate(); err != nil {
 		return err

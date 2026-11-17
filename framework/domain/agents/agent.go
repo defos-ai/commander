@@ -10,17 +10,20 @@ import (
 // DefaultHeartbeatTimeout allows a 30-second heartbeat interval plus 15 seconds of grace.
 const DefaultHeartbeatTimeout = 45 * time.Second
 
-// Agent is a received public snapshot with controller-owned liveness data.
+// Agent is a received public snapshot with controller-owned liveness and stop state.
 // LastSeen records receipt time; ObservedAt orders source observations.
 // LastHeartbeat is the source heartbeat time and alone renews the agent's lease.
-// A zero LastHeartbeat has no lease. Stores retain the observed status.
+// A zero LastHeartbeat has no lease. A requested stop overrides live observations
+// until the agent confirms shutdown.
 type Agent struct {
 	AgentSnapshot
-	ObservedAt     time.Time `json:"observed_at,omitzero"`
-	LastSeen       time.Time `json:"last_seen"`
-	LastHeartbeat  time.Time `json:"last_heartbeat"`
-	LeaseExpiresAt time.Time `json:"lease_expires_at,omitzero"`
-	Stale          bool      `json:"stale"`
+	StopCommandID   string    `json:"stop_command_id,omitempty"`
+	StopRequestedAt time.Time `json:"stop_requested_at,omitzero"`
+	ObservedAt      time.Time `json:"observed_at,omitzero"`
+	LastSeen        time.Time `json:"last_seen"`
+	LastHeartbeat   time.Time `json:"last_heartbeat"`
+	LeaseExpiresAt  time.Time `json:"lease_expires_at,omitzero"`
+	Stale           bool      `json:"stale"`
 }
 
 // Snapshot derives freshness from the persisted lease even when the controller
@@ -32,7 +35,7 @@ func (record Agent) Snapshot(now time.Time) Agent {
 		expires = record.LastHeartbeat.Add(DefaultHeartbeatTimeout)
 	}
 	record.Stale = record.Status != AgentStopped && (record.LastHeartbeat.IsZero() || !now.Before(expires))
-	if record.Stale {
+	if record.Stale && record.Status != AgentStopRequested {
 		record.Status = AgentUnavailable
 	}
 	if record.Stale || record.Status == AgentStopped {

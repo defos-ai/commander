@@ -29,6 +29,12 @@ including workers whose `Run` has not started. No runtime loop starts in assembl
   inventory observation state, lease expiry and durable dispatch/recovery. Remote
   waits stay outside its owner loop. `submit` retains a buffered reply so caller
   cancellation does not block the owner or discard value-plus-error outcomes.
+  Its stop reconciler retains controller-owned stop intent before publishing,
+  reuses the saved command envelope without a caller-derived expiry, and retries
+  after publication uncertainty or controller restart. Pending stops fence new
+  work but preserve active-work observation and acceptance. A successful publish
+  is throttled for one heartbeat interval; only a stopped observation confirms
+  shutdown. Provider read failures during uncertainty fence controller admission.
 - [Events](event/worker.go) owns the subscription and handlers. Apply observations
   inside coordination before acknowledging a delivery. Fatal observation errors
   fence admission before releasing the mailbox; rejected messages and log write

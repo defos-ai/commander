@@ -198,7 +198,7 @@ func (w *Worker) sharedRecipient(ctx context.Context, task operations.Task) (boo
 		return false, err
 	}
 	work := record.Work
-	return record.ID == task.AgentID && !record.Stale && record.Status == agents.AgentWorking && work != nil &&
+	return record.ID == task.AgentID && !record.Stale && (record.Status == agents.AgentWorking || record.Status == agents.AgentStopRequested) && work != nil &&
 		work.OperationID == task.OperationID && work.TaskID == task.ID && work.CommandID == task.CommandID && work.ActionName == task.ActionName, nil
 }
 

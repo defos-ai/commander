@@ -116,6 +116,9 @@ func (c AgentEventConsumer) observe(ctx context.Context, record agentmodel.Agent
 	renew := heartbeat && heartbeatAt.After(record.LastHeartbeat) && (newSnapshot || record.Status != agentmodel.AgentStopped)
 	changed := newSnapshot || renew
 	if newSnapshot {
+		if record.StopCommandID != "" && snapshot.Status != agentmodel.AgentStopped {
+			snapshot.Status = agentmodel.AgentStopRequested
+		}
 		record.AgentSnapshot = snapshot
 		record.ObservedAt, record.Stale = message.CreatedAt, false
 	}

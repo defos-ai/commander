@@ -90,6 +90,7 @@ func (s *AgentFsStore) Upsert(ctx context.Context, record agentmodel.Agent) erro
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	record.StopCommandID, record.StopRequestedAt = "", time.Time{}
 	if err := validateInventoryRecord(record); err != nil {
 		return err
 	}
@@ -98,6 +99,14 @@ func (s *AgentFsStore) Upsert(ctx context.Context, record agentmodel.Agent) erro
 		stored, err := s.read(ctx, snapshot.ID)
 		if err != nil && !errors.Is(err, agentmodel.ErrUnknownAgent) {
 			return err
+		}
+		if err == nil {
+			snapshot.StopCommandID, snapshot.StopRequestedAt = stored.StopCommandID, stored.StopRequestedAt
+		}
+		if snapshot.StopCommandID != "" && snapshot.Status != agentmodel.AgentStopped {
+			snapshot.Status = agentmodel.AgentStopRequested
+		} else if snapshot.Status == agentmodel.AgentStopRequested {
+			return errors.New("observation cannot request an agent stop")
 		}
 		if err == nil && !stored.ObservedAt.IsZero() && !snapshot.ObservedAt.After(stored.ObservedAt) {
 			if stored.Expired || stored.Status == agentmodel.AgentStopped ||
@@ -118,6 +127,42 @@ func (s *AgentFsStore) Upsert(ctx context.Context, record agentmodel.Agent) erro
 		_, err = s.write(ctx, inventoryRecord{Agent: snapshot})
 		return err
 	})
+}
+
+func (s *AgentFsStore) RequestStop(ctx context.Context, agentID, commandID string, requestedAt time.Time) (agentmodel.Agent, error) {
+	if err := ctx.Err(); err != nil {
+		return agentmodel.Agent{}, err
+	}
+	if err := agentmodel.ValidateStopRequest(commandID, requestedAt); err != nil {
+		return agentmodel.Agent{}, err
+	}
+	if !id.ValidAgent(agentID) {
+		return agentmodel.Agent{}, agentmodel.ErrUnknownAgent
+	}
+	var result agentmodel.Agent
+	err := s.locked(ctx, func() error {
+		stored, err := s.read(ctx, agentID)
+		if err != nil {
+			return err
+		}
+		if stored.Expired {
+			return agentmodel.ErrUnknownAgent
+		}
+		if stored.StopCommandID == "" && stored.Status != agentmodel.AgentStopped {
+			stored.StopCommandID, stored.StopRequestedAt, stored.Status = commandID, requestedAt, agentmodel.AgentStopRequested
+			if _, err := s.write(ctx, stored); err != nil {
+				return err
+			}
+		} else if stored.StopCommandID != "" && stored.Status != agentmodel.AgentStopped {
+			// Confirm a prior publication whose directory sync may have failed.
+			if err := syncInventoryDirectory(s.directory()); err != nil {
+				return err
+			}
+		}
+		result = stored.Agent.Clone()
+		return nil
+	})
+	return result, err
 }
 
 func (s *AgentFsStore) Get(ctx context.Context, agentID string) (agentmodel.Agent, error) {
@@ -204,6 +249,9 @@ func (s *AgentFsStore) DeleteExpired(ctx context.Context, cutoff time.Time) ([]a
 		}
 		removed := false
 		for _, record := range records {
+			if record.Status == agentmodel.AgentStopRequested {
+				continue
+			}
 			if record.Expired && record.ObservedAt.After(cutoff) ||
 				!record.Expired && !record.LastHeartbeat.IsZero() && record.LastHeartbeat.After(cutoff) {
 				continue
@@ -346,6 +394,11 @@ func validateInventoryRecord(record agentmodel.Agent) error {
 	}
 	if record.LastSeen.IsZero() {
 		return errors.New("inventory observation must have a receipt timestamp")
+	}
+	if record.StopCommandID != "" || !record.StopRequestedAt.IsZero() {
+		if err := agentmodel.ValidateStopRequest(record.StopCommandID, record.StopRequestedAt); err != nil {
+			return fmt.Errorf("invalid stored agent stop request: %w", err)
+		}
 	}
 	return record.Server.Validate()
 }

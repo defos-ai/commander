@@ -24,7 +24,7 @@ func AssessTaskRequirements(task Task, record agents.Agent, now time.Time) []act
 	}
 	record = record.Snapshot(now)
 	work := record.Work
-	if record.Stale || record.Status != agents.AgentWorking || work == nil ||
+	if record.Stale || record.Status != agents.AgentWorking && record.Status != agents.AgentStopRequested || work == nil ||
 		work.OperationID != task.OperationID || work.TaskID != task.ID ||
 		work.CommandID != task.CommandID || work.ActionName != task.ActionName {
 		return nil

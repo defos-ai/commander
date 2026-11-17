@@ -10,6 +10,10 @@ database stores, artifact files and reports. See [README.md](README.md) for use.
 - Reuse `internal/jsonfile` for locking and publication. Shared filesystems must
   support file locks, atomic renames and hard links; process-local locking alone
   cannot protect stores shared by hosts.
+- Agent inventory reserves the first controller stop request under its inventory
+  lock, retaining its command ID and timestamp with `stop_requested` status.
+  Observations cannot supply, replace or clear that intent. Preserve it across
+  lease expiry and reopen; confirmed stopped agents expire normally.
 - Mission creation checks names and writes under one catalog lock, rejecting an
   existing name even for an identical definition. Keep startup `Upsert` separate;
   callers reconcile failed writes by reading the saved definition.
