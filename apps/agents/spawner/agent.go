@@ -11,6 +11,9 @@ import (
 
 const AgentType agents.AgentType = "spawner-agent"
 
+// Version is set by release builds and stays empty in unstamped builds.
+var Version string
+
 func Responsibilities() []string {
 	return []string{
 		"Install compatible agents from GitHub releases, including repositories outside the source list. defos-ai sources proceed automatically; for other owners spawn-agent asks an installation question before token access or launch. The operator answers first, and the model may answer after fallback_at. Answer the saved question: Yes resumes installation and No prevents it. No saved owner trust is created. The release must publish agent.yaml describing a released native executable or digest-pinned Docker image for the configured runtime.",
@@ -25,6 +28,9 @@ func Responsibilities() []string {
 
 func NewAgent(config agents.AgentConfig, launcher spawneractions.Spawner, resolver *packages.Resolver, runtimeKind runtimes.RuntimeKind) (*agents.Agent, error) {
 	config.Type = AgentType
+	if config.Version == "" {
+		config.Version = Version
+	}
 	if config.Responsibilities == nil {
 		config.Responsibilities = Responsibilities()
 	}

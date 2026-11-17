@@ -105,6 +105,12 @@ checksums and image digest. It validates the manifest and renders `agent.yaml`.
 Export pure `Responsibilities()` and `ActionDescriptions()` helpers so release
 tooling and live registration share their descriptions.
 
+Use the same exact release version for `agent.yaml`, image tags and the running
+agent's `AgentConfig.Version`. The built-in release workflows stamp this value
+into native and Docker builds; embedded agents retain their own package version.
+Existing unstamped binaries remain unreported. See the
+[agent build contract](../apps/agents/AGENTS.md#package-contract) when adopting it.
+
 Build, test and generate metadata from the same revision. Keep the release as a
 draft until all assets are uploaded. For Commander's built-in packages, follow
 [the release checklist](releases/README.md#agent-packages).

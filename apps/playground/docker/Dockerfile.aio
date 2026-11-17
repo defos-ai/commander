@@ -18,9 +18,10 @@ WORKDIR /src
 ENV CGO_ENABLED=0 GOTOOLCHAIN=local
 COPY . .
 COPY --from=frontend /src/dist ./apps/admin/ui/backend/static/dist
+ARG VERSION
 RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg/mod \
-    go build -tags embed_ui -trimpath -buildvcs=false -o /out/commander ./apps/playground/cmd/commander
+    go build -tags embed_ui -trimpath -buildvcs=false -ldflags="-X github.com/defos-ai/commander/apps/agents/spawner.Version=${VERSION}" -o /out/commander ./apps/playground/cmd/commander
 
 FROM debian:bookworm-slim
 RUN apt-get update \

@@ -39,6 +39,8 @@ jobs:
         with:
           context: .
           file: apps/playground/docker/Dockerfile.aio
+          build-args: |
+            VERSION=${{ inputs.version }}
           push: true
           platforms: linux/amd64
           tags: ghcr.io/defos-ai/commander-aio:${{ inputs.version }}

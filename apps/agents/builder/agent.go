@@ -15,6 +15,9 @@ import (
 
 const AgentType agent.AgentType = "builder-agent"
 
+// Version is set by release builds and stays empty in unstamped builds.
+var Version string
+
 func Dependencies() []agentmodel.Dependency {
 	return []agentmodel.Dependency{
 		{Name: "git", Description: "Git CLI for checking out the agent template and publishing generated source."},
@@ -35,6 +38,9 @@ func Responsibilities() []string {
 
 func NewAgent(config agent.AgentConfig, workspaceDir string) (*agent.Agent, error) {
 	config.Type = AgentType
+	if config.Version == "" {
+		config.Version = Version
+	}
 	if config.Responsibilities == nil {
 		config.Responsibilities = Responsibilities()
 	}

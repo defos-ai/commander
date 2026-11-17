@@ -15,6 +15,11 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
   [docker.Manager](runtimes/docker/manager.go) and the injected
   [Kubernetes Manager](runtimes/kubernetes/manager.go) implement the interface.
   CLI factories select the runtime; `cli.go` stays independent of concrete clients.
+- `Version` is module-owned release metadata stamped through Go linker flags.
+  `NewAgent` uses it only when `AgentConfig.Version` is empty, preserving explicit
+  caller versions and framework validation. Unstamped builds leave it empty;
+  never infer the agent version from the framework, environment, build info or
+  host binary.
 - Supporting helpers live under `internal/`: [package access](internal/packageaccess/access.go)
   prepares credentials for inspection and spawning; [readiness](internal/readiness/readiness.go)
   projects registration into compact action summaries. Keep registered executors

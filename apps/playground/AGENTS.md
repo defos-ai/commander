@@ -10,6 +10,9 @@
 - [`internal/local/session.go`](internal/local/session.go) composes the existing
   Admin, MCP, API, controller and spawner hosts for `--all-in-one`.
   The spawner launches agent packages requested through chat/MCP as native children.
+  Native Commander, lightweight image and AIO release builds stamp
+  `github.com/defos-ai/commander/apps/agents/spawner.Version` from the same release
+  input as its standalone assets. Unstamped local builds leave it empty.
 - [`internal/adminhost/`](internal/adminhost/) owns the UI listener for local hosts
   and explicit `/admin serve` calls. Command cancellation limits startup; Playground
   owns the ready server until shutdown. Serialize starts and await shutdown.

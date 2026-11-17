@@ -11,6 +11,11 @@ Read the [agent guide](../AGENTS.md) and [root guide](../../../AGENTS.md) first.
   `AgentConfig` together. Custom actions/providers remain caller-owned; default
   actions cannot use an unrelated provider. Keep catalog construction here;
   individual action constructors belong in `actions/`.
+- `Version` is module-owned release metadata stamped through Go linker flags.
+  `NewAgent` uses it only when `AgentConfig.Version` is empty, preserving explicit
+  caller versions and framework validation. Unstamped builds leave it empty;
+  never infer the agent version from the framework, environment, build info or
+  host binary.
 - `Dependencies()` returns fresh software declarations for both live registration
   and the built-in release manifest generator. Default `AgentConfig.Dependencies`
   only when nil; preserve explicit empty/custom declarations. Keep `git`, `go`

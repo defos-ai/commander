@@ -87,15 +87,35 @@ case "${@: -1}" in
   ./apps/playground/cmd/commander)
     [[ " $* " == *' -tags embed_ui '* ]]
     prefix=commander
+    symbol=github.com/defos-ai/commander/apps/agents/spawner.Version
     ;;
   ./apps/admin/cmd/commander-admin)
     [[ " $* " == *' -tags embed_ui '* ]]
     prefix=commander-admin
+    symbol=
     ;;
-  ./apps/agents/spawner/cmd) prefix=commander-spawner-agent ;;
-  ./apps/agents/builder/cmd) prefix=commander-builder-agent ;;
+  ./apps/agents/spawner/cmd)
+    prefix=commander-spawner-agent
+    symbol=github.com/defos-ai/commander/apps/agents/spawner.Version
+    ;;
+  ./apps/agents/builder/cmd)
+    prefix=commander-builder-agent
+    symbol=github.com/defos-ai/commander/apps/agents/builder.Version
+    ;;
   *) exit 1 ;;
 esac
+flags=
+for argument in "$@"; do
+  case "$argument" in
+    -ldflags=*) [[ -z "$flags" ]]; flags="${argument#-ldflags=}" ;;
+  esac
+done
+expected='-s -w'
+if [[ -n "$symbol" ]]; then expected+=" -X $symbol=$VERSION"; fi
+if [[ "$flags" != "$expected" ]]; then
+  printf '%s linker flags = %s; expected %s\n' "$prefix" "$flags" "$expected" >&2
+  exit 1
+fi
 while [[ "$1" != '-o' ]]; do shift; done
 [[ "$2" == "dist/${prefix}_${GOOS}_${GOARCH}"* ]]
 cat > "$2" <<'BINARY'
@@ -104,6 +124,12 @@ cat > "$2" <<'BINARY'
 printf 'help called\n' > "$STATE/help-${0##*/}"
 BINARY
 chmod +x "$2"
+`
+
+const ImageGoBuild = `#!/bin/bash
+set -euo pipefail
+[[ "$1" == build ]]
+printf '%s\n' "$@" > "$STATE/build-arguments"
 `
 
 const StableGitHub = `#!/bin/bash

@@ -26,6 +26,13 @@
 
 ## Package contract
 
+- Keep package build metadata in the agent module's `Version` string. Default
+  `AgentConfig.Version` from it only when the caller leaves that field empty.
+  Stamp native and Docker builds with the same exact version used by `agent.yaml`
+  and release tags, using `-ldflags "-X <agent-module>.Version=$VERSION"`.
+  Embedded hosts must stamp each included agent package explicitly. Unstamped
+  local builds remain unreported; never infer versions from the framework,
+  enclosing executable or mutable `stable`/`latest` tags.
 - [Agent packages and bootstrap](../../docs/agent-packages.md) defines the release
   manifest and spawner behavior. The [spawner module](spawner/AGENTS.md)
   implements native/Docker spawning through the controller-dispatched `spawn-agent`

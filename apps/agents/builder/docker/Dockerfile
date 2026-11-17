@@ -10,9 +10,10 @@ FROM golang:1.26.7-bookworm AS build
 WORKDIR /src
 ENV CGO_ENABLED=0 GOTOOLCHAIN=local
 COPY . .
+ARG VERSION
 RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg/mod \
-    go build -trimpath -buildvcs=false -o /out/commander-builder-agent ./apps/agents/builder/cmd
+    go build -trimpath -buildvcs=false -ldflags="-X github.com/defos-ai/commander/apps/agents/builder.Version=${VERSION}" -o /out/commander-builder-agent ./apps/agents/builder/cmd
 
 FROM debian:bookworm-slim
 RUN apt-get update \
