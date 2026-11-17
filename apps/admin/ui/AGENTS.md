@@ -66,6 +66,19 @@
   `version`, with **Unknown** for absent/empty values. Include versions and this
   fallback in agent search. Validate the optional string, render it as text, and
   keep it separate from software dependency version guidance and readiness.
+- Agent stop controls submit one authenticated `POST /api/v1/agents/stop` with
+  exact nonempty ID/type/version criteria. Individual stops fix the ID; group
+  stops leave selection to the controller, independent of list search. Confirm
+  the criteria before submission and validate every returned item/error, even
+  for HTTP 200. Show `stop_requested` separately from confirmed `stopped`, retaining
+  active work and stop metadata. Stopping does not remove deployment resources
+  or change their restart policies. Keep the attempt through dialog dismissal
+  and list/detail navigation; abort stale writes/reads on selection or source
+  changes. Require an explicit saved-inventory read before another submission;
+  ordinary polling cannot clear this guard. For a validated receipt, read back
+  only its reported IDs, including failures. For unknown selector outcomes,
+  current matching inventory cannot establish the original selected set or
+  prove shutdown of absent agents. A new request explicitly captures new matches.
 - Agent details show declared software dependencies and optional supported versions
   independently of action readiness. Inline guidance matches only executable
   missing requirements by exact name. Omitted/empty declarations mean none were

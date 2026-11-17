@@ -29,3 +29,18 @@ export function agentDependencySnapshots(agent: Agent, legacy: Agent): AgentDepe
     legacy: { ...legacy, version: undefined, dependencies: undefined },
   };
 }
+
+export function stoppingAgentSnapshots(agent: Agent, other: Agent) {
+  const ready = { ...agent, version: 'v8.9.0', status: 'ready', stale: false, work: null };
+  const requested = {
+    ...ready, status: 'stop_requested',
+    stop_command_id: 'a1234567-1234-4123-8123-123456789abc',
+    stop_requested_at: new Date().toISOString(),
+  };
+  return {
+    ready,
+    other: { ...other, version: ready.version, status: 'ready', stale: false, work: null },
+    requested,
+    stopped: { ...requested, status: 'stopped' },
+  };
+}

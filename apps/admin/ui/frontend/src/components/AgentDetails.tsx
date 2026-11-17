@@ -4,9 +4,9 @@ import { ActionStatus } from './ActionDetails';
 
 export function AgentStatus({ status }: { status: string }) {
   const { t } = useTranslation();
-  const label = status === 'idle' || status === 'discovering' || status === 'ready' || status === 'working' || status === 'unavailable' || status === 'stopped'
+  const label = status === 'idle' || status === 'discovering' || status === 'ready' || status === 'working' || status === 'unavailable' || status === 'stop_requested' || status === 'stopped'
     ? t($ => $.agents.status[status]) : status;
-  const tone = status === 'ready' ? 'ready' : status === 'unavailable' ? 'warning' : 'muted';
+  const tone = status === 'ready' ? 'ready' : status === 'unavailable' || status === 'stop_requested' ? 'warning' : 'muted';
   return <span className="catalog-status" data-tone={tone}>{label}</span>;
 }
 
@@ -37,11 +37,14 @@ export function AgentDetails({ agent }: { agent: Agent }) {
   const work = agent.work;
   return <div className="catalog-details">
     {agent.stale && <p className="notice" role="status">{t($ => $.agents.staleDescription)}</p>}
+    {agent.status === 'stop_requested' && <p className="notice" role="status">{t($ => $.agents.stop.drainNote)}</p>}
     <section className="catalog-section"><h2>{t($ => $.agents.snapshot)}</h2>
       <dl className="detail-list">
         <div><dt>{t($ => $.agents.type)}</dt><dd>{agent.type}</dd></div>
         <div><dt>{t($ => $.agents.version)}</dt><dd>{agent.version || t($ => $.agents.unknownVersion)}</dd></div>
         <div><dt>{t($ => $.agents.statusLabel)}</dt><dd><AgentStatus status={agent.status} />{agent.stale && <> · <span className="catalog-status" data-tone="warning">{t($ => $.agents.stale)}</span></>}</dd></div>
+        {agent.stop_requested_at && <div><dt>{t($ => $.agents.stop.requestedAt)}</dt><dd><ReportedTime value={agent.stop_requested_at} /></dd></div>}
+        {agent.stop_command_id && <div><dt>{t($ => $.agents.stop.commandID)}</dt><dd><code>{agent.stop_command_id}</code></dd></div>}
         <div><dt>{t($ => $.agents.hostname)}</dt><dd>{agent.server.hostname || t($ => $.agents.notReported)}</dd></div>
         <div><dt>{t($ => $.agents.ipAddress)}</dt><dd>{agent.server.ip_address || t($ => $.agents.notReported)}</dd></div>
         <div><dt>{t($ => $.agents.lastSeen)}</dt><dd><ReportedTime value={agent.last_seen} /></dd></div>

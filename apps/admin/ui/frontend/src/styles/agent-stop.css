@@ -1,0 +1,15 @@
+.agent-stop-controls { display: grid; gap: 18px; margin: 0 0 24px; }
+.agent-stop-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.agent-stop-controls > .agent-stop-actions { justify-content: flex-end; }
+.agent-stop-form { display: grid; gap: 16px; }
+.agent-stop-confirmation { display: flex; align-items: flex-start; gap: 10px; font-size: 13px; line-height: 1.7; }
+.agent-stop-confirmation input { flex: 0 0 auto; margin-top: 4px; }
+.agent-stop-controls .agent-stop-results { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; justify-content: normal; gap: 14px; min-width: 0; margin-bottom: 0; }
+.agent-stop-results h2 { font-size: 18px; }
+.agent-stop-results code { font: 400 11px/1.7 var(--font-mono); overflow-wrap: anywhere; }
+.agent-stop-results ul { display: grid; gap: 14px; padding: 0; list-style: none; }
+.agent-stop-results li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; }
+.agent-stop-selector { display: flex; flex-wrap: wrap; gap: 10px 22px; margin: 0; }
+.agent-stop-selector div { min-width: 0; }
+.agent-stop-selector dt { color: var(--muted); margin-bottom: 4px; }
+.agent-stop-selector dd { margin: 0; }

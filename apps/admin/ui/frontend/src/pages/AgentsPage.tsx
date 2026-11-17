@@ -3,6 +3,7 @@ import { ArrowLeft, ArrowUpRight, Bot, KeyRound, LoaderCircle, RefreshCw, Search
 import { getAgent, listAgents } from '../api/agents';
 import type { Agent } from '../api/types';
 import { AgentDetails, AgentStatus } from '../components/AgentDetails';
+import { AgentStopControls } from '../components/AgentStopControls';
 import { Button } from '../components/Button';
 import type { Connection, Session } from '../connections/types';
 import { useCatalogQuery } from '../hooks/useCatalogQuery';
@@ -56,6 +57,8 @@ export function AgentsPage({ connection, credentials, onSignIn, selectedID: rout
         </Button>}
       </div>
     </div>
+    {credentials && <AgentStopControls connection={connection} credentials={credentials} selectedID={selectedID} agent={query.item}
+      available={!error && !query.loading} onRefresh={query.refresh} />}
     {error ? <div className="notice" role="alert">
       <p>{t($ => $.agents.errors[error])}</p>
       {error === 'authentication' ? <Button onClick={onSignIn}>{t($ => $.agents.signIn)}</Button>

@@ -66,6 +66,8 @@ export interface Agent {
   version?: string;
   status: string;
   work?: AgentWork | null;
+  stop_command_id?: string;
+  stop_requested_at?: string;
   server: { ip_address: string; hostname: string };
   responsibilities: string[] | null;
   dependencies?: AgentDependency[];
