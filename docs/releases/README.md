@@ -1,13 +1,14 @@
 # Release Commander
 
 Use one stable `v0.X.Y` or `v1.X.Y` version for Commander and every module in
-[go.work](../../go.work). The prepared version is `v0.6.1`; the examples below use it.
+[go.work](../../go.work). The prepared version is `v0.7.0`; the examples below use it.
 
-Read the [v0.6.1 notes](note-v0.6.1.md) for Commander and standalone
+Read the [v0.7.0 notes](note-v0.7.0.md) for Commander and standalone
 agent changes, or choose an earlier version below.
 
 ## Release notes
 
+- [v0.7.0](note-v0.7.0.md)
 - [v0.6.1](note-v0.6.1.md)
 - [v0.6.0](note-v0.6.0.md)
 - [v0.5.1](note-v0.5.1.md)
@@ -32,7 +33,7 @@ agent changes, or choose an earlier version below.
    publication. For the local module readiness check, run:
 
 ```sh
-RELEASE_VERSION=v0.6.1 go test -count=1 -failfast -timeout=10m -v ./.github/tests/release_test.go
+RELEASE_VERSION=v0.7.0 go test -count=1 -failfast -timeout=10m -v ./.github/tests/release_test.go
 ```
 
 The local check does not replace the full CI pipeline. Review the
@@ -68,7 +69,7 @@ Windows filenames end in `.exe`; macOS uses `darwin`. `LICENSE` and
 `checksums.txt` accompany the binaries. Binaries are unsigned; macOS builds are
 not notarized.
 
-The prepared v0.6.1 release publishes `install.sh` and `install.ps1` in the root
+The prepared v0.7.0 release publishes `install.sh` and `install.ps1` in the root
 assets and checksum file. They select the native Commander binary and install it to a
 user-owned directory. See the [installer guide](../installation.md); existing
 releases keep their original assets.
@@ -84,8 +85,8 @@ The publication workflow also creates separate builder and spawner package relea
 
 | Package reference | Release tag |
 | --- | --- |
-| `github.com/defos-ai/commander/apps/agents/builder@v0.6.1` | `apps/agents/builder/v0.6.1` |
-| `github.com/defos-ai/commander/apps/agents/spawner@v0.6.1` | `apps/agents/spawner/v0.6.1` |
+| `github.com/defos-ai/commander/apps/agents/builder@v0.7.0` | `apps/agents/builder/v0.7.0` |
+| `github.com/defos-ai/commander/apps/agents/spawner@v0.7.0` | `apps/agents/spawner/v0.7.0` |
 
 Each contains its six native binaries, `agent.yaml`, `LICENSE` and `checksums.txt`.
 Both support Docker on `linux/amd64`. These references become installable after

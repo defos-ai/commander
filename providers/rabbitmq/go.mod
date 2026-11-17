@@ -3,6 +3,6 @@ module github.com/defos-ai/commander/providers/rabbitmq
 go 1.26.7
 
 require (
-	github.com/defos-ai/commander/framework v0.6.1
+	github.com/defos-ai/commander/framework v0.7.0
 	github.com/rabbitmq/amqp091-go v1.15.0
 )
