@@ -30,7 +30,7 @@ func Verify(ctx context.Context, endpoint string, credentials host.BearerCredent
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	client := protocol.NewClient(&protocol.Implementation{Name: "commander-setup", Version: "0.6.0"}, &protocol.ClientOptions{Logger: logger})
+	client := protocol.NewClient(&protocol.Implementation{Name: "commander-setup", Version: "0.6.1"}, &protocol.ClientOptions{Logger: logger})
 	httpClient := &http.Client{
 		Transport:     &bearerTransport{credentials: credentials},
 		Timeout:       15 * time.Second,

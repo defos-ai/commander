@@ -9,7 +9,7 @@ Start with [Installation](installation.md) to run natively, or
 | Use terminal chat | [Playground](../apps/playground/README.md) |
 | Inspect operations in a browser | [Admin UI](../apps/admin/ui/README.md) |
 | Create missions and manage execution | [Feature guides](features/README.md) |
-| Find useful workflows | [Use cases](use-cases.md) |
+| Find useful workflows | [Use cases](https://github.com/defos-ai/commander/blob/main/docs/use-cases.md) |
 | Build an agent | [Agent development](../apps/agents/README.md) · [Packaging](agent-packages.md) |
 | Integrate existing agent frameworks | [Framework integrations](frameworks.md) |
 | Understand architecture and limits | [Overview](overview.md) · [Domain abstractions](abstractions.md) |

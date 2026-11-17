@@ -8,7 +8,7 @@ Build, connect, orchestrate, and govern distributed AI agents across complex mis
 
 Run missions and operations lasting months, orchestrating agents with different models and levels of intelligence.
 
-What are the use cases for Commander? <a href="https://chatgpt.com/?q=What%20are%20the%20use%20cases%20for%20defos-ai/commander?" target="_blank" rel="noopener noreferrer">Ask ChatGPT</a>
+What are the use cases for Commander? [Ask ChatGPT](https://chatgpt.com/?q=Read%20https%3A%2F%2Fgithub.com%2Fdefos-ai%2Fcommander%2Fblob%2Fmain%2Fdocs%2Fuse-cases.md%20and%20explain%20the%20practical%20use%20cases%20for%20DEFOS%20Commander%2C%20the%20enterprise%20control%20plane%20for%20AI%20agents.)
 
 ## Quick start
 
@@ -27,4 +27,4 @@ The demo installs `example` agent, saves a topic-focused reading list as Markdow
 
 ## Learn more
 
-[Documentation](docs/README.md) · [Use cases](docs/use-cases.md) · [Releases](docs/releases/README.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Code of Conduct](CODE_OF_CONDUCT.md) · [AGPL-3.0-only](LICENSE)
+[Documentation](docs/README.md) · [Use cases](https://github.com/defos-ai/commander/blob/main/docs/use-cases.md) · [Releases](docs/releases/README.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Code of Conduct](CODE_OF_CONDUCT.md) · [AGPL-3.0-only](LICENSE)

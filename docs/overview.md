@@ -8,10 +8,6 @@ execution history, results and artifacts for operational review.
 The decision maker can be a model in Playground or another MCP client, or an
 operator using the API and Admin UI.
 
-See [11 practical use cases](use-cases.md) for missions across security,
-software delivery, business operations and long-running research at universities
-and R&D centers.
-
 ## Execution flow
 
 ```mermaid
@@ -25,13 +21,19 @@ flowchart LR
     Agents --> Storage[(Artifact files)]
 ```
 
-For a website review:
+For example, create a Hacker News digest:
 
-1. Ask Commander to review a site.
-2. Commander installs any missing agents and starts the review mission.
-3. The controller sends checks to ready agents. Mission policies determine when
-   Commander reviews their results.
-4. Open the completed operation in Admin to inspect findings and screenshots.
+1. Ask Commander to create a Hacker News digest.
+2. Commander installs the example agent if required actions are missing, then
+   starts the digest operation.
+3. Choose topics when prompted. The controller runs the fetch, filter, rank and
+   write actions; mission policies determine when Commander reviews results.
+4. Open the operation in Admin to inspect results and the saved `digest.md` and
+   `stories.json` artifacts.
+
+Explore [11 practical use cases](https://github.com/defos-ai/commander/blob/main/docs/use-cases.md)
+across security, software delivery, business operations and long-running research
+at universities and R&D centers.
 
 Learn how to [create missions and choose policies](features/missions.md),
 [build agents](../apps/agents/README.md), or [connect another client](../apps/adapters/README.md).
