@@ -26,11 +26,16 @@ fetch during startup or accept source URLs/credentials as tool input. Reads are
 bounded, and remote failures stay tool-local without exposing response bodies or
 connection details. Source discovery grants no permissions and stores no state.
 
+`list_agents` and `describe_agent` preserve the optional agent `version` from
+saved inventory. It identifies the agent package/build, independently of the
+Commander framework and software dependency versions. Omit unreported versions;
+never infer them from tags, framework versions or dependency guidance.
+
 `describe_agent` preserves optional dependency declarations from saved inventory;
 `list_agents` omits them to keep discovery compact. Match only executable
-`missing_requirements` to dependency names exactly. Declarations and version hints
-do not establish installed software or action readiness. Keep secret/configuration
-handoffs separate and leave release inspection and installation to their existing
+`missing_requirements` to dependency names exactly. Declarations and dependency
+version hints do not establish installed software or action readiness. Keep
+secret/configuration handoffs separate and leave release inspection and installation to their existing
 boundaries.
 
 Question fallback is available to every MCP client through the same

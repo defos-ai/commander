@@ -12,7 +12,7 @@ func AgentWithDependencies() agents.Agent {
 	now := time.Now().UTC()
 	return agents.Agent{
 		AgentSnapshot: agents.AgentSnapshot{
-			ID: "browser-agent-00000001", Type: "browser-agent", Status: agents.AgentReady,
+			ID: "browser-agent-00000001", Type: "browser-agent", Version: "v4.5.6", Status: agents.AgentReady,
 			Server: agents.ServerInfo{IPAddress: "198.51.100.10", Hostname: "native-browser-host"},
 			Dependencies: []agents.Dependency{
 				{Name: "lightpanda", Description: "Browser runtime for the execution host.", Version: "v1.2.3"},

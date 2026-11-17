@@ -11,7 +11,7 @@ import (
 	"github.com/defos-ai/commander/framework/domain/agents"
 )
 
-func TestAgentDetailsRetainDependencyGuidanceAcrossReadinessUpdates(t *testing.T) {
+func TestAgentDetailsRetainVersionAndDependenciesAcrossReadinessUpdates(t *testing.T) {
 	a, inventory := fixtures.HostWithInventory(t)
 	announced := fixtures.AgentWithDependencies()
 	if err := inventory.Upsert(a.Context, announced); err != nil {
@@ -25,9 +25,9 @@ func TestAgentDetailsRetainDependencyGuidanceAcrossReadinessUpdates(t *testing.T
 	if err := json.Unmarshal(raw, &detail); err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Equal(detail.Dependencies, announced.Dependencies) || detail.Stale || len(detail.Actions) != 2 ||
+	if detail.Version != announced.Version || !slices.Equal(detail.Dependencies, announced.Dependencies) || detail.Stale || len(detail.Actions) != 2 ||
 		detail.Actions[0].Status != actions.Unavailable || len(detail.Actions[0].MissingRequirements) != 1 || detail.Actions[1].Status != actions.Ready {
-		t.Fatalf("agent details changed declared dependencies or observed readiness: %+v", detail)
+		t.Fatalf("agent details changed package version, dependencies or readiness: %+v", detail)
 	}
 	if dependency, found := detail.DependencyFor(detail.Actions[0].MissingRequirements[0]); !found || dependency != announced.Dependencies[0] {
 		t.Fatalf("missing executable lost its installation guidance: %+v found=%v", dependency, found)
@@ -50,6 +50,10 @@ func TestAgentDetailsRetainDependencyGuidanceAcrossReadinessUpdates(t *testing.T
 	if len(listed.Agents) != 1 {
 		t.Fatalf("agent list lost saved inventory: %+v", listed)
 	}
+	var listedVersion string
+	if err := json.Unmarshal(listed.Agents[0]["version"], &listedVersion); err != nil || listedVersion != announced.Version {
+		t.Fatalf("agent list changed the reported package version: got %q, want %q, error=%v", listedVersion, announced.Version, err)
+	}
 	if _, present := listed.Agents[0]["dependencies"]; present {
 		t.Fatal("compact agent list included dependency installation metadata")
 	}
@@ -71,11 +75,12 @@ func TestAgentDetailsRetainDependencyGuidanceAcrossReadinessUpdates(t *testing.T
 
 	a.Call("describe_agent", fixtures.Object{"agent_id": announced.ID}, &ready)
 
-	if len(ready.Actions) != 2 || ready.Actions[0].Status != actions.Ready || len(ready.Actions[0].MissingRequirements) != 0 ||
+	if ready.Version != announced.Version || len(ready.Actions) != 2 || ready.Actions[0].Status != actions.Ready || len(ready.Actions[0].MissingRequirements) != 0 ||
 		!slices.Equal(ready.Dependencies, announced.Dependencies) {
-		t.Fatalf("readiness update retained missing requirements or discarded declarations: %+v", ready)
+		t.Fatalf("readiness update changed package metadata or retained missing requirements: %+v", ready)
 	}
 	announced.Dependencies = nil
+	announced.Version = ""
 	announced.ObservedAt = announced.ObservedAt.Add(time.Nanosecond)
 	if err := inventory.Upsert(a.Context, announced); err != nil {
 		t.Fatal(err)
@@ -86,5 +91,20 @@ func TestAgentDetailsRetainDependencyGuidanceAcrossReadinessUpdates(t *testing.T
 
 	if _, present := withoutDeclarations["dependencies"]; present {
 		t.Fatal("agent details retained omitted dependency declarations")
+	}
+	if _, present := withoutDeclarations["version"]; present {
+		t.Fatal("agent details invented an unreported package version")
+	}
+	var unversionedList struct {
+		Agents []map[string]json.RawMessage `json:"agents"`
+	}
+
+	a.Call("list_agents", fixtures.Object{}, &unversionedList)
+
+	if len(unversionedList.Agents) != 1 {
+		t.Fatalf("agent list lost the unversioned agent: %+v", unversionedList)
+	}
+	if _, present := unversionedList.Agents[0]["version"]; present {
+		t.Fatal("agent list invented an unreported package version")
 	}
 }

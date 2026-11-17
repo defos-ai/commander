@@ -13,6 +13,7 @@ func ToAgentResponse(agent agents.Agent) models.AgentResponse {
 		ID:               agent.ID,
 		Sessions:         ToRuntimeSessionResponses(agent.Sessions),
 		Type:             string(agent.Type),
+		Version:          agent.Version,
 		Status:           string(agent.Status),
 		Server:           models.AgentServerResponse{IPAddress: agent.Server.IPAddress, Hostname: agent.Server.Hostname},
 		Responsibilities: slices.Clone(agent.Responsibilities),

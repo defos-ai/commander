@@ -9,6 +9,7 @@ type AgentResponse struct {
 	Sessions         []RuntimeSessionResponse     `json:"sessions,omitempty"`
 	ID               string                       `json:"id"`
 	Type             string                       `json:"type"`
+	Version          string                       `json:"version,omitempty"`
 	Status           string                       `json:"status"`
 	Work             *AgentWorkResponse           `json:"work,omitempty"`
 	Server           AgentServerResponse          `json:"server"`

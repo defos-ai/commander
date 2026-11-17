@@ -143,7 +143,7 @@ func NewServer(config Config) (*mcp.Server, error) {
 			}
 			return actionmodel.Action{}, fmt.Errorf("%w: %s on agent %s", actionmodel.ErrUnknownAction, request.ActionName, request.AgentID)
 		})
-	addTool(server, "list_agents", "List agent IDs, responsibilities, current work, hosts, freshness and action readiness without schemas. Expired leases are stale. Use describe_action for schemas or describe_agent for full details and dependency installation guidance.", emptySchema,
+	addTool(server, "list_agents", "List agent IDs, reported package versions, responsibilities, current work, hosts, freshness and action readiness without schemas. Unreported versions are omitted. Expired leases are stale. Use describe_action for schemas or describe_agent for full details and dependency installation guidance.", emptySchema,
 		func(ctx context.Context, _ struct{}) (agentList, error) {
 			agents, err := config.AgentStore.List(ctx)
 			if err != nil {
@@ -157,7 +157,7 @@ func NewServer(config Config) (*mcp.Server, error) {
 			}
 			return agentList{Agents: summaries}, nil
 		})
-	addTool(server, "describe_agent", "Inspect one announced agent, its responsibilities, dependency installation guidance, current work, freshness and complete action catalog. Match executable missing_requirements to dependencies by exact name. Declared versions are guidance, not readiness evidence; prepare software for the execution host's platform.", agentSchema,
+	addTool(server, "describe_agent", "Inspect one announced agent, its reported package version, responsibilities, dependency installation guidance, current work, freshness and complete action catalog. Unreported package versions are omitted. Match executable missing_requirements to dependencies by exact name. Dependency versions are guidance, not installed-version observations or readiness evidence; prepare software for the execution host's platform.", agentSchema,
 		func(ctx context.Context, request AgentRequest) (agentmodel.Agent, error) {
 			record, err := config.AgentStore.Get(ctx, request.AgentID)
 			if err != nil {

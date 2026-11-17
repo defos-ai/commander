@@ -127,6 +127,9 @@
   guidance into independent DTOs. Match only executable missing requirements by
   exact dependency name. Version declarations do not verify installed versions or
   readiness; keep secret/configuration requirements separate.
+  Optional agent `version` reports the agent package/build version, distinct from
+  framework and dependency versions. Omit it when unreported; it is not readiness
+  evidence.
 - Operation preflight preserves the controller's saved `agent_type` and
   `missing_requirements` metadata. Requirements with `kind: secret` identify
   managed declarations for assessed live candidates, not sensitive host

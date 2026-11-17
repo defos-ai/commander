@@ -23,7 +23,7 @@ func NewAgentInventory(t *testing.T, root string) *fsagents.AgentFsStore {
 func AgentDependencyRecord() agents.Agent {
 	now := time.Now().UTC().Add(-time.Second)
 	return agents.Agent{AgentSnapshot: agents.AgentSnapshot{
-		ID: "browser-agent-00000001", Type: "browser-agent", Status: agents.AgentReady,
+		ID: "browser-agent-00000001", Type: "browser-agent", Version: "v2.4.6", Status: agents.AgentReady,
 		Server: agents.ServerInfo{IPAddress: "127.0.0.1", Hostname: "dependency-fixture"},
 		Dependencies: []agents.Dependency{
 			{Name: "lightpanda", Description: "Install the browser runtime for the execution host.", Version: "v1.2.3"},

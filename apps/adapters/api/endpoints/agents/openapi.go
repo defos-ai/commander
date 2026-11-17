@@ -25,6 +25,7 @@ func RegisterOpenAPI(paths, components map[string]any, options *jsonschema.ForOp
 	if err != nil {
 		return fmt.Errorf("describe API Agent: %w", err)
 	}
+	schema.Properties["version"].Description = "Agent package/build version reported by the agent; absent when unreported. Distinct from framework and dependency versions; does not establish readiness."
 	schema.Properties["status"].Description = "Observed agent state. A stale lease is reported as unavailable unless the agent has stopped."
 	schema.Properties["stale"].Description = "Whether the heartbeat lease has expired at query time."
 	schema.Properties["work"].Description = "Current execution identifiers and action name; absent when no work is reported."
