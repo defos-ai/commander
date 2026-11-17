@@ -93,8 +93,8 @@ func TestAgentsAndActions(t *testing.T) {
 	}
 	for _, tool := range tools.Tools {
 		switch tool.Name {
-		case "run_action", "discover_actions", "stop_agent":
-			t.Errorf("agent administration is exposed to the model: %s", tool.Name)
+		case "run_action", "discover_actions":
+			t.Errorf("direct agent execution is exposed to the model: %s", tool.Name)
 		case "assign_task", "resolve_continuation":
 			schema, err := json.Marshal(tool.InputSchema)
 			if err != nil {
@@ -105,12 +105,26 @@ func TestAgentsAndActions(t *testing.T) {
 			}
 		}
 	}
-	for _, name := range []string{"run_action", "discover_actions", "stop_agent"} {
+	for _, name := range []string{"run_action", "discover_actions"} {
 		invalid := fixtures.OpenSession(t)
 		_, err := invalid.Session.CallTool(invalid.Context, &mcp.CallToolParams{Name: name, Arguments: fixtures.Object{"agent_id": detail.ID}})
 		if err == nil || !strings.Contains(strings.ToLower(err.Error()), "unknown tool") {
 			t.Errorf("%s should be unavailable, got %v", name, err)
 		}
+	}
+
+	var stopped struct {
+		Agents []agents.Agent     `json:"agents"`
+		Errors []agents.StopError `json:"errors"`
+	}
+	a.Call("stop_agent", fixtures.Object{"selector": fixtures.Object{"id": detail.ID, "type": "spawner-agent"}}, &stopped)
+	if stopped.Agents == nil || len(stopped.Agents) != 0 || len(stopped.Errors) != 0 {
+		t.Fatalf("stop selector did not intersect the example ID with the different agent type: %+v", stopped)
+	}
+	var unchanged agents.Agent
+	a.Call("describe_agent", fixtures.Object{"agent_id": detail.ID}, &unchanged)
+	if unchanged.Status != agents.AgentReady || unchanged.StopCommandID != "" {
+		t.Fatalf("nonmatching stop selector changed the example agent: %+v", unchanged)
 	}
 
 	op := a.Start("Agent query fixture")
