@@ -63,6 +63,7 @@ export interface AgentDependency {
 export interface Agent {
   id: string;
   type: string;
+  version?: string;
   status: string;
   work?: AgentWork | null;
   server: { ip_address: string; hostname: string };

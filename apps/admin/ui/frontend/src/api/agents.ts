@@ -23,6 +23,7 @@ function isDependency(value: unknown): value is AgentDependency {
 
 function isAgent(value: unknown): value is Agent {
   return isObject(value) && isIdentifier(value.id) && typeof value.type === 'string' &&
+    isOptionalString(value.version) &&
     typeof value.status === 'string' && typeof value.stale === 'boolean' &&
     (value.work === undefined || value.work === null || isWork(value.work)) &&
     isObject(value.server) && typeof value.server.ip_address === 'string' && typeof value.server.hostname === 'string' &&

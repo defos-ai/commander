@@ -18,6 +18,7 @@
 .catalog-row-name { font-size: 19px; font-weight: 600; overflow-wrap: anywhere; }
 .catalog-row-description { color: var(--muted); font-size: 13px; line-height: 1.6; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
 .catalog-row-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 7px 22px; color: var(--muted); font: 400 10px/1.6 var(--font-mono); }
+.catalog-row-version { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
 .catalog-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 43px 22px; border: 1px solid var(--line); text-align: center; }
 .catalog-empty > svg, .catalog-empty p { color: var(--muted); }
 .catalog-empty h2 { font-size: 20px; }

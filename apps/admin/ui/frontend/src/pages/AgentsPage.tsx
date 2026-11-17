@@ -27,7 +27,7 @@ export function AgentsPage({ connection, credentials, onSignIn, selectedID: rout
   const query = useCatalogQuery<Agent>({ url: connection.url, credentials, id: selectedID, list: listAgents, get: getAgent, pollInterval: 30_000 });
   const items = query.items ?? [];
   const filter = search.trim().toLocaleLowerCase();
-  const visible = items.filter(item => `${item.id} ${item.type} ${item.server.hostname}`.toLocaleLowerCase().includes(filter));
+  const visible = items.filter(item => `${item.id} ${item.type} ${item.version || t($ => $.agents.unknownVersion)} ${item.server.hostname}`.toLocaleLowerCase().includes(filter));
   const error = !credentials ? 'authentication' : query.error?.kind;
 
   useEffect(() => {
@@ -76,6 +76,7 @@ export function AgentsPage({ connection, credentials, onSignIn, selectedID: rout
             <span className="catalog-row-description">{item.type}{item.server.hostname && <> · {item.server.hostname}</>}</span>
             <span className="catalog-row-meta"><AgentStatus status={item.status} />
               {item.stale && <span className="catalog-status" data-tone="warning">{t($ => $.agents.stale)}</span>}
+              <span className="catalog-row-version">{t($ => $.agents.version)}: {item.version || t($ => $.agents.unknownVersion)}</span>
               <span>{t($ => $.agents.actionReadiness, { ready: item.actions?.filter(action => action.status === 'ready').length ?? 0, total: item.actions?.length ?? 0 })}</span>
             </span>
             <span className="catalog-row-description">{item.work

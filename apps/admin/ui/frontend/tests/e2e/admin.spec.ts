@@ -267,7 +267,7 @@ test('custom-port API catalogs survive navigation and restore server sign-in acr
   expect(browserRequests.filter(request => new URL(request.url).pathname.startsWith('/api/'))).toEqual([]);
 });
 
-test('agent dependencies explain missing executables and remain after readiness refresh', async ({ page, api }) => {
+test('agent versions and dependencies survive search, navigation and readiness refresh', async ({ page, api }) => {
   const agents = (await api.get<{ items: Agent[] }>('/agents')).items.filter(agent => agent.type === 'example-agent');
   expect(agents).toHaveLength(2);
   const snapshots = agentDependencySnapshots(agents[0], agents[1]);
@@ -277,8 +277,20 @@ test('agent dependencies explain missing executables and remain after readiness 
 
   await connect(page, { name: 'Dependency guidance API', url: publicAPIURL });
   await page.getByRole('navigation', { name: 'Workspace navigation' }).getByRole('button', { name: 'Agents', exact: true }).click();
-  await page.getByRole('button', { name: `View agent ${snapshots.blocked.id}`, exact: true }).click();
+  const versionedAgent = page.getByRole('button', { name: `View agent ${snapshots.blocked.id}`, exact: true });
+  const legacyAgent = page.getByRole('button', { name: `View agent ${snapshots.legacy.id}`, exact: true });
+  await expect(versionedAgent).toContainText(`Version: ${snapshots.blocked.version}`);
+  await expect(legacyAgent).toContainText('Version: Unknown');
+  const search = page.getByRole('searchbox', { name: 'Search agents', exact: true });
+  await expect(search).toHaveAttribute('placeholder', /version/i);
+  await search.fill(snapshots.blocked.version!);
+  await expect(page.getByRole('button', { name: /^View agent / })).toHaveCount(1);
+  await expect(versionedAgent).toBeVisible();
+  await versionedAgent.click();
 
+  const version = page.locator('.detail-list > div').filter({ has: page.getByText('Version', { exact: true }) }).locator('dd');
+  await expect(version).toHaveText(snapshots.blocked.version!);
+  const versionedURL = page.url();
   const dependencies = page.getByRole('region', { name: 'Dependencies', exact: true });
   await expect(dependencies.getByText('Declared software and supported versions. Action readiness shows current availability.', { exact: true })).toBeVisible();
   await expect(dependencies.getByRole('listitem')).toHaveCount(2);
@@ -304,10 +316,25 @@ test('agent dependencies explain missing executables and remain after readiness 
   await expect(action.getByRole('heading', { name: 'Missing requirements', exact: true })).toHaveCount(0);
   await expect(dependencies.getByRole('listitem')).toHaveCount(2);
   await expect(dependencies.getByText('Supported version: v1.2.3', { exact: true })).toBeVisible();
+  await expect(version).toHaveText(snapshots.blocked.version!);
   await page.getByRole('button', { name: 'All agents', exact: true }).click();
-  await page.getByRole('button', { name: `View agent ${snapshots.legacy.id}`, exact: true }).click();
+  await search.fill('');
+  await expect(versionedAgent).toContainText(`Version: ${snapshots.blocked.version}`);
+  await expect(legacyAgent).toContainText('Version: Unknown');
+  await legacyAgent.click();
+  await expect(version).toHaveText('Unknown');
   await expect(dependencies.getByText('No dependencies declared.', { exact: true })).toBeVisible();
   await expect(dependencies.getByRole('list')).toHaveCount(0);
+
+  await page.goBack();
+  await expect(versionedAgent).toContainText(`Version: ${snapshots.blocked.version}`);
+  await page.goBack();
+  await expect(page).toHaveURL(versionedURL);
+  await expect(version).toHaveText(snapshots.blocked.version!);
+  await expect(dependencies.getByText('Supported version: v1.2.3', { exact: true })).toBeVisible();
+  await page.goForward();
+  await legacyAgent.click();
+  await expect(version).toHaveText('Unknown');
 });
 
 test('operation questions, automatic work, graph and downloads use the real stack', async ({ page, api }) => {

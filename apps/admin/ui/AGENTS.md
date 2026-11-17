@@ -62,6 +62,10 @@
   upstream; reject structural traversal and keep other route checks intact.
 - Do not automatically retry mutating commands after timeouts. Query the operation
   to inspect its outcome. Update TypeScript response validation with API changes.
+- Agent list rows and snapshot details show the optional reported package
+  `version`, with **Unknown** for absent/empty values. Include versions and this
+  fallback in agent search. Validate the optional string, render it as text, and
+  keep it separate from software dependency version guidance and readiness.
 - Agent details show declared software dependencies and optional supported versions
   independently of action readiness. Inline guidance matches only executable
   missing requirements by exact name. Omitted/empty declarations mean none were

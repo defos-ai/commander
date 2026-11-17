@@ -40,6 +40,7 @@ export function AgentDetails({ agent }: { agent: Agent }) {
     <section className="catalog-section"><h2>{t($ => $.agents.snapshot)}</h2>
       <dl className="detail-list">
         <div><dt>{t($ => $.agents.type)}</dt><dd>{agent.type}</dd></div>
+        <div><dt>{t($ => $.agents.version)}</dt><dd>{agent.version || t($ => $.agents.unknownVersion)}</dd></div>
         <div><dt>{t($ => $.agents.statusLabel)}</dt><dd><AgentStatus status={agent.status} />{agent.stale && <> · <span className="catalog-status" data-tone="warning">{t($ => $.agents.stale)}</span></>}</dd></div>
         <div><dt>{t($ => $.agents.hostname)}</dt><dd>{agent.server.hostname || t($ => $.agents.notReported)}</dd></div>
         <div><dt>{t($ => $.agents.ipAddress)}</dt><dd>{agent.server.ip_address || t($ => $.agents.notReported)}</dd></div>

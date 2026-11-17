@@ -34,6 +34,6 @@ export class AgentDependencyResponses {
     const snapshot = agent.id === this.snapshots.blocked.id
       ? this.available ? this.snapshots.ready : this.snapshots.blocked
       : agent.id === this.snapshots.legacy.id ? this.snapshots.legacy : undefined;
-    return snapshot ? { ...agent, dependencies: snapshot.dependencies, actions: snapshot.actions } : agent;
+    return snapshot ? { ...agent, version: snapshot.version, dependencies: snapshot.dependencies, actions: snapshot.actions } : agent;
   }
 }

@@ -16,6 +16,7 @@ export function agentDependencySnapshots(agent: Agent, legacy: Agent): AgentDepe
   };
   const blocked: Agent = {
     ...agent,
+    version: 'v7.8.9',
     dependencies: [
       { name: 'fixture-runtime', description: 'Install the runtime for this host platform.', version: 'v1.2.3' },
       { name: 'helper-runtime', description: 'Auxiliary software used by optional actions.' },
@@ -25,6 +26,6 @@ export function agentDependencySnapshots(agent: Agent, legacy: Agent): AgentDepe
   return {
     blocked,
     ready: { ...blocked, actions: [{ ...blockedAction, status: 'ready', status_reason: undefined, missing_requirements: [] }, ...agent.actions!.slice(1)] },
-    legacy: { ...legacy, dependencies: undefined },
+    legacy: { ...legacy, version: undefined, dependencies: undefined },
   };
 }
