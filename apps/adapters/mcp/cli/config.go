@@ -36,7 +36,7 @@ func parseConfig(args []string, stderr io.Writer, credentials *host.BearerCreden
 	flags.StringVar(&databaseURL, "database-url", "", "Database URL for querying saved state (fallback: DATABASE_URL, then ./state/database)")
 	flags.StringVar(&result.listenAddress, "listen-address", "", "HTTP host:port serving /mcp, /healthz and /aboutz (MCP_LISTEN_ADDRESS, then 0.0.0.0:$PORT, then 127.0.0.1:4273)")
 	flags.StringVar(&result.runtime, "runtime", "", "Deployment runtime: native, docker or docker-compose (MCP_RUNTIME; default native)")
-	flags.StringVar(&allowedHosts, "allowed-hosts", "localhost,127.0.0.1,::1", "Comma-separated HTTP hostnames/IPs without ports; include the public hostname when deploying behind an ingress")
+	flags.StringVar(&allowedHosts, "allowed-hosts", "", "Comma-separated HTTP hostnames/IPs without ports (MCP_ALLOWED_HOSTS; default localhost,127.0.0.1,::1)")
 	flags.StringVar(&result.logLevel, "log-level", "info", "Logging level: debug, info, warn, error (fallback: LOG_LEVEL, then info)")
 	flags.StringVar(&result.logFormat, "log-format", "json", "Logging format: json, text (fallback: LOG_FORMAT, then json)")
 	flags.Usage = func() {
@@ -88,6 +88,7 @@ func parseConfig(args []string, stderr io.Writer, credentials *host.BearerCreden
 	if err != nil || portNumber < 0 || portNumber > 65535 {
 		return config{}, errors.New("listen-address port must be between 0 and 65535")
 	}
+	allowedHosts = host.Value(allowedHosts, provided["allowed-hosts"], "MCP_ALLOWED_HOSTS", "localhost,127.0.0.1,::1")
 	for _, host := range strings.Split(allowedHosts, ",") {
 		host = normalizeHost(strings.TrimSpace(host))
 		if !validHostname(host) {

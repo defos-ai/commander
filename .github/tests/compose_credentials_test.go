@@ -251,7 +251,8 @@ func TestCIComposeCredentialWiring(t *testing.T) {
 		t.Fatal("Compose must declare the persistent API credential volume")
 	}
 	mcp := services["mcp"]
-	if mcp.Init == nil || *mcp.Init || !slices.Equal(mcp.Command, []string{"--listen-address=:4273", "--allowed-hosts=localhost,127.0.0.1,::1,mcp"}) {
+	if mcp.Init == nil || *mcp.Init || !slices.Equal(mcp.Command, []string{"--listen-address=:4273"}) ||
+		mcp.Environment["MCP_ALLOWED_HOSTS"] != "${MCP_ALLOWED_HOSTS:-localhost,127.0.0.1,::1,mcp}" {
 		t.Fatal("MCP must remain PID 1 with its configured listen address and allowed hosts")
 	}
 }

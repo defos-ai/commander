@@ -276,12 +276,12 @@ services:
       dockerfile: apps/adapters/mcp/docker/Dockerfile
     command:
       - --listen-address=:4273
-      - --allowed-hosts=localhost,127.0.0.1,::1,mcp
     environment:
       <<: *environment
       DATABASE_URL: ${DATABASE_URL:-mongodb://mongo:27017/commander?replicaSet=rs0}
       MCP_TOKEN: ${MCP_TOKEN:-}
       MCP_RUNTIME: docker-compose
+      MCP_ALLOWED_HOSTS: ${MCP_ALLOWED_HOSTS:-localhost,127.0.0.1,::1,mcp}
     ports:
       - "127.0.0.1:${COMMANDER_MCP_PORT:-4273}:4273"
     volumes:

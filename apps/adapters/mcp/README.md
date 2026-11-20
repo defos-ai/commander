@@ -27,7 +27,11 @@ See [Operations](../../../docs/features/operations.md) and
 The server listens on `127.0.0.1:4273` locally. On a platform that supplies `PORT`,
 it binds to `0.0.0.0:$PORT`. Override this with `MCP_LISTEN_ADDRESS` or
 `--listen-address` (highest priority). The Docker image defaults `PORT` to `4273`.
-Include your public hostname in `--allowed-hosts` when deploying behind a proxy.
+Set `MCP_ALLOWED_HOSTS` to a comma-separated list of hostnames/IPs without ports
+when deploying behind a proxy, including your public and internal upstream names.
+`--allowed-hosts` overrides it; the default is `localhost,127.0.0.1,::1`.
+The configured list replaces those defaults; retain loopback names for local
+and all-in-one clients.
 
 To edit a mission, read `describe_mission`, then call `update_mission` with its
 complete definition and unchanged name. Edit objectives, actions, policies and

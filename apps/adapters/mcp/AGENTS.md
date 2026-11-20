@@ -13,6 +13,11 @@ nonempty `MCP_LISTEN_ADDRESS`, `0.0.0.0:$PORT`, then `127.0.0.1:4273`. Validate
 Explicit addresses retain port zero for embedded hosts. The Docker image sets
 `PORT=4273` rather than a fixed command argument, so platform ports can override it.
 
+Resolve allowed hosts after parsing: explicit `--allowed-hosts`, nonempty
+`MCP_ALLOWED_HOSTS`, then `localhost,127.0.0.1,::1`, matching API's flag/environment
+precedence. Preserve validation of explicit empty flags and reject URLs, ports
+and wildcards. Host and Origin checks remain active alongside authentication.
+
 Embedded hosts may supply a canonical UUID through `Options.InstanceID`; `/aboutz`
 then includes `instance_id` alongside runtime/application. Standalone hosts omit
 the field. Keep identity outside flags/environment and preserve public GET/HEAD

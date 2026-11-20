@@ -91,7 +91,6 @@ services:
       dockerfile: apps/adapters/mcp/docker/Dockerfile
     command:
       - --listen-address=:4273
-      - --allowed-hosts=localhost,127.0.0.1,::1,mcp
     volumes:
       - bus:/state/bus
       - storage:/state/storage
@@ -102,6 +101,7 @@ services:
       ENV: tests
       MCP_TOKEN: mcp-fixture-token
       MCP_RUNTIME: docker-compose
+      MCP_ALLOWED_HOSTS: localhost,127.0.0.1,::1,mcp
     ports:
       - "127.0.0.1:14273:4273"
     depends_on:

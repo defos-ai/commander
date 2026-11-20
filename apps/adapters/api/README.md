@@ -181,6 +181,9 @@ deployment metadata (`/aboutz`), health probes and approved CORS preflights.
 
 ### Hosts, origins and proxies
 
+`--allowed-hosts` overrides `API_ALLOWED_HOSTS`; the default is
+`localhost,127.0.0.1,::1`. MCP follows the same pattern with `MCP_ALLOWED_HOSTS`.
+
 | Configure… | Environment variable |
 | --- | --- |
 | Listener (default `127.0.0.1:4274`) | `API_LISTEN_ADDRESS`, then `PORT` |
