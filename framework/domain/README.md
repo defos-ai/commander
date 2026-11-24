@@ -30,7 +30,7 @@ The [Agent], [Controller], [Operation worker], [Queries], [Secret service] and
 | --- | --- | --- |
 | [`AgentSnapshot`](agents/agent_snapshot.go) | Advertises an instance's identity, responsibilities, capabilities, sessions and current work. | Agent state publishing, Controller registration and heartbeat consumers. |
 | [`Agent`](agents/agent.go) | Retains received inventory plus controller-owned observation times, heartbeat lease, stop intent and derived freshness. | Controller selection, Operation worker preflight, Session coordinator, Queries, Adapters. |
-| [`Selector`](agents/selector.go) | Names exact ID, type, version and advertised hostname criteria for a controller-owned selection. | Agent stop commands, saved tasks and Controller selection. |
+| [`StopSelector`](agents/stop_selector.go) | Names exact ID, type, version and advertised hostname criteria for a controller-owned stop selection. | Agent stop commands and Controller coordination. |
 | [`StopResult`](agents/stop_result.go) | Distinguishes selected agents with accepted stops from per-agent failures. | Controller commands and Adapters. |
 | [`Dependency`](agents/dependency.go) | Describes external software and supported versions; executable requirements link to this installation guidance by name. | Agent configuration, advertised snapshots and Controller inventory. |
 | [`Work`](agents/agent_snapshot.go) | Correlates current action activity and managed-secret waits with a saved assignment. | Agent runtime, Controller observations, operation requirement queries. |
@@ -53,6 +53,7 @@ The [Agent], [Controller], [Operation worker], [Queries], [Secret service] and
 | --- | --- | --- |
 | [`Operation`](operations/operation.go), [`CompletionOrigin`](operations/operation_completion.go) | Own one mission run: its input, tasks, questions, event history, completion draft for operator review, final output/report reference and accepted completion channel. | Operation worker scheduling/recovery, Controller question consumer, Queries, Adapters. |
 | [`Task`](operations/task.go) | Retains one action assignment, optional executor criteria, parentage, aggregation batch membership, assigned process, deadline, outcome and continuation. | Operation worker dispatch/results, OperationStore providers, Session coordinator, operation queries and Adapters. |
+| [`TaskSelector`](operations/task_selector.go) | Restricts action-compatible executors to one advertised hostname before the controller's selection strategy runs. | Task assignments, saved tasks, Operation worker selection and Session dispatch preparation. |
 | [`TaskDispatch`](operations/task_dispatch.go) | Supplies the process and timestamps for atomically claiming a queued task. | Operation worker, Session coordinator, OperationStore implementations. |
 | [`TaskResult`](operations/task_result.go) | Supplies an execution outcome for the atomic task/continuation/event transition. | Operation worker result reconciliation, OperationStore implementations. |
 | [`Continuation`](operations/continuation.go) | Records who decides the next work, its decision version, proposals and accepted direct children. | Mission policy evaluation, Operation worker continuation commands, model clients through Adapters. |

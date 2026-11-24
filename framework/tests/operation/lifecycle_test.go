@@ -10,7 +10,6 @@ import (
 	"github.com/defos-ai/commander/framework/comms/clients/controller/commands"
 	operationworker "github.com/defos-ai/commander/framework/controller/workers/operation"
 	"github.com/defos-ai/commander/framework/domain/actions"
-	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/domain/missions/policies"
 	"github.com/defos-ai/commander/framework/domain/operations"
@@ -153,7 +152,7 @@ func TestWaitingClientsDoNotBlockSchedulingOrCancellation(t *testing.T) {
 	first := fixtures.Start(t, r)
 	_, err := r.Assign(t.Context(), commands.AssignTaskCommand{
 		OperationID: first.ID, ActionName: "inspect", Input: []byte(`{}`),
-		Selector: &agents.Selector{Hostname: target.Server.Hostname},
+		Selector: &operations.TaskSelector{Hostname: target.Server.Hostname},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -162,7 +161,7 @@ func TestWaitingClientsDoNotBlockSchedulingOrCancellation(t *testing.T) {
 	second := fixtures.Start(t, r)
 	task, err := r.Assign(t.Context(), commands.AssignTaskCommand{
 		OperationID: second.ID, ActionName: "inspect", Input: []byte(`{}`),
-		Selector: &agents.Selector{Hostname: target.Server.Hostname},
+		Selector: &operations.TaskSelector{Hostname: target.Server.Hostname},
 	})
 	if err != nil {
 		t.Fatal(err)

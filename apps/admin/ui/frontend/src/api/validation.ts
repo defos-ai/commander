@@ -12,6 +12,10 @@ export function isOptionalString(value: unknown): value is string | undefined {
   return value === undefined || typeof value === 'string';
 }
 
+export function isHostname(value: unknown): value is string {
+  return typeof value === 'string' && value !== '' && !/[\p{White_Space}\p{Cc}/\\]/u.test(value);
+}
+
 export function isIdentifier(value: unknown): value is string {
   return typeof value === 'string' && value.trim() !== '' && value !== '.' && value !== '..';
 }

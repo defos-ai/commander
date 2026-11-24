@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/defos-ai/commander/apps/adapters/api/models"
 	e2efixtures "github.com/defos-ai/commander/apps/adapters/api/tests/fixtures/e2e"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/framework/domain/sessions"
@@ -386,6 +387,12 @@ func TestE2ESessionIndependentOwners(t *testing.T) {
 	if first.OwnerAgentID == second.OwnerAgentID {
 		t.Fatal("fixture needs two different resource owners")
 	}
+	var firstAgent, secondAgent models.AgentResponse
+	s.Request("GET", "/api/v1/agents/"+first.OwnerAgentID, nil, http.StatusOK, &firstAgent)
+	s.Request("GET", "/api/v1/agents/"+second.OwnerAgentID, nil, http.StatusOK, &secondAgent)
+	if firstAgent.Server.Hostname == "" || secondAgent.Server.Hostname == "" || firstAgent.Server.Hostname == secondAgent.Server.Hostname {
+		t.Fatal("fixture needs two distinct advertised execution hostnames")
+	}
 	for _, input := range []map[string]any{
 		{}, {"session_scope": first.ScopeID, "session_id": first.ID},
 	} {
@@ -407,7 +414,7 @@ func TestE2ESessionIndependentOwners(t *testing.T) {
 	var blocked operations.Task
 	s.Request("POST", "/api/v1/operations/"+op+"/tasks", map[string]any{
 		"action_name": "use-resource", "session_task_id": firstUse.ID, "input": map[string]any{},
-		"selector": map[string]any{"id": second.OwnerAgentID},
+		"selector": map[string]any{"hostname": secondAgent.Server.Hostname},
 	}, http.StatusCreated, &blocked)
 
 	s.Restart()
@@ -415,17 +422,17 @@ func TestE2ESessionIndependentOwners(t *testing.T) {
 	var matching operations.Task
 	mcp.Call("assign_task", map[string]any{
 		"operation_id": op, "action_name": "use-resource", "session_task_id": firstUse.ID, "input": map[string]any{},
-		"selector": map[string]any{"id": first.OwnerAgentID},
+		"selector": map[string]any{"hostname": firstAgent.Server.Hostname},
 	}, &matching)
 	matching = s.Finished(op, matching.ID)
 
 	assertIndependentSessionReuse(t, matching, first)
-	if matching.Selector == nil || matching.Selector.ID != first.OwnerAgentID {
+	if matching.Selector == nil || matching.Selector.Hostname != firstAgent.Server.Hostname {
 		t.Fatalf("matching selector was not retained with the original owner: %+v", matching)
 	}
 	retained := s.Task(op, blocked.ID)
 	if retained.Status != operations.TaskQueued || retained.AgentID != "" || retained.Selector == nil ||
-		retained.Selector.ID != second.OwnerAgentID || retained.SessionIntent == nil ||
+		retained.Selector.Hostname != secondAgent.Server.Hostname || retained.SessionIntent == nil ||
 		retained.SessionIntent.ID != first.ID || retained.SessionIntent.ScopeID != first.ScopeID {
 		t.Fatalf("selector changed session ownership or was lost across restart: %+v", retained)
 	}

@@ -6,7 +6,6 @@ import (
 
 	"github.com/defos-ai/commander/framework/comms/clients/controller/commands"
 	"github.com/defos-ai/commander/framework/domain/actions"
-	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/domain/missions/policies"
 	"github.com/defos-ai/commander/framework/domain/operations"
@@ -31,7 +30,7 @@ func TestSameActionContinuationsRetainRoutingAcrossRecoveryWithoutPinningAnAgent
 			exec, calls := fakes.ControlledExecutor()
 			first := fixtures.NewWorker(t, config, exec)
 			op := fixtures.Start(t, first)
-			selector := agents.Selector{Hostname: target.Server.Hostname}
+			selector := operations.TaskSelector{Hostname: target.Server.Hostname}
 			parent, err := first.Assign(t.Context(), commands.AssignTaskCommand{
 				OperationID: op.ID, ActionName: "inspect", Input: json.RawMessage(`{}`),
 				Selector: &selector,
@@ -113,7 +112,7 @@ func TestSameActionContinuationsRetainRoutingAcrossRecoveryWithoutPinningAnAgent
 
 func TestContinuationFanOutSelectorsAreIndependentOfParentAndSiblings(t *testing.T) {
 	op := fixtures.AggregationReview(t)
-	op.Tasks[0].Selector = &agents.Selector{Hostname: "k8s-prod"}
+	op.Tasks[0].Selector = &operations.TaskSelector{Hostname: "k8s-prod"}
 	parent := op.Tasks[0]
 
 	err := op.ResolveContinuation(parent.ID, parent.Continuation.Version, []actions.NextAction{

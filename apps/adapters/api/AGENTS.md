@@ -43,11 +43,13 @@
   resolved session intent and exact-owner checks stay in the controller. Reuse
   creates independent work without reopening or modifying a prior continuation.
   Optional `selector` is omitted/null for unconstrained work, otherwise a nonempty
-  object with exact intersecting `id`, `type`, `version` and `hostname` criteria.
-  Map independent selector DTOs into the command and preserve saved criteria in
+  `TaskSelectorRequest` with only an exact nonempty `hostname`. Reject assignment
+  `id`, `type` and `version` fields rather than treating them as stop criteria.
+  Map independent task selector DTOs into the command and preserve the filter in
   assignment responses and task/operation reads. Selection, readiness, capacity
   and session-owner checks remain controller responsibilities; no matches stay
-  queued. Same-action direct follow-ups inherit criteria, never assigned owners.
+  queued. Apply filtering before the existing selection strategy. Same-action
+  direct follow-ups inherit the filter, never assigned owners.
 - `POST /api/v1/missions` strictly decodes a flat API request, maps it explicitly
   to a mission and uses the shared validator before `MissionStore.Create`.
   Root `objectives` is a required ordered array of nonblank strings. Preserve
@@ -130,6 +132,7 @@
 - `POST /api/v1/agents/stop` accepts a required `selector` with at least one exact
   `id`, `type`, `version` or `hostname` filter; criteria intersect. Reject missing/null/empty
   selectors, supplied empty/null criteria, unknown fields and query parameters.
+  Keep broad `StopSelectorRequest` separate from task hostname filtering.
   Map independent API DTOs explicitly; selection belongs to the controller, never
   an adapter-side inventory scan. The optional `AgentCommands` capability
   delegates to the controller through the existing command client; absent

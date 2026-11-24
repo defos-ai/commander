@@ -33,7 +33,7 @@ func NewAgentCommands(inventory agents.AgentStore) *AgentCommands {
 	return &AgentCommands{inventory: inventory}
 }
 
-func (c *AgentCommands) StopAgents(ctx context.Context, selector agents.Selector) (agents.StopResult, error) {
+func (c *AgentCommands) StopAgents(ctx context.Context, selector agents.StopSelector) (agents.StopResult, error) {
 	c.calls.Add(1)
 	if err := selector.Validate(); err != nil {
 		return agents.StopResult{}, err

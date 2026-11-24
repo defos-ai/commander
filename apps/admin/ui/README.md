@@ -48,7 +48,8 @@ execution graph to inspect tasks, results and artifacts; download the final
 report as JSON. Use **Manage secrets** when an agent needs a value. See the
 [operation workflow](../../../docs/features/operations.md) for readiness and recovery.
 
-Task details show requested agent filters separately from the assigned agent ID.
+Task details show the requested hostname filter separately from the assigned
+agent ID.
 In **Agents**, use **Stop agents** to filter by ID, type, version or advertised
 hostname; supplied filters intersect. Confirm the criteria, then read saved
 state to check shutdown. Open one agent to stop that exact instance.

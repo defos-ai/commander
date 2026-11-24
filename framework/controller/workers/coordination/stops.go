@@ -30,7 +30,7 @@ func (c *Worker) StopAgent(ctx context.Context, agentID string) (agents.Agent, e
 	})
 }
 
-func (c *Worker) StopAgents(ctx context.Context, selector agents.Selector) (agents.StopResult, error) {
+func (c *Worker) StopAgents(ctx context.Context, selector agents.StopSelector) (agents.StopResult, error) {
 	if ctx == nil {
 		return agents.StopResult{}, errors.New("agent stop requires a context")
 	}

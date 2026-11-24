@@ -110,7 +110,7 @@ func run() error {
 	interval := 500 * time.Millisecond
 	worker, err := agent.NewAgent(agent.AgentConfig{Logger: slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug})), ID: owner, Type: "fixture", Actions: executors,
 		Sessions: resources, ArtifactFileStore: files, HeartbeatInterval: &interval,
-		Server: agent.ServerInfo{IPAddress: "127.0.0.1", Hostname: "session-e2e"}})
+		Server: agent.ServerInfo{IPAddress: "127.0.0.1", Hostname: "session-e2e-" + owner}})
 	if err != nil {
 		return err
 	}

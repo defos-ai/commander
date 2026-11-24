@@ -81,6 +81,8 @@
   prove shutdown of absent agents. A new request explicitly captures new matches.
   Include hostname in receipt validation and unknown-outcome inventory display;
   never use browser-side matching to choose the submitted stop targets.
+  Stop criteria use the broad `StopSelector`; task assignment criteria are a
+  separate hostname-only `TaskSelector` and must not share the stop guard.
 - Agent details show declared software dependencies and optional supported versions
   independently of action readiness. Inline guidance matches only executable
   missing requirements by exact name. Omitted/empty declarations mean none were
@@ -197,9 +199,10 @@
   enable commands or prove agent idleness for cleanup. Keep unanswered questions
   answerable before and after `fallback_at`, while preserving active-only
   secret/command controls.
-  Validate optional saved task selectors through the shared agent-selector guard.
-  Task and graph details show their exact requested criteria separately from the
-  assigned agent ID; filters do not prove dispatch, ownership or host identity.
+  Validate optional saved task selectors as strict hostname-only objects, using
+  the same hostname validation as stop criteria. Reject extra task selector fields.
+  Task and graph details show the requested hostname separately from the assigned
+  agent ID; filters do not prove dispatch, ownership or host identity.
   `QuestionAnswerStatus` shares countdown and answer-origin rendering between
   question history and the open answer dialog. Countdown ticks stay local and
   stop at the cutoff, after an answer, on terminal status or unmount; do not

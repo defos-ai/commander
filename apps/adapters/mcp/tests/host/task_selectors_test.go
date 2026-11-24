@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/defos-ai/commander/apps/adapters/mcp/tests/fixtures"
-	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -24,6 +23,9 @@ func TestTaskSelectorSurvivesMCPQueriesWhileUnconstrainedWorkContinues(t *testin
 		{"selector": fixtures.Object{"hostname": true}},
 		{"selector": fixtures.Object{"hostname": "https://remote-host"}},
 		{"selector": fixtures.Object{"type": "review", "hostname": nil}},
+		{"selector": fixtures.Object{"hostname": "remote-host", "id": "review-agent-00000001"}},
+		{"selector": fixtures.Object{"hostname": "remote-host", "type": "review"}},
+		{"selector": fixtures.Object{"hostname": "remote-host", "version": "v1.0.0"}},
 		{"selector": fixtures.Object{"hostname": "remote-host", "owner": "someone"}},
 		{"agent_id": "review-agent-00000001"},
 		{"session": fixtures.Object{"owner_agent_id": "review-agent-00000001"}},
@@ -41,11 +43,11 @@ func TestTaskSelectorSurvivesMCPQueriesWhileUnconstrainedWorkContinues(t *testin
 	if rejected := a.Get(started.ID); len(rejected.Tasks) != 0 {
 		t.Fatalf("invalid selectors created tasks: %+v", rejected.Tasks)
 	}
-	selector := agents.Selector{Type: "review", Hostname: "remote-host"}
+	selector := operations.TaskSelector{Hostname: "remote-host"}
 	var selected operations.Task
 	a.Call("assign_task", fixtures.Object{
 		"operation_id": started.ID, "action_name": "inspect", "input": fixtures.Object{"marker": "selected-host"},
-		"selector": fixtures.Object{"type": string(selector.Type), "hostname": selector.Hostname},
+		"selector": fixtures.Object{"hostname": selector.Hostname},
 	}, &selected)
 	var detail operations.Task
 	a.Call("get_task", fixtures.Object{"operation_id": started.ID, "task_id": selected.ID}, &detail)

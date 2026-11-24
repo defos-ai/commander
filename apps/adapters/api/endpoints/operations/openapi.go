@@ -24,7 +24,7 @@ func RegisterOpenAPI(paths, components map[string]any, options *jsonschema.ForOp
 		{"ActionReadiness", reflect.TypeFor[models.ActionReadinessResponse]()},
 		{"Preflight", reflect.TypeFor[models.PreflightResponse]()},
 		{"Continuation", reflect.TypeFor[models.ContinuationResponse]()},
-		{"AgentSelector", reflect.TypeFor[models.AgentSelectorResponse]()},
+		{"TaskSelector", reflect.TypeFor[models.TaskSelectorResponse]()},
 		{"Task", reflect.TypeFor[models.TaskResponse]()},
 		{"Event", reflect.TypeFor[models.EventResponse]()},
 		{"Log", reflect.TypeFor[models.LogResponse]()},
@@ -43,14 +43,14 @@ func RegisterOpenAPI(paths, components map[string]any, options *jsonschema.ForOp
 			return fmt.Errorf("describe API %s: %w", model.name, err)
 		}
 		switch model.name {
-		case "AgentSelector":
+		case "TaskSelector":
 			minimum := 1
 			schema.MinProperties = &minimum
 			schema.AdditionalProperties = &jsonschema.Schema{Not: &jsonschema.Schema{}}
 			for _, property := range schema.Properties {
 				property.MinLength = &minimum
 			}
-			schema.Description = "Saved exact executor filters. Criteria intersect; the controller selects matching ready agents with capacity while preserving session ownership."
+			schema.Description = "Saved exact execution-hostname filter. The controller selects a ready agent providing the action with available capacity while preserving session ownership."
 		case "AgentReadiness":
 			schema.Properties["agent_type"].Description = "Registered agent type in this saved readiness snapshot."
 			schema.Properties["missing_requirements"].Description = "Missing prerequisites assessed on a live ready/working candidate. Entries with kind=secret identify declared shared secret names; agent_type identifies the requesting candidate, not a secret scope. Sensitive host configuration is separate. Stale or offline candidates report only their unavailability reason. Values and secret lease refresh requests are never included."
@@ -63,7 +63,7 @@ func RegisterOpenAPI(paths, components map[string]any, options *jsonschema.ForOp
 			schema.Properties["status"].Enum = []any{"queued", "running", "succeeded", "failed", "cancelled", "interrupted"}
 			if model.name == "Task" {
 				schema.Properties["selector"].ReadOnly = true
-				schema.Properties["selector"].Description = "Optional saved executor criteria, distinct from the assigned agent_id. Same-action direct follow-ups inherit these filters; a later inventory change never retargets dispatched work."
+				schema.Properties["selector"].Description = "Optional saved execution-hostname filter, distinct from the assigned agent_id. Same-action direct follow-ups inherit it; a later inventory change never retargets dispatched work."
 				schema.Properties["batch_id"].ReadOnly = true
 				schema.Properties["batch_id"].Format = "uuid"
 				schema.Properties["batch_id"].Description = "Stable identity of this task's direct-child aggregation batch. Retained across later continuation decisions and late outcomes; absent for work outside aggregation."
@@ -224,6 +224,12 @@ func openAPICommandSchemas(components map[string]any) error {
 		constraints map[string]map[string]any
 	}{
 		{
+			name: "TaskSelectorRequest", typeOf: reflect.TypeFor[models.TaskSelectorRequest](),
+			constraints: map[string]map[string]any{
+				"hostname": {"minLength": 1, "description": "Exact advertised execution hostname. Whitespace, control characters and path separators are invalid."},
+			},
+		},
+		{
 			name: "StartOperationRequest", typeOf: reflect.TypeFor[models.StartOperationRequest](),
 			constraints: map[string]map[string]any{
 				"operation_id": {
@@ -307,10 +313,13 @@ func openAPICommandSchemas(components map[string]any) error {
 			return fmt.Errorf("decode API %s schema: %w", model.name, err)
 		}
 		properties, _ := schema["properties"].(map[string]any)
+		if model.name == "TaskSelectorRequest" {
+			schema["additionalProperties"] = false
+		}
 		if model.name == "AssignOperationTaskRequest" {
 			properties["selector"] = map[string]any{
-				"anyOf":       []any{endpoints.OpenAPIRef("AgentSelectorRequest"), map[string]any{"type": "null"}},
-				"description": "Optional exact id/type/version/hostname AND filters. Omitted or null is unconstrained. The controller selects among matching ready agents with capacity; no matches stay queued. Filters never override session ownership. Same-action direct follow-ups inherit these criteria. Hostname matches the executing agent's advertised server.hostname; keep routing outside action input.",
+				"anyOf":       []any{endpoints.OpenAPIRef("TaskSelectorRequest"), map[string]any{"type": "null"}},
+				"description": "Optional exact hostname filter. Omitted or null is unconstrained. The controller filters action-compatible ready agents with capacity before its selection strategy chooses an executor; no matches stay queued. The filter never overrides session ownership. Same-action direct follow-ups inherit it. Hostname matches the executing agent's advertised server.hostname; keep routing outside action input.",
 			}
 		}
 		for name, constraints := range model.constraints {
@@ -352,7 +361,7 @@ func openAPICommandPaths(paths map[string]any) {
 		},
 		{
 			path: operation + "/tasks", id: "assignOperationTask", summary: "Assign an operation task",
-			description: "Returns the full assigned task. action_name must be nonblank. Optional selector supplies exact id/type/version/hostname AND filters; omitted or null is unconstrained. The controller selects a matching ready agent with capacity; no match remains queued. Filters cannot override session ownership. Same-action direct follow-ups inherit them. Optional session_task_id selects a finished session-aware task in this operation to reuse its saved session, including after its continuation has resolved. This creates an independent assignment without changing the source continuation. The path supplies operation_id; operation_id and agent_id are not accepted in the body. Repeated assignment creates another task.",
+			description: "Returns the full assigned task. action_name must be nonblank. Optional selector supplies an exact hostname filter; omitted or null is unconstrained. The controller applies it before choosing a ready action-compatible agent with capacity; no match remains queued. The filter cannot override session ownership. Same-action direct follow-ups inherit it. Optional session_task_id selects a finished session-aware task in this operation to reuse its saved session, including after its continuation has resolved. This creates an independent assignment without changing the source continuation. The path supplies operation_id; operation_id and agent_id are not accepted in the body. Repeated assignment creates another task.",
 			request:     "AssignOperationTaskRequest", response: "Task", status: "201", missing: "operation_not_found or task_not_found", conflict: "operation_conflict, operation_finished or question_pending",
 			location: "/api/v1/operations/{operation_id}/tasks/{task_id}", bodyRequired: true, validationError: "invalid_input",
 		},

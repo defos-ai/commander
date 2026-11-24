@@ -15,14 +15,15 @@ func TestTaskSelectorRoutesToHostnameAndRetainsIndependentCriteria(t *testing.T)
 	config := fixtures.Config()
 	native := fixtures.ReadyAgentOnHost(fixtures.AgentID, "native-host")
 	target := fixtures.ReadyAgentOnHost("review-agent-00000002", "k8s-prod")
-	config.AgentCatalog.(*fakes.AgentCatalog).Set(native, target)
+	otherMatch := fixtures.ReadyAgentOnHost("review-agent-00000003", target.Server.Hostname)
+	config.AgentCatalog.(*fakes.AgentCatalog).Set(native, target, otherMatch)
 	exec, calls := fakes.ControlledExecutor()
 	r := fixtures.NewWorker(t, config, exec)
 	op := fixtures.Start(t, r)
-	selector := &agents.Selector{Hostname: target.Server.Hostname}
+	selector := &operations.TaskSelector{Hostname: target.Server.Hostname}
 
 	_, rejected := r.Assign(t.Context(), commands.AssignTaskCommand{
-		OperationID: op.ID, ActionName: "inspect", Input: []byte(`{}`), Selector: &agents.Selector{},
+		OperationID: op.ID, ActionName: "inspect", Input: []byte(`{}`), Selector: &operations.TaskSelector{},
 	})
 	before, readErr := r.Get(t.Context(), op.ID)
 	if rejected == nil || readErr != nil || len(before.Tasks) != 0 {
@@ -53,6 +54,22 @@ func TestTaskSelectorRoutesToHostnameAndRetainsIndependentCriteria(t *testing.T)
 	if got.Selector == nil || got.Selector.Hostname != target.Server.Hostname || got.AgentID != target.ID {
 		t.Fatalf("caller or returned-task mutation changed accepted routing: %+v", got)
 	}
+
+	second, err := r.Assign(t.Context(), commands.AssignTaskCommand{
+		OperationID: op.ID, ActionName: "inspect", Input: []byte(`{}`),
+		Selector: &operations.TaskSelector{Hostname: target.Server.Hostname},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	next := fixtures.Receive(t, calls)
+	if next.Call.TaskID != second.ID || next.Agent != otherMatch.ID {
+		t.Fatalf("round-robin did not rotate among the hostname matches: %+v", next)
+	}
+	next.Reply <- fixtures.Output("inspect")
+	fixtures.AwaitOperation(t, r, op.ID, func(op operations.Operation) bool {
+		return len(op.Tasks) == 2 && op.Tasks[1].Status == operations.TaskSucceeded
+	})
 }
 
 func TestUnavailableTaskSelectorStaysQueuedWithoutBlockingOtherAssignments(t *testing.T) {
@@ -92,7 +109,7 @@ func TestUnavailableTaskSelectorStaysQueuedWithoutBlockingOtherAssignments(t *te
 
 			blockedTask, err := r.Assign(t.Context(), commands.AssignTaskCommand{
 				OperationID: op.ID, ActionName: "inspect", Input: []byte(`{}`),
-				Selector: &agents.Selector{Hostname: target.Server.Hostname},
+				Selector: &operations.TaskSelector{Hostname: target.Server.Hostname},
 			})
 			if err != nil {
 				t.Fatal(err)

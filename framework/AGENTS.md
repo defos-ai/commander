@@ -208,7 +208,7 @@
   timeout or expired heartbeat. Only accepted stopped observations confirm it.
   Unconfirmed stops retain inventory records and status with stale lease metadata;
   confirmed stops expire normally. Agent-reported snapshots cannot request a stop.
-  `StopAgents` applies a nonempty exact `agents.Selector` to one sorted inventory
+  `StopAgents` applies a nonempty exact `agents.StopSelector` to one sorted inventory
   snapshot inside coordination. Supplied ID/type/version/hostname criteria intersect;
   versions are reported package strings, not tag selectors. The captured IDs are
   fixed for that submission, so later registrations are not enrolled. Save all
@@ -220,8 +220,9 @@
 - Apply operation mutations atomically to the latest saved record through
   [`OperationStore`](domain/operations/operation_store.go). Persist tasks and
   events separately; preserve independent copies at store boundaries.
-  Optional `Task.Selector` retains validated requested executor criteria, distinct
-  from the assigned agent. Preserve it in stored tasks and deep clones; assignment
+  Optional `Task.Selector` uses `operations.TaskSelector` for a hostname filter,
+  distinct from the action name and assigned agent. Preserve it in stored tasks
+  and deep clones; assignment
   retries must not change or remove it, including after dispatch. Keep candidate
   matching in the operation worker rather than providers.
   Question answers save `answered_by` (`operator` or `model`) atomically with the
@@ -385,7 +386,8 @@
 - Keep [`AgentSelector`](controller/workers/operation/agent_selector.go) limited to choosing
   eligible candidates. The operation worker owns task criteria, session ownership, readiness,
   capacity checks and dispatch persistence. Selection is serial, must honor cancellation and
-  return promptly; an empty choice defers work.
+  return promptly; an empty choice defers work. Apply hostname filtering before
+  this strategy, including RoundRobin; keep broad stop criteria separate.
 - Operation preflight exposes missing requirements only for live, ready/working
   candidates, retaining their registered agent type. Inventory retains the last
   snapshot for offline candidates. Managed secrets use requirement kind `secret`

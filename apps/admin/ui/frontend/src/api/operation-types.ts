@@ -1,4 +1,4 @@
-import type { ActionRequirement, AgentSelector, Mission } from './types';
+import type { ActionRequirement, Mission, TaskSelector } from './types';
 
 export interface Operation {
   id: string;
@@ -31,7 +31,7 @@ export interface OperationProgress {
 
 export interface OperationTask {
   session_intent?: OperationSessionIntent | null;
-  selector?: AgentSelector | null;
+  selector?: TaskSelector | null;
   id: string;
   operation_id: string;
   parent_task_id?: string;

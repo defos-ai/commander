@@ -31,7 +31,7 @@ func (r RunActionCommand) Validate() error {
 }
 
 type StopAgentsCommand struct {
-	Selector agentmodel.Selector `json:"selector"`
+	Selector agentmodel.StopSelector `json:"selector"`
 }
 
 func (r StopAgentsCommand) Validate() error { return r.Selector.Validate() }
@@ -55,11 +55,11 @@ func (r StartOperationCommand) Validate() error {
 }
 
 type AssignTaskCommand struct {
-	OperationID   string               `json:"operation_id"`
-	ActionName    string               `json:"action_name"`
-	Input         json.RawMessage      `json:"input,omitempty"`
-	SessionTaskID string               `json:"session_task_id,omitempty"`
-	Selector      *agentmodel.Selector `json:"selector,omitempty"`
+	OperationID   string                   `json:"operation_id"`
+	ActionName    string                   `json:"action_name"`
+	Input         json.RawMessage          `json:"input,omitempty"`
+	SessionTaskID string                   `json:"session_task_id,omitempty"`
+	Selector      *operations.TaskSelector `json:"selector,omitempty"`
 }
 
 func (r AssignTaskCommand) Validate() error {

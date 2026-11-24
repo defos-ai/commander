@@ -36,7 +36,7 @@ applies to all domain packages below this directory.
   not proof that external work stopped. `AgentStopRequested` is controller-owned
   status; observations cannot clear it. Flat stop command ID/time retain the
   original identity through retries and inventory expiry until confirmation.
-  `agents.Selector` holds nonempty exact ID/type/version/hostname criteria combined
+  `agents.StopSelector` holds nonempty exact ID/type/version/hostname criteria combined
   with AND; controller workers own inventory matching. Hostname matches the
   agent's advertised `Server.Hostname` without case folding or DNS resolution;
   use the same validation as `ServerInfo`. It identifies the agent's own host or
@@ -92,14 +92,17 @@ applies to all domain packages below this directory.
   [Execution](executions/execution.go) retains a reserved command and accepted
   outcome. Reserve before publication, preserve the original envelope for replay
   and never infer that a missing result permits a new execution elsewhere.
-  Optional `Task.Selector` retains requested executor criteria separately from the
-  assigned `AgentID`. Nil is unconstrained; nonnil selectors must pass shared
+  Optional `Task.Selector` uses `operations.TaskSelector` to retain one requested
+  hostname separately from the action name and assigned `AgentID`. Nil is
+  unconstrained; a present selector requires a nonempty hostname and rejects
+  ID/type/version or other fields. Nonnil selectors must pass shared
   validation at queueing, persistence and recovery. Clone the selector independently
   and include it in assignment replay identity: changing or removing criteria
   conflicts with the saved task. The operation worker filters queued candidates
   without bypassing readiness, capacity or exact session ownership. The session
   worker rechecks the chosen candidate before dispatch. Dispatched recovery
-  retains the saved agent even when its advertised properties change.
+  retains the saved agent even when its advertised properties change. RoundRobin
+  or another `AgentSelector` strategy chooses only after eligibility filtering.
   Child creation copies the direct parent's selector only when the child repeats
   its action name, for automatic and model-resolved continuations alike. Copy
   each child independently; different-action children remain unconstrained.

@@ -95,7 +95,7 @@ including workers whose `Run` has not started. No runtime loop starts in assembl
   admission so accepted results can drain during shutdown. Assembly injects it
   into the command worker; hosts do not construct a second operation worker or
   command consumer.
-  Optional task selectors filter queued candidates before strategy selection,
+  Optional task selectors filter queued candidates by hostname before strategy selection,
   intersect exact session ownership and never bypass readiness or capacity.
   Missing matches remain queued; other eligible tasks can proceed.
   Session preparation rechecks the chosen candidate before

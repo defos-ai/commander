@@ -61,8 +61,8 @@ func ToAgentResponses(agents []agents.Agent) []models.AgentResponse {
 	return responses
 }
 
-func ToAgentSelector(request models.AgentSelectorRequest) agents.Selector {
-	return agents.Selector{ID: request.ID, Type: agents.AgentType(request.Type), Version: request.Version, Hostname: request.Hostname}
+func ToStopSelector(request models.StopSelectorRequest) agents.StopSelector {
+	return agents.StopSelector{ID: request.ID, Type: agents.AgentType(request.Type), Version: request.Version, Hostname: request.Hostname}
 }
 
 func ToStopAgentsResponse(result agents.StopResult) models.StopAgentsResponse {

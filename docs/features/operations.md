@@ -31,10 +31,13 @@ stale decision. Proposal order alone does not establish dependencies.
 ## Choose an executor
 
 Pass an optional `selector` beside `action_name` and `input` in MCP `assign_task`
-or `POST /api/v1/operations/{operation_id}/tasks`. Exact `id`, `type`, `version`
-and `hostname` filters intersect: every supplied criterion must match. Omitted
-or null means normal selection. The controller still checks readiness, capacity
-and session ownership; no match leaves the task queued without fallback.
+or `POST /api/v1/operations/{operation_id}/tasks`, for example
+`"selector": {"hostname": "worker-host"}`. The action name establishes the required
+capability; the selector accepts only hostname. Omitted or null means normal
+selection. The controller filters compatible agents by hostname, readiness,
+capacity and session ownership, then applies its selection strategy (RoundRobin
+by default) to eligible instances.
+No match leaves the task queued without fallback.
 
 Task reads retain the requested `selector` separately from the assigned `agent_id`.
 Admin shows these as **Executor filters**. Same-action direct follow-ups inherit

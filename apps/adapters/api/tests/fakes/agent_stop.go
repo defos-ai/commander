@@ -23,7 +23,7 @@ func NewUncertainAgentStop(inventory agents.AgentStore) *UncertainAgentStop {
 	return &UncertainAgentStop{inventory: inventory}
 }
 
-func (c *UncertainAgentStop) StopAgents(ctx context.Context, selector agents.Selector) (agents.StopResult, error) {
+func (c *UncertainAgentStop) StopAgents(ctx context.Context, selector agents.StopSelector) (agents.StopResult, error) {
 	c.calls.Add(1)
 	record, err := c.inventory.RequestStop(ctx, selector.ID, id.New(), time.Now().UTC())
 	if err != nil {
@@ -43,7 +43,7 @@ func NewFixedAgentStops(result agents.StopResult) *FixedAgentStops {
 	return &FixedAgentStops{result: cloneStopResult(result)}
 }
 
-func (c *FixedAgentStops) StopAgents(context.Context, agents.Selector) (agents.StopResult, error) {
+func (c *FixedAgentStops) StopAgents(context.Context, agents.StopSelector) (agents.StopResult, error) {
 	return cloneStopResult(c.result), nil
 }
 

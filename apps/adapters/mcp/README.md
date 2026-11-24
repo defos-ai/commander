@@ -22,9 +22,10 @@ Read saved state after uncertainty before submitting again. Deployment resources
 and restart policies remain host-managed.
 
 To target a spawner or another executor, pass an optional `selector` to
-`assign_task`, such as `{"type":"spawner-agent","hostname":"native-host"}`.
+`assign_task`, such as `{"hostname":"native-host"}`.
 Read advertised `server.hostname` values with `list_agents`. The controller
-chooses among matching ready agents; no match leaves the task queued.
+chooses among matching ready agents that provide the action; no match leaves the
+task queued.
 
 See [Operations](../../../docs/features/operations.md) and
 [Questions](../../../docs/features/questions.md) for the operator workflows.

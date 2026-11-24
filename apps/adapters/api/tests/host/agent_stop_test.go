@@ -24,7 +24,7 @@ func TestAgentStopThroughAPIDrainsItsWorkAndPreservesOtherAgents(t *testing.T) {
 	task = stack.AwaitWorking(t, operation.ID, task.ID)
 	path := "/api/v1/agents/stop"
 	agentPath := "/api/v1/agents/" + task.AgentID
-	input := models.StopAgentsRequest{Selector: models.AgentSelectorRequest{ID: task.AgentID}}
+	input := models.StopAgentsRequest{Selector: models.StopSelectorRequest{ID: task.AgentID}}
 
 	unauthenticated := stack.Request(t, http.MethodPost, path, input, func(request *http.Request) { request.Header.Del("Authorization") })
 	if unauthenticated.Status != http.StatusUnauthorized {
@@ -119,7 +119,7 @@ func TestAgentStopThroughAPIDrainsItsWorkAndPreservesOtherAgents(t *testing.T) {
 	if confirmed.Status != "stopped" || confirmed.StopCommandID != requested.StopCommandID || !confirmed.StopRequestedAt.Equal(requested.StopRequestedAt) || confirmed.Work != nil {
 		t.Fatalf("confirmed stop did not remain idempotent: %+v", confirmed)
 	}
-	matching := models.StopAgentsRequest{Selector: models.AgentSelectorRequest{Type: "analyzer", Version: "v1.0.0"}}
+	matching := models.StopAgentsRequest{Selector: models.StopSelectorRequest{Type: "analyzer", Version: "v1.0.0"}}
 	batch := decodeSharing[models.StopAgentsResponse](t, stack.Request(t, http.MethodPost, path, matching), http.StatusAccepted)
 	if len(batch.Items) != 2 || len(batch.Errors) != 0 || batch.Items[0].ID != "analyzer-agent-00000001" || batch.Items[1].ID != "analyzer-agent-00000003" {
 		t.Fatalf("type and version filters did not intersect: %+v", batch)
@@ -133,13 +133,13 @@ func TestAgentStopThroughAPIDrainsItsWorkAndPreservesOtherAgents(t *testing.T) {
 	if nonmatching.Status != "ready" || nonmatching.Version != "v2.0.0" || nonmatching.StopCommandID != "" {
 		t.Fatalf("version-filtered stop touched a different version: %+v", nonmatching)
 	}
-	missingInput := models.StopAgentsRequest{Selector: models.AgentSelectorRequest{ID: "producer-agent-ffffffff"}}
+	missingInput := models.StopAgentsRequest{Selector: models.StopSelectorRequest{ID: "producer-agent-ffffffff"}}
 	missing := decodeSharing[models.StopAgentsResponse](t, stack.Request(t, http.MethodPost, path, missingInput), http.StatusOK)
 	if missing.Items == nil || len(missing.Items) != 0 || len(missing.Errors) != 0 {
 		t.Fatalf("no matches did not return an empty result: %+v", missing)
 	}
 	for _, literal := range []string{"stable", "latest"} {
-		selection := models.StopAgentsRequest{Selector: models.AgentSelectorRequest{Version: literal}}
+		selection := models.StopAgentsRequest{Selector: models.StopSelectorRequest{Version: literal}}
 		unresolved := decodeSharing[models.StopAgentsResponse](t, stack.Request(t, http.MethodPost, path, selection), http.StatusOK)
 		if unresolved.Items == nil || len(unresolved.Items) != 0 || len(unresolved.Errors) != 0 {
 			t.Fatalf("literal version %q was resolved as a release alias: %+v", literal, unresolved)
@@ -160,7 +160,7 @@ func TestAgentStopUncertaintyIsSanitizedAndReadableWithoutRetry(t *testing.T) {
 	commands := fakes.NewUncertainAgentStop(inventory)
 	server := hostfixtures.NewAgentStopAPI(t, inventory, commands)
 	path := "/api/v1/agents/" + record.ID
-	input := models.StopAgentsRequest{Selector: models.AgentSelectorRequest{ID: record.ID}}
+	input := models.StopAgentsRequest{Selector: models.StopSelectorRequest{ID: record.ID}}
 
 	response := server.Request(t, http.MethodPost, "/api/v1/agents/stop", hostfixtures.JSONBody(t, input))
 
@@ -186,7 +186,7 @@ func TestAgentStopUncertaintyIsSanitizedAndReadableWithoutRetry(t *testing.T) {
 	}
 	failures := []agents.StopError{{ID: "browser-agent-ffffffff", Error: "agent_stop_uncertain"}}
 	partialServer := hostfixtures.NewAgentStopAPI(t, inventory, fakes.NewFixedAgentStops(agents.StopResult{Agents: []agents.Agent{accepted}, Errors: failures}))
-	partialInput := models.StopAgentsRequest{Selector: models.AgentSelectorRequest{Type: "browser-agent"}}
+	partialInput := models.StopAgentsRequest{Selector: models.StopSelectorRequest{Type: "browser-agent"}}
 	partial := decodeSharing[models.StopAgentsResponse](t, partialServer.Request(t, http.MethodPost, "/api/v1/agents/stop", hostfixtures.JSONBody(t, partialInput)), http.StatusAccepted)
 	if len(partial.Items) != 1 || len(partial.Errors) != 1 || partial.Errors[0].Error != "agent_stop_uncertain" || partial.Errors[0].ID != failures[0].ID {
 		t.Fatalf("partial stop result discarded accepted work or per-agent failure: %+v", partial)

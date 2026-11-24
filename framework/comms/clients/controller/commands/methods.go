@@ -23,7 +23,7 @@ func (c *Client) RunAction(ctx context.Context, agentID string, call actionmodel
 	return result, err
 }
 
-func (c *Client) StopAgents(ctx context.Context, selector agentmodel.Selector) (agentmodel.StopResult, error) {
+func (c *Client) StopAgents(ctx context.Context, selector agentmodel.StopSelector) (agentmodel.StopResult, error) {
 	var result agentmodel.StopResult
 	err := c.call(ctx, MethodStopAgents, StopAgentsCommand{Selector: selector}, &result)
 	return result, err

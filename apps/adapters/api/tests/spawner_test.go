@@ -218,8 +218,8 @@ func TestSpawnerBatchCreatesIndependentAgentTasks(t *testing.T) {
 	if spawner.ID == "" || spawner.Type != "spawner-agent" || spawner.Server.Hostname == "" {
 		t.Fatalf("ready spawner did not advertise its identity and execution hostname: %+v", spawner)
 	}
-	selector := models.AgentSelectorRequest{ID: spawner.ID, Type: spawner.Type, Hostname: spawner.Server.Hostname}
-	wantSelector := models.AgentSelectorResponse{ID: selector.ID, Type: selector.Type, Hostname: selector.Hostname}
+	selector := models.TaskSelectorRequest{Hostname: spawner.Server.Hostname}
+	wantSelector := models.TaskSelectorResponse{Hostname: selector.Hostname}
 
 	assigned := fixtures.Post[models.TaskResponse](a, fixtures.OperationPath(op.ID)+"/tasks", fixtures.Object{
 		"action_name": "spawn-agent", "input": input, "selector": selector,

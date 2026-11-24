@@ -25,7 +25,7 @@ type agentStopSummary struct {
 
 const agentStopUncertain = "agent_stop_uncertain: the stop outcome is unknown; inspect list_agents and describe_agent before submitting again; do not retry automatically"
 
-func agentSelectorSchema() map[string]any {
+func stopSelectorSchema() map[string]any {
 	return map[string]any{
 		"type": "object", "minProperties": 1, "additionalProperties": false,
 		"properties": map[string]any{
@@ -37,7 +37,7 @@ func agentSelectorSchema() map[string]any {
 }
 
 func addAgentCommands(server *mcp.Server, config Config) {
-	addTool(server, "stop_agent", "Request graceful stop for agents matching selector fields id, type, version and hostname. Supplied fields are exact AND filters; at least one is required. Hostname matches the agent's own advertised server.hostname, not its parent spawner or Kubernetes node. The controller captures matches once; future agents are unaffected. New work is blocked while accepted work drains. stop_requested is acceptance, not shutdown. Inspect per-agent errors and use list_agents/describe_agent after uncertainty; never retry automatically. Deployment resources/restart policies stay host-managed.", objectSchema(map[string]any{"selector": agentSelectorSchema()}, "selector"),
+	addTool(server, "stop_agent", "Request graceful stop for agents matching selector fields id, type, version and hostname. Supplied fields are exact AND filters; at least one is required. Hostname matches the agent's own advertised server.hostname, not its parent spawner or Kubernetes node. The controller captures matches once; future agents are unaffected. New work is blocked while accepted work drains. stop_requested is acceptance, not shutdown. Inspect per-agent errors and use list_agents/describe_agent after uncertainty; never retry automatically. Deployment resources/restart policies stay host-managed.", objectSchema(map[string]any{"selector": stopSelectorSchema()}, "selector"),
 		func(ctx context.Context, request commands.StopAgentsCommand) (agentStopReceipt, error) {
 			if config.AgentCommands == nil {
 				return agentStopReceipt{}, errors.New("agent_controls_unavailable: agent stopping is not configured on this MCP host")

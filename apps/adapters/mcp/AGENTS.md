@@ -52,14 +52,16 @@ through `list_agents`/`describe_agent` without backend details. Deployment resou
 and restart policies remain host responsibilities.
 
 `assign_task.selector` is optional; omitted/null means unconstrained. A present
-object uses the same exact AND filters and strict validation as stopping. Forward
-criteria without adapter-side selection; the controller retains the filter with
+object contains only a required nonempty `hostname`; reject ID, type, version
+and unknown fields. `action_name` already defines the capability. Forward
+the hostname without adapter-side selection; the controller retains the filter with
 the task and still enforces readiness, capacity and exact session ownership.
 No match stays queued without fallback. Same-action direct children inherit the
 saved filter, while different-action children do not. Task details and summaries
 expose independent selector copies. Hostname is the agent's advertised
 `server.hostname`, including its container/Pod namespace, not a Kubernetes node
 or the hostname of a parent spawner. Keep placement out of action input.
+Filtering precedes the controller's existing selection strategy, including RoundRobin.
 
 `describe_agent` preserves optional dependency declarations from saved inventory;
 `list_agents` omits them to keep discovery compact. Match only executable

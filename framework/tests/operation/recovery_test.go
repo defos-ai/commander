@@ -12,7 +12,6 @@ import (
 	"github.com/defos-ai/commander/framework/comms/clients/controller/commands"
 	operationworker "github.com/defos-ai/commander/framework/controller/workers/operation"
 	"github.com/defos-ai/commander/framework/domain/actions"
-	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/executions"
 	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/domain/missions/policies"
@@ -46,7 +45,7 @@ func TestRecoveryObservesSavedResultWithoutNewExecution(t *testing.T) {
 			op := fixtures.Start(t, first)
 			task, err := first.Assign(t.Context(), commands.AssignTaskCommand{
 				OperationID: op.ID, ActionName: "inspect", Input: []byte(`{}`),
-				Selector: &agents.Selector{Hostname: "original-host"},
+				Selector: &operations.TaskSelector{Hostname: "original-host"},
 			})
 			if err != nil {
 				t.Fatal(err)
@@ -112,7 +111,7 @@ func TestUncertainAssignmentWriteSuspendsUntilRecovery(t *testing.T) {
 	op := fixtures.Start(t, first)
 	command := commands.AssignTaskCommand{
 		OperationID: op.ID, ActionName: "inspect", Input: json.RawMessage(`{"page":1}`),
-		Selector: &agents.Selector{Hostname: target.Server.Hostname},
+		Selector: &operations.TaskSelector{Hostname: target.Server.Hostname},
 	}
 	_, assignErr := first.Assign(t.Context(), command)
 	stored, err := first.Get(t.Context(), op.ID)

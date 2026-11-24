@@ -21,7 +21,7 @@ func RegisterCommands(mux *http.ServeMux, controller commands.Controller) {
 		if !endpoints.ReadJSON(w, r, &input, false) {
 			return
 		}
-		selector := mappings.ToAgentSelector(input.Selector)
+		selector := mappings.ToStopSelector(input.Selector)
 		if err := selector.Validate(); err != nil {
 			endpoints.WriteError(w, http.StatusBadRequest, "invalid_request")
 			return

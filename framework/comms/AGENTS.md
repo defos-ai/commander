@@ -47,11 +47,13 @@
   Controller replies follow saved-claim validation and durable persistence.
   This does not extend adapter mutation replay or authorize rerunning an action.
 - `agents.stop` carries `StopAgentsCommand.Selector`, never an adapter-selected
-  list of IDs. The controller captures matching instances and returns `StopResult`
+  list of IDs. Its `agents.StopSelector` accepts exact ID/type/version/hostname
+  criteria. The controller captures matching instances and returns `StopResult`
   with accepted agents and per-agent error codes. A new submission reevaluates
   current inventory; never automatically retry an uncertain selector command.
-- `AssignTaskCommand.Selector` carries optional executor criteria separately from
-  action input. The controller copies and validates them before queueing; the
+- `AssignTaskCommand.Selector` uses `operations.TaskSelector` for an optional
+  hostname filter, separate from its action name and action input. The controller
+  copies and validates it before queueing; the
   accepted task retains them while inventory changes or the controller restarts.
   Selection and dispatch remain controller responsibilities.
 - Agent command expiry controls admission of new work, not cancellation of

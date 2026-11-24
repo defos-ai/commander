@@ -1,8 +1,8 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { LoaderCircle, Square } from 'lucide-react';
-import { AgentStopError, listAgents, matchesAgentSelector, stopAgents, validAgentSelector, type AgentStopResult } from '../api/agents';
+import { AgentStopError, listAgents, matchesStopSelector, stopAgents, validStopSelector, type AgentStopResult } from '../api/agents';
 import { ApiError } from '../api/client';
-import type { Agent, AgentSelector } from '../api/types';
+import type { Agent, StopSelector } from '../api/types';
 import type { Connection, Session } from '../connections/types';
 import { useTranslation } from '../i18n';
 import { AgentStatus } from './AgentDetails';
@@ -12,7 +12,7 @@ import '../styles/agent-stop.css';
 
 type Attempt = {
   credentials: Session;
-  selector: AgentSelector;
+  selector: StopSelector;
   result?: AgentStopResult;
   error?: AgentStopError['kind'];
   saved?: Agent[];
@@ -50,8 +50,8 @@ export function AgentStopControls({ connection, credentials, selectedID, agent, 
     dismiss(); read.current?.abort(); read.current = null; setReading(false); setReadError(undefined);
   }, [selectedID]);
 
-  async function submit(selector: AgentSelector) {
-    if (!canStop || current || mutation.current || !validAgentSelector(selector)) return;
+  async function submit(selector: StopSelector) {
+    if (!canStop || current || mutation.current || !validStopSelector(selector)) return;
     const controller = new AbortController();
     mutation.current = controller;
     setAttempt({ credentials, selector });
@@ -76,7 +76,7 @@ export function AgentStopControls({ connection, credentials, selectedID, agent, 
     try {
       const inventory = await listAgents(connection.url, credentials, controller.signal);
       const ids = current.result ? new Set([...current.result.items, ...(current.result.errors ?? [])].map(item => item.id)) : undefined;
-      const saved = inventory.filter(item => ids ? ids.has(item.id) : matchesAgentSelector(item, current.selector));
+      const saved = inventory.filter(item => ids ? ids.has(item.id) : matchesStopSelector(item, current.selector));
       if (!controller.signal.aborted && read.current === controller) { setAttempt({ ...current, saved }); onRefresh(); }
     } catch (cause) {
       if (!controller.signal.aborted && read.current === controller) setReadError(cause instanceof ApiError ? cause.kind : 'unavailable');
@@ -125,7 +125,7 @@ export function AgentStopControls({ connection, credentials, selectedID, agent, 
 }
 
 function AgentStopDialog({ selectedID, submitting, available, onClose, onSubmit }: {
-  selectedID?: string; submitting: boolean; available: boolean; onClose: () => void; onSubmit: (selector: AgentSelector) => void;
+  selectedID?: string; submitting: boolean; available: boolean; onClose: () => void; onSubmit: (selector: StopSelector) => void;
 }) {
   const { t } = useTranslation();
   const identity = useId();
@@ -135,8 +135,8 @@ function AgentStopDialog({ selectedID, submitting, available, onClose, onSubmit 
   const [hostname, setHostname] = useState('');
   const [confirmed, setConfirmed] = useState(false);
   const [invalid, setInvalid] = useState(false);
-  const selector: AgentSelector = { ...(id ? { id } : {}), ...(type ? { type } : {}), ...(version ? { version } : {}), ...(hostname ? { hostname } : {}) };
-  const valid = validAgentSelector(selector);
+  const selector: StopSelector = { ...(id ? { id } : {}), ...(type ? { type } : {}), ...(version ? { version } : {}), ...(hostname ? { hostname } : {}) };
+  const valid = validStopSelector(selector);
 
   function submit(event: FormEvent) {
     event.preventDefault();

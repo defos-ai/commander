@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/defos-ai/commander/framework/domain/actions"
-	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/operations"
 	"github.com/defos-ai/commander/providers/fs/tests/fixtures"
 )
@@ -21,7 +20,7 @@ func TestOperationTaskSelectorSurvivesQueueDispatchAndReopen(t *testing.T) {
 		t.Fatal(err)
 	}
 	task := operations.NewTask(op.ID, "", actions.NextAction{ActionName: "inspect"})
-	task.Selector = &agents.Selector{Type: "review-agent", Hostname: "k8s-prod"}
+	task.Selector = &operations.TaskSelector{Hostname: "k8s-prod"}
 	assignment := task.Clone()
 
 	queued, err := store.QueueTask(t.Context(), op.ID, task)
@@ -58,7 +57,7 @@ func TestOperationTaskSelectorSurvivesQueueDispatchAndReopen(t *testing.T) {
 	if err != nil || !reflect.DeepEqual(retried, dispatched) {
 		t.Fatalf("same assignment changed the dispatched snapshot: %+v, %v", retried, err)
 	}
-	for _, replacement := range []*agents.Selector{nil, {Type: "review-agent", Hostname: "native-host"}} {
+	for _, replacement := range []*operations.TaskSelector{nil, {Hostname: "native-host"}} {
 		changed := assignment.Clone()
 		changed.Selector = replacement
 		if _, err := reopened.QueueTask(t.Context(), op.ID, changed); !errors.Is(err, operations.ErrOperationConflict) {
@@ -71,7 +70,7 @@ func TestOperationTaskSelectorSurvivesQueueDispatchAndReopen(t *testing.T) {
 	}
 	for index := range recovered.Tasks {
 		invalidRecovery := recovered.Clone()
-		invalidRecovery.Tasks[index].Selector = &agents.Selector{}
+		invalidRecovery.Tasks[index].Selector = &operations.TaskSelector{}
 		before := invalidRecovery.Clone()
 		changed, err := invalidRecovery.Recover(started.Add(2 * time.Second))
 		if changed || err == nil || !reflect.DeepEqual(invalidRecovery, before) {
@@ -81,7 +80,7 @@ func TestOperationTaskSelectorSurvivesQueueDispatchAndReopen(t *testing.T) {
 }
 
 func TestOperationTaskSelectorRejectsInvalidWritesWithoutChangingSavedState(t *testing.T) {
-	for _, selector := range []agents.Selector{{}, {Hostname: "k8s prod"}, {Hostname: string([]byte{0xff})}} {
+	for _, selector := range []operations.TaskSelector{{}, {Hostname: "k8s prod"}, {Hostname: string([]byte{0xff})}} {
 		dir := t.TempDir()
 		store := fixtures.NewDispatchStore(t, dir)
 		op, task := fixtures.CreateQueueOperation(t, store)
@@ -113,7 +112,12 @@ func TestOperationTaskSelectorRejectsInvalidWritesWithoutChangingSavedState(t *t
 }
 
 func TestOperationTaskSelectorRejectsMalformedStoredSelectors(t *testing.T) {
-	for _, raw := range []string{`{}`, `{"hostname":"k8s prod"}`, `{"hostname":"k8s-prod","unknown":true}`} {
+	for _, raw := range []string{
+		`{}`, `{"hostname":"k8s prod"}`, `{"hostname":"k8s-prod","unknown":true}`,
+		`{"hostname":"k8s-prod","id":"review-agent-00000001"}`,
+		`{"hostname":"k8s-prod","type":"review-agent"}`,
+		`{"hostname":"k8s-prod","version":"v1.0.0"}`,
+	} {
 		dir := t.TempDir()
 		store := fixtures.NewDispatchStore(t, dir)
 		op, task := fixtures.CreateQueueOperation(t, store)

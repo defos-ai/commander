@@ -42,9 +42,10 @@
   response because repeating an assignment can create another task.
 - Task assignments may carry optional `selector` criteria separately from action
   input. Omission/null leaves selection unconstrained; a present object requires
-  at least one exact `id`, `type`, `version` or advertised `hostname` filter.
-  Supplied criteria intersect and never bypass readiness, capacity or session
-  ownership. Forward them to the controller without matching inventory in adapters.
+  only an exact nonempty advertised `hostname`. Reject ID/type/version and unknown
+  fields. The separate action name establishes capability; hostname filtering
+  precedes the controller's selection strategy and never bypasses readiness,
+  capacity or session ownership. Forward it without matching inventory in adapters.
   Preserve the retained selector in task reads independently of assigned `agent_id`.
   Same-action continuation children inherit the filter, not the assigned instance;
   different-action children use normal selection. Unmatched work remains queued.

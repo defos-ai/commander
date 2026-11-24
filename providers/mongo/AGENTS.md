@@ -37,6 +37,8 @@ artifact bytes and reports belong to the separate storage provider.
 - Operations span metadata, task, question and event collections. Initialize
   collections/indexes before the first transaction; preserve unique positions and
   event keys within each operation.
+  Task records retain optional hostname-only selectors in JSON; validate before
+  writes and reject unknown selector fields on reads rather than dropping them.
 - In operation mutations, reconstruct state from the latest transaction snapshot
   on every attempt, including generated child IDs and event sequences. Check the
   stored revision when replacing metadata; update related collections together.

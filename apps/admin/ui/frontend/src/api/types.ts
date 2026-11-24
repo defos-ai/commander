@@ -60,7 +60,11 @@ export interface AgentDependency {
   version?: string;
 }
 
-export interface AgentSelector {
+export interface TaskSelector {
+  hostname: string;
+}
+
+export interface StopSelector {
   id?: string;
   type?: string;
   version?: string;

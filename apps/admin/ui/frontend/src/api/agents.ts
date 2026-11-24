@@ -2,8 +2,8 @@ import { expireSession, proxyURL } from '../connections/client';
 import type { Session } from '../connections/types';
 import { isAction, isActionRequirement } from './actions';
 import { ApiError, getJSON } from './client';
-import type { Agent, AgentDependency, AgentSelector, AgentWork } from './types';
-import { encodeIdentifier, isIdentifier, isNullableStringArray, isObject, isOptionalString } from './validation';
+import type { Agent, AgentDependency, AgentWork, StopSelector } from './types';
+import { encodeIdentifier, isHostname, isIdentifier, isNullableStringArray, isObject, isOptionalString } from './validation';
 
 export type AgentStopErrorKind = 'authentication' | 'forbidden' | 'invalid_input' | 'unavailable' | 'unknown';
 export type AgentStopFailureCode = 'agent_not_found' | 'agent_stop_uncertain' | 'agent_stop_not_requested';
@@ -28,15 +28,14 @@ function isAgentID(value: unknown): value is string {
   return typeof value === 'string' && value.length <= 63 && agentID.test(value);
 }
 
-export function validAgentSelector(selector: unknown): selector is AgentSelector {
+export function validStopSelector(selector: unknown): selector is StopSelector {
   if (!isObject(selector) || !Object.values(selector).some(value => value !== undefined) ||
     Object.keys(selector).some(name => name !== 'id' && name !== 'type' && name !== 'version' && name !== 'hostname')) return false;
   return (selector.id === undefined || isAgentID(selector.id)) &&
     (selector.type === undefined || typeof selector.type === 'string' && selector.type.length <= 63 && agentType.test(selector.type)) &&
     (selector.version === undefined || typeof selector.version === 'string' && selector.version !== '' &&
       new TextEncoder().encode(selector.version).length <= 128 && !/[\p{White_Space}\p{Cc}]/u.test(selector.version)) &&
-    (selector.hostname === undefined || typeof selector.hostname === 'string' && selector.hostname !== '' &&
-      !/[\p{White_Space}\p{Cc}/\\]/u.test(selector.hostname));
+    (selector.hostname === undefined || isHostname(selector.hostname));
 }
 
 function isWork(value: unknown): value is AgentWork {
@@ -94,16 +93,16 @@ export async function getAgent(url: string, credentials: Session, id: string, si
   return body;
 }
 
-export function matchesAgentSelector(agent: Agent, selector: AgentSelector): boolean {
+export function matchesStopSelector(agent: Agent, selector: StopSelector): boolean {
   return (selector.id === undefined || agent.id === selector.id) &&
     (selector.type === undefined || agent.type === selector.type) &&
     (selector.version === undefined || agent.version === selector.version) &&
     (selector.hostname === undefined || agent.server.hostname === selector.hostname);
 }
 
-function readStopResult(value: unknown, selector: AgentSelector, status: number): AgentStopResult {
+function readStopResult(value: unknown, selector: StopSelector, status: number): AgentStopResult {
   if (!isObject(value) || !Array.isArray(value.items) || !value.items.every(item => isAgent(item) && isAgentID(item.id) &&
-    (item.status === 'stop_requested' || item.status === 'stopped') && matchesAgentSelector(item, selector)) ||
+    (item.status === 'stop_requested' || item.status === 'stopped') && matchesStopSelector(item, selector)) ||
     value.errors !== undefined && !Array.isArray(value.errors)) throw new AgentStopError('unknown');
   const items = value.items as Agent[];
   const errors = (value.errors ?? []) as unknown[];
@@ -127,8 +126,8 @@ function stopResponseError(status: number, body: unknown): AgentStopError {
       : status === 503 && isObject(body) && body.error === 'agent_controls_unavailable' ? 'unavailable' : 'unknown');
 }
 
-export async function stopAgents(url: string, credentials: Session, selector: AgentSelector, signal?: AbortSignal): Promise<AgentStopResult> {
-  if (!validAgentSelector(selector)) throw new AgentStopError('invalid_input');
+export async function stopAgents(url: string, credentials: Session, selector: StopSelector, signal?: AbortSignal): Promise<AgentStopResult> {
+  if (!validStopSelector(selector)) throw new AgentStopError('invalid_input');
   selector = { ...selector };
   if (signal?.aborted) throw new DOMException('Request aborted', 'AbortError');
   let endpoint: string;

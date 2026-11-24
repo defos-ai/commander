@@ -188,11 +188,14 @@ func addOperationTools(server *mcp.Server, config Config) {
 		func(ctx context.Context, request OperationRequest) (reports.Report, error) {
 			return query.GetReport(ctx, request.OperationID)
 		})
-	addTool(server, "assign_task", "Queue an action task; the controller selects a ready agent with available capacity and routes session work to its recorded owner. Optional selector is a hard filter over exact id/type/version/hostname criteria; supplied fields intersect. Omit it or use null for normal selection. No match leaves the task queued without fallback. Same-action continuations inherit the filter; different actions do not. Read server.hostname with list_agents and supply the filter here, never in action input. Returns immediately; inspect operation events for completion. Action input must match its advertised schema. Set session_task_id to reuse a finished task's session in this operation without changing its previous continuation. Available in nonterminal operations, including under operator completion policy or with a saved completion_draft; operator completion is not required to continue requested work. Existing question, readiness and session checks still apply. "+sessionGuidance, objectSchema(map[string]any{
+	addTool(server, "assign_task", "Queue an action task; the controller selects a ready agent with available capacity and routes session work to its recorded owner. Optional selector contains only an exact hostname filter; action_name defines the required capability. Omit it or use null for normal selection. No match leaves the task queued without fallback. Same-action continuations inherit the filter; different actions do not. Read server.hostname with list_agents and supply the filter here, never in action input. Returns immediately; inspect operation events for completion. Action input must match its advertised schema. Set session_task_id to reuse a finished task's session in this operation without changing its previous continuation. Available in nonterminal operations, including under operator completion policy or with a saved completion_draft; operator completion is not required to continue requested work. Existing question, readiness and session checks still apply. "+sessionGuidance, objectSchema(map[string]any{
 		"operation_id": stringProperty,
 		"selector": map[string]any{
-			"description": "Optional exact AND filters on eligible agents; omitted/null means unconstrained. The controller still enforces readiness, capacity and exact session ownership.",
-			"anyOf":       []any{agentSelectorSchema(), map[string]any{"type": "null"}},
+			"description": "Optional exact hostname filter; omitted/null means unconstrained. The controller still enforces action compatibility, readiness, capacity and exact session ownership before choosing an executor.",
+			"anyOf": []any{map[string]any{
+				"type": "object", "additionalProperties": false, "required": []string{"hostname"},
+				"properties": map[string]any{"hostname": map[string]any{"type": "string", "minLength": 1}},
+			}, map[string]any{"type": "null"}},
 		},
 		"session_task_id": map[string]any{"type": "string", "format": "uuid", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", "description": "Optional finished session-aware task in this operation whose saved session will be reused. The controller checks its exact owner and lifecycle; the previous continuation remains unchanged."},
 		"action_name":     map[string]any{"type": "string", "minLength": 1, "description": "Action to execute, such as discover-pages."},

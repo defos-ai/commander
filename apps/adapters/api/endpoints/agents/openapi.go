@@ -46,7 +46,7 @@ func registerStopSchemas(components map[string]any, options *jsonschema.ForOptio
 		name   string
 		typeOf reflect.Type
 	}{
-		{"AgentSelectorRequest", reflect.TypeFor[models.AgentSelectorRequest]()},
+		{"StopSelectorRequest", reflect.TypeFor[models.StopSelectorRequest]()},
 		{"StopAgentsRequest", reflect.TypeFor[models.StopAgentsRequest]()},
 		{"AgentStopError", reflect.TypeFor[models.AgentStopErrorResponse]()},
 		{"StopAgentsResponse", reflect.TypeFor[models.StopAgentsResponse]()},
@@ -57,7 +57,7 @@ func registerStopSchemas(components map[string]any, options *jsonschema.ForOptio
 		}
 		schema.AdditionalProperties = &jsonschema.Schema{Not: &jsonschema.Schema{}}
 		switch entry.name {
-		case "AgentSelectorRequest":
+		case "StopSelectorRequest":
 			minimum := 1
 			schema.MinProperties = &minimum
 			for name, property := range schema.Properties {

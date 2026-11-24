@@ -34,7 +34,7 @@ func TestControllerStopSelectorUsesOneExactMatchingInventorySnapshot(t *testing.
 	c := fixture.Start(t)
 	client := fixture.CommandClient(t)
 
-	selected, err := client.StopAgents(fixture.Context, agents.Selector{Type: "example-agent", Version: "v1.0.0", Hostname: "k8s-prod"})
+	selected, err := client.StopAgents(fixture.Context, agents.StopSelector{Type: "example-agent", Version: "v1.0.0", Hostname: "k8s-prod"})
 
 	if err != nil || selected.Validate() != nil || len(selected.Agents) != 2 || len(selected.Errors) != 0 ||
 		selected.Agents[0].ID != first.ID || selected.Agents[1].ID != second.ID {
@@ -51,7 +51,7 @@ func TestControllerStopSelectorUsesOneExactMatchingInventorySnapshot(t *testing.
 			t.Fatalf("selector stopped a nonmatching agent: %+v, %v", saved, err)
 		}
 	}
-	for _, selector := range []agents.Selector{
+	for _, selector := range []agents.StopSelector{
 		{ID: first.ID, Version: "v2.0.0", Hostname: first.Server.Hostname},
 		{ID: first.ID, Hostname: native.Server.Hostname},
 		{Hostname: "K8S-prod"},
@@ -62,7 +62,7 @@ func TestControllerStopSelectorUsesOneExactMatchingInventorySnapshot(t *testing.
 			t.Fatalf("nonmatching selector was not an explicit empty result: selector=%+v result=%+v, %v", selector, empty, err)
 		}
 	}
-	repeated, err := c.StopAgents(fixture.Context, agents.Selector{ID: first.ID, Type: first.Type, Version: first.Version, Hostname: first.Server.Hostname})
+	repeated, err := c.StopAgents(fixture.Context, agents.StopSelector{ID: first.ID, Type: first.Type, Version: first.Version, Hostname: first.Server.Hostname})
 	if err != nil || len(repeated.Agents) != 1 || !sameStopIdentity(repeated.Agents[0], selected.Agents[0]) {
 		t.Fatalf("exact selector changed a retained stop identity: %+v, %v", repeated, err)
 	}
@@ -86,11 +86,11 @@ func TestControllerStopSelectorUsesOneExactMatchingInventorySnapshot(t *testing.
 		}
 	}
 	for _, hostname := range []string{" k8s-prod", "k8s prod", "k8s/prod", `k8s\prod`, "k8s\nprod", string([]byte{0xff})} {
-		if _, err := client.StopAgents(fixture.Context, agents.Selector{Type: "example-agent", Hostname: hostname}); err == nil {
+		if _, err := client.StopAgents(fixture.Context, agents.StopSelector{Type: "example-agent", Hostname: hostname}); err == nil {
 			t.Fatalf("invalid hostname was accepted by the command client: %q", hostname)
 		}
 	}
-	selectedNative, err := client.StopAgents(fixture.Context, agents.Selector{Hostname: native.Server.Hostname})
+	selectedNative, err := client.StopAgents(fixture.Context, agents.StopSelector{Hostname: native.Server.Hostname})
 	if err != nil || selectedNative.Validate() != nil || len(selectedNative.Agents) != 1 || len(selectedNative.Errors) != 0 ||
 		selectedNative.Agents[0].ID != native.ID || selectedNative.Agents[0].Status != agents.AgentStopRequested {
 		t.Fatalf("hostname-only selector did not stop its exact target: %+v, %v", selectedNative, err)
@@ -114,7 +114,7 @@ func TestControllerStopSelectorReportsPartialFailureWithoutEnrollingReplacement(
 	fixture.Config.AgentStore = inventory
 	c := fixture.Start(t)
 
-	result, err := c.StopAgents(fixture.Context, agents.Selector{Version: first.Version})
+	result, err := c.StopAgents(fixture.Context, agents.StopSelector{Version: first.Version})
 
 	if err != nil || result.Validate() != nil || len(result.Agents) != 1 || result.Agents[0].ID != first.ID ||
 		len(result.Errors) != 1 || result.Errors[0].ID != disappeared.ID || result.Errors[0].Error != "agent_not_found" {

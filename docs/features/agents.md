@@ -14,7 +14,7 @@ Read the spawners' `server.hostname` values with `list_agents`. Start an
 {
   "operation_id": "<install-agent-operation-id>",
   "action_name": "spawn-agent",
-  "selector": {"type": "spawner-agent", "hostname": "k8s-spawner"},
+  "selector": {"hostname": "k8s-spawner"},
   "input": {"package": "github.com/defos-ai/commander-example-agent@stable"}
 }
 ```

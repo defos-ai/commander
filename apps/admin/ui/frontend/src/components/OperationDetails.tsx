@@ -2,7 +2,7 @@ import type {
   Operation, OperationArtifact, OperationContinuation, OperationNextAction,
   OperationPreflight, OperationQuestion, OperationTask, OperationTaskPlacement,
 } from '../api/operation-types';
-import type { ActionRequirement, AgentSelector } from '../api/types';
+import type { ActionRequirement, TaskSelector as TaskSelectorCriteria } from '../api/types';
 import { useTranslation } from '../i18n';
 import { Button } from './Button';
 import { QuestionAnswerStatus } from './QuestionAnswerStatus';
@@ -11,14 +11,14 @@ import '../styles/operations.css';
 
 export type SessionNavigationTarget = { id?: string; scope_id?: string; owner_agent_id?: string };
 
-export function TaskSelector({ selector }: { selector?: AgentSelector | null }) {
+export function TaskSelector({ selector }: { selector?: TaskSelectorCriteria | null }) {
   const { t } = useTranslation();
   if (!selector) return null;
   return <section className="operation-nested" aria-label={t($ => $.operations.executorFilters)}>
     <h3>{t($ => $.operations.executorFilters)}</h3>
-    <dl className="detail-list">{(['id', 'type', 'version', 'hostname'] as const).map(key => selector[key] && <div key={key}>
-      <dt>{t($ => $.operations.executorFilterFields[key])}</dt><dd><code>{selector[key]}</code></dd>
-    </div>)}</dl>
+    <dl className="detail-list"><div>
+      <dt>{t($ => $.operations.executorFilterFields.hostname)}</dt><dd><code>{selector.hostname}</code></dd>
+    </div></dl>
   </section>;
 }
 

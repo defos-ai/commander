@@ -7,14 +7,14 @@ import (
 	"github.com/defos-ai/commander/framework/id"
 )
 
-type Selector struct {
+type StopSelector struct {
 	ID       string    `json:"id,omitempty"`
 	Type     AgentType `json:"type,omitempty"`
 	Version  string    `json:"version,omitempty"`
 	Hostname string    `json:"hostname,omitempty"`
 }
 
-func (selector Selector) Validate() error {
+func (selector StopSelector) Validate() error {
 	if selector.ID == "" && selector.Type == "" && selector.Version == "" && selector.Hostname == "" {
 		return errors.New("agent selector requires id, type, version or hostname")
 	}
@@ -30,19 +30,19 @@ func (selector Selector) Validate() error {
 	return ValidateVersion(selector.Version)
 }
 
-func (selector Selector) Matches(agent Agent) bool {
+func (selector StopSelector) Matches(agent Agent) bool {
 	return (selector.ID == "" || selector.ID == agent.ID) &&
 		(selector.Type == "" || selector.Type == agent.Type) &&
 		(selector.Version == "" || selector.Version == agent.Version) &&
 		(selector.Hostname == "" || selector.Hostname == agent.Server.Hostname)
 }
 
-func (selector *Selector) UnmarshalJSON(data []byte) error {
+func (selector *StopSelector) UnmarshalJSON(data []byte) error {
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(data, &fields); err != nil || fields == nil {
 		return errors.New("agent selector must be an object")
 	}
-	var next Selector
+	var next StopSelector
 	for name, raw := range fields {
 		var value *string
 		if err := json.Unmarshal(raw, &value); err != nil || value == nil || *value == "" {

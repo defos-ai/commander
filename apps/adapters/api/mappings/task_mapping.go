@@ -18,8 +18,7 @@ func ToAssignTaskCommand(operationID string, request models.AssignTaskRequest) c
 		Input:         bytes.Clone(request.Input),
 	}
 	if request.Selector != nil {
-		selector := ToAgentSelector(*request.Selector)
-		command.Selector = &selector
+		command.Selector = &operations.TaskSelector{Hostname: request.Selector.Hostname}
 	}
 	return command
 }
@@ -45,8 +44,7 @@ func ToTaskResponse(task operations.Task) models.TaskResponse {
 		response.SessionIntent = &models.SessionIntentResponse{Mode: string(i.Mode), ScopeID: i.ScopeID, ID: i.ID, Error: i.Error}
 	}
 	if task.Selector != nil {
-		selector := task.Selector
-		response.Selector = &models.AgentSelectorResponse{ID: selector.ID, Type: string(selector.Type), Version: selector.Version, Hostname: selector.Hostname}
+		response.Selector = &models.TaskSelectorResponse{Hostname: task.Selector.Hostname}
 	}
 	if task.Result != nil {
 		result := ToActionOutputResponse(*task.Result)

@@ -1,15 +1,15 @@
 import type { Session } from '../connections/types';
 import { ApiError, getJSON, getJSONDocument } from './client';
 import { isActionRequirement } from './actions';
-import { validAgentSelector } from './agents';
 import { isMission } from './missions';
+import type { TaskSelector } from './types';
 import type {
   Operation, OperationActionOutput, OperationActionReadiness, OperationAgentReadiness,
   OperationArtifact, OperationArtifactFile, OperationContinuation, OperationEvent,
   OperationNextAction, OperationPreflight, OperationProgress, OperationQuestion, OperationTask,
   OperationSessionIntent, OperationSessionReference, OperationTaskPlacement,
 } from './operation-types';
-import { encodeIdentifier, isIdentifier, isNullableStringArray, isObject, isOptionalString } from './validation';
+import { encodeIdentifier, isHostname, isIdentifier, isNullableStringArray, isObject, isOptionalString } from './validation';
 import { readJSONObject } from '../missions/draft';
 
 function isNullableArray<T>(value: unknown, isItem: (item: unknown) => item is T): value is T[] | null {
@@ -56,6 +56,10 @@ function isContinuation(value: unknown): value is OperationContinuation {
     isNullableStringArray(value.created_task_ids) && isOptionalString(value.question_id);
 }
 
+function isTaskSelector(value: unknown): value is TaskSelector {
+  return isObject(value) && Object.keys(value).every(key => key === 'hostname') && isHostname(value.hostname);
+}
+
 function isTask(value: unknown): value is OperationTask {
   return isObject(value) && isIdentifier(value.id) && typeof value.operation_id === 'string' &&
     isOptionalString(value.parent_task_id) && (value.batch_id === undefined || isUUID(value.batch_id)) &&
@@ -63,7 +67,7 @@ function isTask(value: unknown): value is OperationTask {
     isOptionalString(value.command_id) && isOptionalDate(value.deadline_at) &&
     typeof value.status === 'string' && isOptionalString(value.error) &&
     isDate(value.started_at) && isOptionalDate(value.finished_at) &&
-    (value.selector === undefined || value.selector === null || validAgentSelector(value.selector)) &&
+    (value.selector === undefined || value.selector === null || isTaskSelector(value.selector)) &&
     (value.session_intent === undefined || value.session_intent === null || isSessionIntent(value.session_intent)) &&
     (value.result === undefined || value.result === null || isActionOutput(value.result)) &&
     (value.continuation === undefined || value.continuation === null || isContinuation(value.continuation));

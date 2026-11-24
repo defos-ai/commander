@@ -361,8 +361,7 @@ test('operation questions, automatic work, graph and downloads use the real stac
   expect(executors).toHaveLength(2);
   const executor = executors[0];
   expect(executor.server.hostname).not.toBe('');
-  const selector = { id: executor.id, type: executor.type, hostname: executor.server.hostname,
-    ...(executor.version ? { version: executor.version } : {}) };
+  const selector = { hostname: executor.server.hostname };
   const root = await api.post<OperationTask>(`${path}/tasks`, { action_name: 'rank-hn-stories', input: storyBatch(), selector }, 201);
   const finished = await api.operation(operation.id, value => value.tasks?.length === 2 && value.tasks.every(task => !['queued', 'running'].includes(task.status))
     && value.tasks.some(task => task.id === root.id && task.continuation?.status === 'pending'));
@@ -372,17 +371,15 @@ test('operation questions, automatic work, graph and downloads use the real stac
   }
   const selectedTask = finished.tasks!.find(task => task.id === root.id)!;
   expect(selectedTask.selector).toEqual(selector);
-  expect(selectedTask.agent_id).toBe(executor.id);
-  const executorFields = [['Agent ID', executor.id], ['Agent type', executor.type], ['Hostname', executor.server.hostname],
-    ...(executor.version ? [['Version', executor.version]] : [])];
+  const assignedExecutor = await api.get<Agent>(`/agents/${selectedTask.agent_id}`);
+  expect(assignedExecutor.server.hostname).toBe(selector.hostname);
   await page.getByRole('button', { name: 'Refresh', exact: true }).click();
   const rootCard = page.locator('details.operation-card').filter({ has: page.locator('summary').filter({ hasText: root.id }) });
   await rootCard.locator('summary').first().click();
   const requestedExecutor = rootCard.getByRole('region', { name: 'Executor filters', exact: true });
-  for (const [label, value] of executorFields) {
-    await expect(requestedExecutor.locator('.detail-list > div').filter({ has: page.getByText(label, { exact: true }) }).locator('dd')).toHaveText(value);
-  }
-  await expect(rootCard.locator('.operation-card-body > .detail-list').first().getByText(executor.id, { exact: true })).toBeVisible();
+  await expect(requestedExecutor.getByText('Hostname', { exact: true })).toBeVisible();
+  await expect(requestedExecutor.locator('dd')).toHaveText(selector.hostname);
+  await expect(rootCard.locator('.operation-card-body > .detail-list').first().getByText(selectedTask.agent_id, { exact: true })).toBeVisible();
   const artifact = finished.tasks?.flatMap(task => task.result?.artifacts ?? []).find(item => item.action_name === 'write-hn-digest');
   expect(artifact).toBeDefined();
   const file = artifact!.files!.find(item => item.name === 'digest.md')!;
@@ -398,9 +395,8 @@ test('operation questions, automatic work, graph and downloads use the real stac
   const node = page.getByRole('region', { name: 'Node details' });
   await graph.getByRole('button', { name: /^Inspect Task rank-hn-stories / }).click();
   const graphExecutor = node.getByRole('region', { name: 'Executor filters', exact: true });
-  for (const [label, value] of executorFields) {
-    await expect(graphExecutor.locator('.detail-list > div').filter({ has: page.getByText(label, { exact: true }) }).locator('dd')).toHaveText(value);
-  }
+  await expect(graphExecutor.getByText('Hostname', { exact: true })).toBeVisible();
+  await expect(graphExecutor.locator('dd')).toHaveText(selector.hostname);
   await page.getByRole('dialog', { name: 'Node details', exact: true }).getByRole('button', { name: 'Close dialog' }).click();
   await graph.getByRole('button', { name: /^Inspect Task write-hn-digest / }).click();
   await expect(node.getByRole('region', { name: 'Executor filters', exact: true })).toHaveCount(0);

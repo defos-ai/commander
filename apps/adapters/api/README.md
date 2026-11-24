@@ -68,8 +68,8 @@ operation, inspect preflight, assign actions, resolve questions and decisions,
 then complete it with output matching the mission schema.
 
 Task assignments may include `"selector":{"hostname":"worker-host"}` alongside
-`action_name` and `input`. Exact `id`, `type`, `version` and `hostname` filters
-intersect; the controller selects a matching ready agent with capacity. No match
+`action_name` and `input`. The controller checks the action, exact hostname,
+readiness and capacity before its selection strategy chooses an executor. No match
 stays queued. Omit the selector for normal selection. Same-action follow-ups keep
 the filter; other actions select normally.
 

@@ -68,20 +68,20 @@ type continuationSummary struct {
 }
 
 type taskSummary struct {
-	Selector            *agents.Selector      `json:"selector,omitempty"`
-	ID                  string                `json:"id"`
-	ParentTaskID        string                `json:"parent_task_id,omitempty"`
-	BatchID             string                `json:"batch_id,omitempty"`
-	AgentID             string                `json:"agent_id"`
-	AgentType           string                `json:"agent_type,omitempty"`
-	MissingRequirements []actions.Requirement `json:"missing_requirements,omitempty"`
-	ActionName          string                `json:"action_name"`
-	DeadlineAt          *time.Time            `json:"deadline_at,omitempty"`
-	Status              operations.TaskStatus `json:"status"`
-	Continuation        *continuationSummary  `json:"continuation,omitempty"`
-	Error               string                `json:"error,omitempty"`
-	StartedAt           time.Time             `json:"started_at"`
-	FinishedAt          *time.Time            `json:"finished_at,omitempty"`
+	Selector            *operations.TaskSelector `json:"selector,omitempty"`
+	ID                  string                   `json:"id"`
+	ParentTaskID        string                   `json:"parent_task_id,omitempty"`
+	BatchID             string                   `json:"batch_id,omitempty"`
+	AgentID             string                   `json:"agent_id"`
+	AgentType           string                   `json:"agent_type,omitempty"`
+	MissingRequirements []actions.Requirement    `json:"missing_requirements,omitempty"`
+	ActionName          string                   `json:"action_name"`
+	DeadlineAt          *time.Time               `json:"deadline_at,omitempty"`
+	Status              operations.TaskStatus    `json:"status"`
+	Continuation        *continuationSummary     `json:"continuation,omitempty"`
+	Error               string                   `json:"error,omitempty"`
+	StartedAt           time.Time                `json:"started_at"`
+	FinishedAt          *time.Time               `json:"finished_at,omitempty"`
 }
 
 func summarizeTask(task queries.TaskView) taskSummary {

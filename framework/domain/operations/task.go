@@ -5,7 +5,6 @@ import (
 	"time"
 
 	actionmodel "github.com/defos-ai/commander/framework/domain/actions"
-	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/sessions"
 	"github.com/defos-ai/commander/framework/id"
 )
@@ -25,7 +24,7 @@ const (
 // the operation is cancelled while its already-dispatched work finishes.
 type Task struct {
 	SessionIntent *sessions.Intent          `json:"session_intent,omitempty"`
-	Selector      *agents.Selector          `json:"selector,omitempty"`
+	Selector      *TaskSelector             `json:"selector,omitempty"`
 	ID            string                    `json:"id"`
 	OperationID   string                    `json:"operation_id"`
 	ParentTaskID  string                    `json:"parent_task_id,omitempty"`

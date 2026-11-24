@@ -40,7 +40,7 @@ func TestOperationMongoSnapshotsAndIntegrity(t *testing.T) {
 		},
 	}
 	task := operations.NewTask(original.ID, "", actions.NextAction{ActionName: "inspect", Input: json.RawMessage(`{ "number": 9007199254740993 }`)})
-	task.Selector = &agents.Selector{Type: "review-agent", Version: "v1.0.0", Hostname: "k8s-prod"}
+	task.Selector = &operations.TaskSelector{Hostname: "k8s-prod"}
 	original.Tasks = []operations.Task{task}
 	question := fixtures.Question("")
 	original.Questions = []operations.Question{question}
@@ -141,7 +141,7 @@ func TestOperationMongoSnapshotsAndIntegrity(t *testing.T) {
 	}
 	invalid = fixtures.Operation()
 	invalidTask := operations.NewTask(invalid.ID, "", actions.NextAction{ActionName: "inspect"})
-	invalidTask.Selector = &agents.Selector{}
+	invalidTask.Selector = &operations.TaskSelector{}
 	invalid.Tasks = []operations.Task{invalidTask}
 	if err := catalog.Create(ctx, invalid); err == nil {
 		t.Fatal("empty task selector was accepted")
@@ -173,7 +173,7 @@ func TestOperationMongoConcurrentQueueDispatchAndPagination(t *testing.T) {
 	for i := range count {
 		tasks[i] = operations.NewTask(op.ID, "", actions.NextAction{ActionName: "inspect", Input: json.RawMessage(fmt.Sprintf(`{"page":%d,"number":9007199254740993}`, i))})
 		if i%2 == 0 {
-			tasks[i].Selector = &agents.Selector{Hostname: "k8s-prod"}
+			tasks[i].Selector = &operations.TaskSelector{Hostname: "k8s-prod"}
 		}
 		catalog := []operations.OperationStore{first, second}[i%2]
 		go func() {
@@ -276,7 +276,7 @@ func TestOperationMongoConcurrentQueueDispatchAndPagination(t *testing.T) {
 	if _, err := first.QueueTask(t.Context(), op.ID, conflict); !errors.Is(err, operations.ErrOperationConflict) {
 		t.Fatalf("different large integer accepted as replay: %v", err)
 	}
-	for _, selector := range []*agents.Selector{nil, {Hostname: "native-host"}, {Type: "review-agent", Hostname: "k8s-prod"}} {
+	for _, selector := range []*operations.TaskSelector{nil, {Hostname: "native-host"}, {Hostname: "K8S-PROD"}} {
 		conflict := tasks[0].Clone()
 		conflict.Selector = selector
 		if _, err := first.QueueTask(t.Context(), op.ID, conflict); !errors.Is(err, operations.ErrOperationConflict) {
@@ -284,7 +284,7 @@ func TestOperationMongoConcurrentQueueDispatchAndPagination(t *testing.T) {
 		}
 	}
 	invalid := operations.NewTask(op.ID, "", actions.NextAction{ActionName: "inspect"})
-	invalid.Selector = &agents.Selector{}
+	invalid.Selector = &operations.TaskSelector{}
 	if _, err := second.QueueTask(t.Context(), op.ID, invalid); err == nil {
 		t.Fatal("empty selector was accepted for a queued assignment")
 	}
@@ -726,7 +726,7 @@ func TestOperationMongoPreflightRecoveryAndNoopWrites(t *testing.T) {
 		t.Fatal(err)
 	}
 	task := operations.NewTask(op.ID, "", actions.NextAction{ActionName: "inspect"})
-	task.Selector = &agents.Selector{Hostname: "k8s-prod"}
+	task.Selector = &operations.TaskSelector{Hostname: "k8s-prod"}
 	if _, err := first.QueueTask(t.Context(), op.ID, task); err != nil {
 		t.Fatal(err)
 	}
