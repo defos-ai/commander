@@ -55,6 +55,9 @@ func (w *Worker) Prepare(ctx context.Context, a runtimeSessions.Assignment) (run
 	available := false
 	for _, record := range records {
 		if record.ID == a.Candidate && !record.Stale {
+			if task.Status == operations.TaskQueued && task.Selector != nil && !task.Selector.Matches(record) {
+				return runtimeSessions.PreparedDispatch{}, errors.New("agent_selector_mismatch")
+			}
 			for _, definition := range record.Actions {
 				if definition.Name == task.ActionName && operations.AssessAgentAction(record, definition).Reason == "" {
 					available = task.MatchesSessionMode(definition.SessionMode)

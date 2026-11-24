@@ -26,6 +26,9 @@ limits, see [Sessions](../../docs/features/sessions.md).
 - Replacement never rebinds queued use. Placement follows each task's accepted
   session intent and exact owner; other tasks remain independently eligible.
   Creation without an owner can select any ready compatible agent.
+  Optional task selectors further restrict queued work without replacing its
+  exact owner. Recheck the selected candidate before dispatch; already dispatched
+  recovery retains its saved agent even if selector properties change.
 - Keep lifecycle disposition (`reserved`, `active`, `closing`, `released`) separate
   from resource state. Lease loss projects `lost` while retaining the reservation.
 - Session discovery uses `sessions.QueryStore.Find` with intersecting session,

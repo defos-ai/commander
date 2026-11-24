@@ -37,7 +37,7 @@ applies to all domain packages below this directory.
   status; observations cannot clear it. Flat stop command ID/time retain the
   original identity through retries and inventory expiry until confirmation.
   `agents.Selector` holds nonempty exact ID/type/version/hostname criteria combined
-  with AND; controller coordination owns inventory matching. Hostname matches the
+  with AND; controller workers own inventory matching. Hostname matches the
   agent's advertised `Server.Hostname` without case folding or DNS resolution;
   use the same validation as `ServerInfo`. It identifies the agent's own host or
   container/Pod namespace, not its parent spawner or Kubernetes node, and is not
@@ -96,7 +96,10 @@ applies to all domain packages below this directory.
   assigned `AgentID`. Nil is unconstrained; nonnil selectors must pass shared
   validation at queueing, persistence and recovery. Clone the selector independently
   and include it in assignment replay identity: changing or removing criteria
-  conflicts with the saved task. Candidate matching belongs in the operation worker.
+  conflicts with the saved task. The operation worker filters queued candidates
+  without bypassing readiness, capacity or exact session ownership. The session
+  worker rechecks the chosen candidate before dispatch. Dispatched recovery
+  retains the saved agent even when its advertised properties change.
   Terminal operation status and [settlement](operations/progress.go) differ:
   interrupted outcomes remain unknown, and late results can still be accepted.
 - [Checkpoints](executions/checkpoint.go) are immutable execution facts;

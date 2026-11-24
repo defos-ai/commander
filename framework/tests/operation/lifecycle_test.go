@@ -10,6 +10,7 @@ import (
 	"github.com/defos-ai/commander/framework/comms/clients/controller/commands"
 	operationworker "github.com/defos-ai/commander/framework/controller/workers/operation"
 	"github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/domain/missions/policies"
 	"github.com/defos-ai/commander/framework/domain/operations"
@@ -143,13 +144,29 @@ func awaitWorkerReturn(t *testing.T, result <-chan error) error {
 }
 
 func TestWaitingClientsDoNotBlockSchedulingOrCancellation(t *testing.T) {
+	config := fixtures.Config()
+	target := fixtures.ReadyAgentOnHost(fixtures.AgentID, "k8s-prod")
+	otherHost := fixtures.ReadyAgentOnHost("review-agent-00000002", "native-host")
+	config.AgentCatalog.(*fakes.AgentCatalog).Set(target, otherHost)
 	exec, calls := fakes.ControlledExecutor()
-	r := fixtures.NewWorker(t, fixtures.Config(), exec)
+	r := fixtures.NewWorker(t, config, exec)
 	first := fixtures.Start(t, r)
-	fixtures.Assign(t, r, first.ID, "inspect")
+	_, err := r.Assign(t.Context(), commands.AssignTaskCommand{
+		OperationID: first.ID, ActionName: "inspect", Input: []byte(`{}`),
+		Selector: &agents.Selector{Hostname: target.Server.Hostname},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	firstCall := fixtures.Receive(t, calls)
 	second := fixtures.Start(t, r)
-	task := fixtures.Assign(t, r, second.ID, "inspect")
+	task, err := r.Assign(t.Context(), commands.AssignTaskCommand{
+		OperationID: second.ID, ActionName: "inspect", Input: []byte(`{}`),
+		Selector: &agents.Selector{Hostname: target.Server.Hostname},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	queued, err := r.Get(t.Context(), second.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -179,6 +196,9 @@ func TestWaitingClientsDoNotBlockSchedulingOrCancellation(t *testing.T) {
 	}
 	firstCall.Reply <- fixtures.Output("inspect")
 	secondCall := fixtures.Receive(t, calls)
+	if firstCall.Agent != target.ID || secondCall.Agent != target.ID || secondCall.Call.TaskID != task.ID {
+		t.Fatalf("busy selected host fell back to another host: first=%+v, second=%+v", firstCall, secondCall)
+	}
 	if _, err := r.Cancel(ctx, commands.CancelOperationCommand{OperationID: second.ID}); err != nil {
 		t.Fatal(err)
 	}

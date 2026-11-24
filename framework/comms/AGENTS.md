@@ -50,6 +50,10 @@
   list of IDs. The controller captures matching instances and returns `StopResult`
   with accepted agents and per-agent error codes. A new submission reevaluates
   current inventory; never automatically retry an uncertain selector command.
+- `AssignTaskCommand.Selector` carries optional executor criteria separately from
+  action input. The controller copies and validates them before queueing; the
+  accepted task retains them while inventory changes or the controller restarts.
+  Selection and dispatch remain controller responsibilities.
 - Agent command expiry controls admission of new work, not cancellation of
   running work or replay of cached outcomes. Recovery preserves the deadline.
 - Lifecycle observations use source timestamps, including lease renewal. Late

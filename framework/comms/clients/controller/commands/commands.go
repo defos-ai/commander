@@ -55,10 +55,11 @@ func (r StartOperationCommand) Validate() error {
 }
 
 type AssignTaskCommand struct {
-	OperationID   string          `json:"operation_id"`
-	ActionName    string          `json:"action_name"`
-	Input         json.RawMessage `json:"input,omitempty"`
-	SessionTaskID string          `json:"session_task_id,omitempty"`
+	OperationID   string               `json:"operation_id"`
+	ActionName    string               `json:"action_name"`
+	Input         json.RawMessage      `json:"input,omitempty"`
+	SessionTaskID string               `json:"session_task_id,omitempty"`
+	Selector      *agentmodel.Selector `json:"selector,omitempty"`
 }
 
 func (r AssignTaskCommand) Validate() error {
@@ -67,6 +68,11 @@ func (r AssignTaskCommand) Validate() error {
 	}
 	if r.SessionTaskID != "" && !id.Valid(r.SessionTaskID) {
 		return errors.New("session_task_id must be a canonical lowercase UUID")
+	}
+	if r.Selector != nil {
+		if err := r.Selector.Validate(); err != nil {
+			return err
+		}
 	}
 	return (actionmodel.ActionCall{ActionName: r.ActionName, Input: r.Input}).Validate()
 }

@@ -383,7 +383,7 @@
   and ordinary reads/recovery never trigger forwarding. Delivery failures do not
   change an answer or its continuation; sharing grants no completion authority.
 - Keep [`AgentSelector`](controller/workers/operation/agent_selector.go) limited to choosing
-  eligible candidates. The operation worker owns session ownership, readiness,
+  eligible candidates. The operation worker owns task criteria, session ownership, readiness,
   capacity checks and dispatch persistence. Selection is serial, must honor cancellation and
   return promptly; an empty choice defers work.
 - Operation preflight exposes missing requirements only for live, ready/working

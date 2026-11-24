@@ -30,7 +30,7 @@ The [Agent], [Controller], [Operation worker], [Queries], [Secret service] and
 | --- | --- | --- |
 | [`AgentSnapshot`](agents/agent_snapshot.go) | Advertises an instance's identity, responsibilities, capabilities, sessions and current work. | Agent state publishing, Controller registration and heartbeat consumers. |
 | [`Agent`](agents/agent.go) | Retains received inventory plus controller-owned observation times, heartbeat lease, stop intent and derived freshness. | Controller selection, Operation worker preflight, Session coordinator, Queries, Adapters. |
-| [`Selector`](agents/selector.go) | Names exact ID, type, version and advertised hostname criteria for a controller-owned selection. | Agent stop commands and Controller coordination. |
+| [`Selector`](agents/selector.go) | Names exact ID, type, version and advertised hostname criteria for a controller-owned selection. | Agent stop commands, saved tasks and Controller selection. |
 | [`StopResult`](agents/stop_result.go) | Distinguishes selected agents with accepted stops from per-agent failures. | Controller commands and Adapters. |
 | [`Dependency`](agents/dependency.go) | Describes external software and supported versions; executable requirements link to this installation guidance by name. | Agent configuration, advertised snapshots and Controller inventory. |
 | [`Work`](agents/agent_snapshot.go) | Correlates current action activity and managed-secret waits with a saved assignment. | Agent runtime, Controller observations, operation requirement queries. |

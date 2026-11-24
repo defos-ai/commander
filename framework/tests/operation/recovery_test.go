@@ -12,6 +12,7 @@ import (
 	"github.com/defos-ai/commander/framework/comms/clients/controller/commands"
 	operationworker "github.com/defos-ai/commander/framework/controller/workers/operation"
 	"github.com/defos-ai/commander/framework/domain/actions"
+	"github.com/defos-ai/commander/framework/domain/agents"
 	"github.com/defos-ai/commander/framework/domain/executions"
 	"github.com/defos-ai/commander/framework/domain/missions"
 	"github.com/defos-ai/commander/framework/domain/missions/policies"
@@ -29,6 +30,7 @@ func TestRecoveryObservesSavedResultWithoutNewExecution(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			config := fixtures.Config()
+			config.AgentCatalog.(*fakes.AgentCatalog).Set(fixtures.ReadyAgentOnHost(fixtures.AgentID, "original-host"))
 			started := make(chan fakes.Invocation, 1)
 			var dispatches atomic.Int32
 			e := fakes.Executor{Run: func(ctx context.Context, agent string, call actions.ActionCall) (actions.ActionOutput, error) {
@@ -42,7 +44,13 @@ func TestRecoveryObservesSavedResultWithoutNewExecution(t *testing.T) {
 			}}
 			first := fixtures.NewWorker(t, config, e)
 			op := fixtures.Start(t, first)
-			task := fixtures.Assign(t, first, op.ID, "inspect")
+			task, err := first.Assign(t.Context(), commands.AssignTaskCommand{
+				OperationID: op.ID, ActionName: "inspect", Input: []byte(`{}`),
+				Selector: &agents.Selector{Hostname: "original-host"},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
 			original := fixtures.Receive(t, started)
 			if interrupted {
 				fixtures.AwaitOperation(t, first, op.ID, func(op operations.Operation) bool { return op.Tasks[0].Status == operations.TaskInterrupted })
@@ -54,7 +62,12 @@ func TestRecoveryObservesSavedResultWithoutNewExecution(t *testing.T) {
 				return fixtures.Output(call.ActionName), nil
 			}
 
-			config.AgentCatalog.(*fakes.AgentCatalog).Set(fixtures.ReadyAgent("review-agent-00000002"))
+			replacement := fixtures.ReadyAgentOnHost("review-agent-00000002", "original-host")
+			catalog := config.AgentCatalog.(*fakes.AgentCatalog)
+			catalog.Set(replacement)
+			if interrupted {
+				catalog.Set(fixtures.ReadyAgentOnHost(fixtures.AgentID, "renamed-host"), replacement)
+			}
 			restarted := fixtures.NewWorker(t, config, e)
 			recovered := fixtures.Receive(t, observed)
 			settled := fixtures.AwaitOperation(t, restarted, op.ID, func(op operations.Operation) bool { return op.Tasks[0].Status == operations.TaskSucceeded })
@@ -66,6 +79,9 @@ func TestRecoveryObservesSavedResultWithoutNewExecution(t *testing.T) {
 			if len(settled.Tasks) != 1 || got.ID != task.ID || got.CommandID != task.ID || got.Result == nil || got.Error != "" {
 				t.Fatalf("recovery lost successful outcome: %+v", got)
 			}
+			if got.Selector == nil || got.Selector.Hostname != "original-host" || got.AgentID != original.Agent {
+				t.Fatalf("recovery changed accepted criteria or retargeted assigned work: %+v", got)
+			}
 			if settled.Status != operations.Planning || got.Continuation.DecisionBy != operations.DecisionModel || got.Continuation.Status != operations.ContinuationPending {
 				t.Fatalf("recovery did not return control to the model: %+v", settled)
 			}
@@ -75,6 +91,9 @@ func TestRecoveryObservesSavedResultWithoutNewExecution(t *testing.T) {
 
 func TestUncertainAssignmentWriteSuspendsUntilRecovery(t *testing.T) {
 	config := fixtures.Config()
+	native := fixtures.ReadyAgentOnHost(fixtures.AgentID, "native-host")
+	target := fixtures.ReadyAgentOnHost("review-agent-00000002", "k8s-prod")
+	config.AgentCatalog.(*fakes.AgentCatalog).Set(native)
 	failure := errors.New("directory sync failed")
 	config.OperationStore = &fakes.UncertainWriteStore{OperationStore: config.OperationStore, AfterQueue: func(operations.Operation) error {
 		return errors.Join(operations.ErrWriteUncertain, failure)
@@ -91,7 +110,10 @@ func TestUncertainAssignmentWriteSuspendsUntilRecovery(t *testing.T) {
 		_ = first.Close(ctx)
 	})
 	op := fixtures.Start(t, first)
-	command := commands.AssignTaskCommand{OperationID: op.ID, ActionName: "inspect", Input: json.RawMessage(`{"page":1}`)}
+	command := commands.AssignTaskCommand{
+		OperationID: op.ID, ActionName: "inspect", Input: json.RawMessage(`{"page":1}`),
+		Selector: &agents.Selector{Hostname: target.Server.Hostname},
+	}
 	_, assignErr := first.Assign(t.Context(), command)
 	stored, err := first.Get(t.Context(), op.ID)
 	if err != nil || len(stored.Tasks) != 1 || stored.Tasks[0].Status != operations.TaskQueued {
@@ -115,13 +137,17 @@ func TestUncertainAssignmentWriteSuspendsUntilRecovery(t *testing.T) {
 	default:
 	}
 
+	config.AgentCatalog.(*fakes.AgentCatalog).Set(native, target)
 	restarted := fixtures.NewWorker(t, config, exec)
 	call := fixtures.Receive(t, calls)
-	if call.Agent != fixtures.AgentID || saved.AgentID != "" || call.Call.TaskID != saved.ID || call.Call.OperationID != op.ID || call.Call.ActionName != saved.ActionName || !reflect.DeepEqual(call.Call.Input, saved.Input) {
+	if call.Agent != target.ID || saved.AgentID != "" || call.Call.TaskID != saved.ID || call.Call.OperationID != op.ID || call.Call.ActionName != saved.ActionName || !reflect.DeepEqual(call.Call.Input, saved.Input) {
 		t.Fatalf("recovery changed the saved assignment: %+v", call)
 	}
 	call.Reply <- fixtures.Output("inspect")
 	settled := fixtures.AwaitOperation(t, restarted, op.ID, func(op operations.Operation) bool { return op.Tasks[0].Status == operations.TaskSucceeded })
+	if settled.Tasks[0].Selector == nil || settled.Tasks[0].Selector.Hostname != target.Server.Hostname {
+		t.Fatalf("queued recovery discarded accepted routing criteria: %+v", settled.Tasks[0])
+	}
 	fixtures.CloseWorker(t, restarted)
 	assigned, dispatched := 0, 0
 	for _, event := range settled.Events {

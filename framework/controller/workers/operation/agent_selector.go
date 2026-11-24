@@ -7,8 +7,8 @@ import (
 	"github.com/defos-ai/commander/framework/domain/operations"
 )
 
-// AgentSelector chooses from candidates satisfying session ownership, readiness and
-// capacity without dispatching work.
+// AgentSelector chooses from candidates satisfying task criteria, session ownership,
+// readiness and capacity without dispatching work.
 // Calls are serial within an operation worker and must return promptly and honor ctx.
 // An empty ID defers selection; errors leave work queued for retry.
 type AgentSelector interface {

@@ -36,7 +36,7 @@ including workers whose `Run` has not started. No runtime loop starts in assembl
   is throttled for one heartbeat interval; only a stopped observation confirms
   shutdown. Provider read failures during uncertainty fence controller admission.
   Selector stops capture matching IDs once inside this same owner, combine exact
-  ID/type/version filters with AND, and save each intent without publishing in
+  ID/type/version/hostname filters with AND, and save each intent without publishing in
   the acceptance loop. Return partial per-ID errors without inventing success.
   Later agent registrations are outside that captured set. Periodic stop
   publication shares one five-second budget for the entire reconciliation pass.
@@ -95,6 +95,11 @@ including workers whose `Run` has not started. No runtime loop starts in assembl
   admission so accepted results can drain during shutdown. Assembly injects it
   into the command worker; hosts do not construct a second operation worker or
   command consumer.
+  Optional task selectors filter queued candidates before strategy selection,
+  intersect exact session ownership and never bypass readiness or capacity.
+  Missing matches remain queued; other eligible tasks can proceed.
+  Session preparation rechecks the chosen candidate before
+  dispatch. Recovery observes the saved owner without reinterpreting selectors.
   Notify sharing after confirmed accepted operation transitions, using saved
   event identity rather than rebuilding groups from current continuation lists.
   Baseline recovered event history without forwarding it again.

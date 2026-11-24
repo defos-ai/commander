@@ -20,6 +20,8 @@ func (r *Worker) Assign(ctx context.Context, command commands.AssignTaskCommand)
 		return operations.Task{}, err
 	}
 	task := queuedTask(command.OperationID, "", actionmodel.NextAction{ActionName: command.ActionName, Input: command.Input})
+	task.Selector = command.Selector
+	task = task.Clone()
 	return submit(ctx, r, func(ctx context.Context) (operations.Task, error) {
 		s, err := r.activeState(ctx, command.OperationID)
 		if err != nil {
