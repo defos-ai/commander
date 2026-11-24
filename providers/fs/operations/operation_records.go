@@ -40,6 +40,11 @@ func encodeOperation(op operations.Operation) (map[string]json.RawMessage, error
 		EventSequences: make([]uint64, 0, len(op.Events))}
 	records := make(map[string]json.RawMessage, 1+len(op.Tasks)+len(op.Questions)+len(op.Events))
 	for _, task := range op.Tasks {
+		if task.Selector != nil {
+			if err := task.Selector.Validate(); err != nil {
+				return nil, fmt.Errorf("task %s selector: %w", task.ID, err)
+			}
+		}
 		if err := addRecord(records, "tasks/", task.ID, task); err != nil {
 			return nil, err
 		}

@@ -17,6 +17,11 @@ func (o *Operation) QueueTask(task Task) (bool, error) {
 	if err := task.validateDirectAssignmentState(); err != nil {
 		return false, err
 	}
+	if task.Selector != nil {
+		if err := task.Selector.Validate(); err != nil {
+			return false, err
+		}
+	}
 	if err := (actions.NextAction{ActionName: task.ActionName, Input: task.Input}).Validate(); err != nil {
 		return false, err
 	}
@@ -56,7 +61,7 @@ func (t Task) validateDirectAssignmentState() error {
 }
 
 func sameAssignment(saved, incoming Task) bool {
-	if !sameJSON(saved.SessionIntent, incoming.SessionIntent) {
+	if !sameJSON(saved.SessionIntent, incoming.SessionIntent) || !sameJSON(saved.Selector, incoming.Selector) {
 		return false
 	}
 	if saved.OperationID != incoming.OperationID || saved.CommandID != incoming.CommandID || saved.ParentTaskID != incoming.ParentTaskID || saved.ActionName != incoming.ActionName {

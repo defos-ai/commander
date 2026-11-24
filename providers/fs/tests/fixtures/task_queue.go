@@ -1,6 +1,8 @@
 package fixtures
 
 import (
+	"encoding/json"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -30,4 +32,24 @@ func CreateQueueOperation(t *testing.T, store *operationfs.OperationFsStore) (op
 		t.Fatal(err)
 	}
 	return saved, operations.NewTask(op.ID, "", actions.NextAction{ActionName: "inspect"})
+}
+
+func SetTaskSelectorRecord(t *testing.T, dir, operationID, taskID string, selector json.RawMessage) {
+	t.Helper()
+	records := OpenRecords(t, filepath.Join(dir, "operations", operationID+".json"))
+	saved, err := records.Read(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	key := "tasks/" + taskID
+	var task map[string]json.RawMessage
+	if err := json.Unmarshal(saved[key], &task); err != nil {
+		t.Fatal(err)
+	}
+	task["selector"] = selector
+	data, err := json.Marshal(task)
+	if err != nil {
+		t.Fatal(err)
+	}
+	PutRecords(t, records, map[string]json.RawMessage{key: data})
 }

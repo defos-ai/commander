@@ -40,6 +40,7 @@ func TestOperationMongoSnapshotsAndIntegrity(t *testing.T) {
 		},
 	}
 	task := operations.NewTask(original.ID, "", actions.NextAction{ActionName: "inspect", Input: json.RawMessage(`{ "number": 9007199254740993 }`)})
+	task.Selector = &agents.Selector{Type: "review-agent", Version: "v1.0.0", Hostname: "k8s-prod"}
 	original.Tasks = []operations.Task{task}
 	question := fixtures.Question("")
 	original.Questions = []operations.Question{question}
@@ -56,6 +57,7 @@ func TestOperationMongoSnapshotsAndIntegrity(t *testing.T) {
 	original.Mission.ActionDefinitions[0].InputSchema[0] = '!'
 	original.Mission.ActionDefinitions[0].OutputSchema[0] = '!'
 	original.Tasks[0].Input[0] = '!'
+	original.Tasks[0].Selector.Hostname = "changed"
 	original.Questions[0].Options[0] = "changed"
 	original.Mission.Policies.Continuation.AggregateResults[0] = "changed"
 	original.Mission.Policies.Continuation.ModelReview[0] = "changed"
@@ -75,8 +77,26 @@ func TestOperationMongoSnapshotsAndIntegrity(t *testing.T) {
 	got.Mission.Policies.Continuation.AggregateResults[0] = "changed"
 	got.Mission.Policies.Continuation.ModelReview[0] = "changed"
 	got.Mission.Policies.Completion.DecisionBy = policies.Model
+	got.Tasks[0].Selector.Hostname = "changed"
 	got.Questions[0].Options[0] = "changed"
 	assertOperationEqual(t, fixtures.ReadOperation(t, catalog, expected.ID), expected)
+	reopened, err := mongooperations.NewOperationMongoStore(ctx, database)
+	if err != nil {
+		t.Fatal(err)
+	}
+	loadedTask, err := reopened.GetTask(ctx, expected.ID, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertOperationEqual(t, loadedTask, expected.Tasks[0])
+	loadedTask.Selector.Hostname = "changed"
+	loadedTasks, err := reopened.ListTasks(ctx, expected.ID, "", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertOperationEqual(t, loadedTasks, expected.Tasks)
+	loadedTasks[0].Selector.Hostname = "changed"
+	assertOperationEqual(t, fixtures.ReadOperation(t, reopened, expected.ID), expected)
 	other := fixtures.Operation()
 	if err := catalog.Create(ctx, other); err != nil {
 		t.Fatal(err)
@@ -119,6 +139,16 @@ func TestOperationMongoSnapshotsAndIntegrity(t *testing.T) {
 	if _, err := catalog.Get(ctx, invalid.ID); !errors.Is(err, operations.ErrUnknownOperation) {
 		t.Fatalf("malformed creation left records: %v", err)
 	}
+	invalid = fixtures.Operation()
+	invalidTask := operations.NewTask(invalid.ID, "", actions.NextAction{ActionName: "inspect"})
+	invalidTask.Selector = &agents.Selector{}
+	invalid.Tasks = []operations.Task{invalidTask}
+	if err := catalog.Create(ctx, invalid); err == nil {
+		t.Fatal("empty task selector was accepted")
+	}
+	if _, err := catalog.Get(ctx, invalid.ID); !errors.Is(err, operations.ErrUnknownOperation) {
+		t.Fatalf("rejected task selector left records: %v", err)
+	}
 	if _, err := catalog.Get(ctx, "not-a-uuid"); err == nil {
 		t.Fatal("invalid operation ID was accepted")
 	}
@@ -142,6 +172,9 @@ func TestOperationMongoConcurrentQueueDispatchAndPagination(t *testing.T) {
 	gate, results := make(chan struct{}), make(chan error, count)
 	for i := range count {
 		tasks[i] = operations.NewTask(op.ID, "", actions.NextAction{ActionName: "inspect", Input: json.RawMessage(fmt.Sprintf(`{"page":%d,"number":9007199254740993}`, i))})
+		if i%2 == 0 {
+			tasks[i].Selector = &agents.Selector{Hostname: "k8s-prod"}
+		}
 		catalog := []operations.OperationStore{first, second}[i%2]
 		go func() {
 			<-gate
@@ -242,6 +275,18 @@ func TestOperationMongoConcurrentQueueDispatchAndPagination(t *testing.T) {
 	conflict.Input = json.RawMessage(`{"page":0,"number":9007199254740992}`)
 	if _, err := first.QueueTask(t.Context(), op.ID, conflict); !errors.Is(err, operations.ErrOperationConflict) {
 		t.Fatalf("different large integer accepted as replay: %v", err)
+	}
+	for _, selector := range []*agents.Selector{nil, {Hostname: "native-host"}, {Type: "review-agent", Hostname: "k8s-prod"}} {
+		conflict := tasks[0].Clone()
+		conflict.Selector = selector
+		if _, err := first.QueueTask(t.Context(), op.ID, conflict); !errors.Is(err, operations.ErrOperationConflict) {
+			t.Fatalf("changed selector accepted as replay: %+v, %v", selector, err)
+		}
+	}
+	invalid := operations.NewTask(op.ID, "", actions.NextAction{ActionName: "inspect"})
+	invalid.Selector = &agents.Selector{}
+	if _, err := second.QueueTask(t.Context(), op.ID, invalid); err == nil {
+		t.Fatal("empty selector was accepted for a queued assignment")
 	}
 	assertOperationEqual(t, fixtures.ReadOperation(t, first, op.ID), latest)
 }
@@ -647,7 +692,10 @@ func TestOperationMongoPreflightRecoveryAndNoopWrites(t *testing.T) {
 	first, database := fixtures.OpenOperations(t)
 	second, _ := fixtures.OpenOperations(t)
 	op := fixtures.CreateOperation(t, first, fixtures.Operation())
-	agent := agents.Agent{AgentSnapshot: agents.AgentSnapshot{ID: "review-agent-00000001", Status: agents.AgentReady, Actions: []actions.Action{{Name: "inspect", Status: actions.Ready}}}}
+	agent := agents.Agent{AgentSnapshot: agents.AgentSnapshot{
+		ID: "review-agent-00000001", Status: agents.AgentReady, Server: agents.ServerInfo{Hostname: "k8s-prod"},
+		Actions: []actions.Action{{Name: "inspect", Status: actions.Ready}},
+	}}
 	gate, results := make(chan struct{}), make(chan error, 2)
 	for _, catalog := range []operations.OperationStore{first, second} {
 		go func() {
@@ -678,6 +726,7 @@ func TestOperationMongoPreflightRecoveryAndNoopWrites(t *testing.T) {
 		t.Fatal(err)
 	}
 	task := operations.NewTask(op.ID, "", actions.NextAction{ActionName: "inspect"})
+	task.Selector = &agents.Selector{Hostname: "k8s-prod"}
 	if _, err := first.QueueTask(t.Context(), op.ID, task); err != nil {
 		t.Fatal(err)
 	}

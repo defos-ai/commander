@@ -220,6 +220,10 @@
 - Apply operation mutations atomically to the latest saved record through
   [`OperationStore`](domain/operations/operation_store.go). Persist tasks and
   events separately; preserve independent copies at store boundaries.
+  Optional `Task.Selector` retains validated requested executor criteria, distinct
+  from the assigned agent. Preserve it in stored tasks and deep clones; assignment
+  retries must not change or remove it, including after dispatch. Keep candidate
+  matching in the operation worker rather than providers.
   Question answers save `answered_by` (`operator` or `model`) atomically with the
   answer and any linked continuation. Trusted adapters stamp this origin: HTTP
   API submissions use `operator`, MCP submissions use `model`. It records the

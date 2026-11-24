@@ -52,7 +52,7 @@ The [Agent], [Controller], [Operation worker], [Queries], [Secret service] and
 | Model | Why it exists | Consumers |
 | --- | --- | --- |
 | [`Operation`](operations/operation.go), [`CompletionOrigin`](operations/operation_completion.go) | Own one mission run: its input, tasks, questions, event history, completion draft for operator review, final output/report reference and accepted completion channel. | Operation worker scheduling/recovery, Controller question consumer, Queries, Adapters. |
-| [`Task`](operations/task.go) | Retains one action assignment, parentage, aggregation batch membership, selected process, deadline, outcome and continuation. | Operation worker dispatch/results, Session coordinator, operation queries and Adapters. |
+| [`Task`](operations/task.go) | Retains one action assignment, optional executor criteria, parentage, aggregation batch membership, assigned process, deadline, outcome and continuation. | Operation worker dispatch/results, OperationStore providers, Session coordinator, operation queries and Adapters. |
 | [`TaskDispatch`](operations/task_dispatch.go) | Supplies the process and timestamps for atomically claiming a queued task. | Operation worker, Session coordinator, OperationStore implementations. |
 | [`TaskResult`](operations/task_result.go) | Supplies an execution outcome for the atomic task/continuation/event transition. | Operation worker result reconciliation, OperationStore implementations. |
 | [`Continuation`](operations/continuation.go) | Records who decides the next work, its decision version, proposals and accepted direct children. | Mission policy evaluation, Operation worker continuation commands, model clients through Adapters. |

@@ -92,6 +92,11 @@ applies to all domain packages below this directory.
   [Execution](executions/execution.go) retains a reserved command and accepted
   outcome. Reserve before publication, preserve the original envelope for replay
   and never infer that a missing result permits a new execution elsewhere.
+  Optional `Task.Selector` retains requested executor criteria separately from the
+  assigned `AgentID`. Nil is unconstrained; nonnil selectors must pass shared
+  validation at queueing, persistence and recovery. Clone the selector independently
+  and include it in assignment replay identity: changing or removing criteria
+  conflicts with the saved task. Candidate matching belongs in the operation worker.
   Terminal operation status and [settlement](operations/progress.go) differ:
   interrupted outcomes remain unknown, and late results can still be accepted.
 - [Checkpoints](executions/checkpoint.go) are immutable execution facts;

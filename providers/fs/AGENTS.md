@@ -20,6 +20,8 @@ database stores, artifact files and reports. See [README.md](README.md) for use.
 - An operation's manifest and sibling `.json.records` directory are one saved
   snapshot. Use [`Records`](internal/jsonfile/records.go) to publish immutable,
   digest-checked record bodies through one manifest; never edit committed blobs.
+  Retain optional task selectors in their task records. Validate nonnil selectors
+  before encoding creates or mutations, and reject malformed selectors on reads.
 - Persist `completion_draft` with operation metadata. `SaveCompletionDraft` rechecks
   readiness, schema and operator completion policy inside the snapshot mutation;
   it creates no report or final output. Retain completion draft on failure/cancellation,

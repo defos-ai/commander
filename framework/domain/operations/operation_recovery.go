@@ -57,6 +57,11 @@ func (o Operation) validateRecovery() error {
 		if task.CommandID != task.ID {
 			return fmt.Errorf("task %s has a mismatched command identity", task.ID)
 		}
+		if task.Selector != nil {
+			if err := task.Selector.Validate(); err != nil {
+				return fmt.Errorf("task %s selector: %w", task.ID, err)
+			}
+		}
 		if undispatched {
 			continue
 		}

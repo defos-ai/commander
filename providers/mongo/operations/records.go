@@ -54,7 +54,15 @@ func encodeOperation(op operations.Operation) (operationRecords, error) {
 		at     func(int) (string, any, error)
 		out    *[]recordDocument
 	}{
-		{len(op.Tasks), func(i int) (string, any, error) { return op.Tasks[i].ID, op.Tasks[i], validateRecordID(op.Tasks[i].ID) }, &records.tasks},
+		{len(op.Tasks), func(i int) (string, any, error) {
+			task := op.Tasks[i]
+			if task.Selector != nil {
+				if err := task.Selector.Validate(); err != nil {
+					return "", nil, err
+				}
+			}
+			return task.ID, task, validateRecordID(task.ID)
+		}, &records.tasks},
 		{len(op.Questions), func(i int) (string, any, error) {
 			return op.Questions[i].ID, op.Questions[i], validateRecordID(op.Questions[i].ID)
 		}, &records.questions},
