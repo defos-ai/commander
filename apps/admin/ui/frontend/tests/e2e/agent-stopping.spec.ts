@@ -46,6 +46,7 @@ test('stop selectors are submitted unchanged and partial failures retain each ta
   const responses = new AgentStoppingResponses([snapshots.ready, snapshots.other]);
   responses.respondOnce(202, { items: [snapshots.requested], errors: [{ id: snapshots.other.id, error: 'agent_stop_uncertain' }] }, [snapshots.requested]);
   responses.respondOnce(200, { items: [] });
+  responses.respondOnce(202, { items: [snapshots.wrongHostRequested] });
   await page.route(url => url.pathname === '/ui/proxy' && url.searchParams.get('url') === publicAPIURL
     && /^\/api\/v1\/agents(?:\/|$)/.test(url.searchParams.get('path') ?? ''), responses.handle);
   await connect(page);
@@ -56,6 +57,9 @@ test('stop selectors are submitted unchanged and partial failures retain each ta
   await expect(dialog.getByRole('button', { name: 'Request stop', exact: true })).toBeDisabled();
   await dialog.getByLabel('Agent type', { exact: true }).fill(snapshots.ready.type);
   await dialog.getByLabel('Version', { exact: true }).fill(snapshots.ready.version);
+  await dialog.getByLabel('Hostname', { exact: true }).fill('invalid host');
+  await expect(dialog.getByRole('checkbox', { name: 'I confirm stopping the agents selected above.', exact: true })).toBeDisabled();
+  await dialog.getByLabel('Hostname', { exact: true }).fill(snapshots.ready.server.hostname);
   await dialog.getByRole('checkbox', { name: 'I confirm stopping the agents selected above.', exact: true }).check();
   await dialog.getByRole('button', { name: 'Request stop', exact: true }).click();
 
@@ -65,7 +69,8 @@ test('stop selectors are submitted unchanged and partial failures retain each ta
   const uncertain = results.getByRole('listitem').filter({ has: page.getByText(snapshots.other.id, { exact: true }) });
   await expect(accepted.getByText('Stop requested', { exact: true })).toBeVisible();
   await expect(uncertain).toContainText(/uncertain|unknown/i);
-  expect(responses.submissions).toEqual([{ selector: { type: snapshots.ready.type, version: snapshots.ready.version } }]);
+  await expect(results.getByText(snapshots.ready.server.hostname, { exact: true })).toBeVisible();
+  expect(responses.submissions).toEqual([{ selector: { type: snapshots.ready.type, version: snapshots.ready.version, hostname: snapshots.ready.server.hostname } }]);
 
   responses.save(snapshots.stopped);
   await results.getByRole('button', { name: 'Read saved state', exact: true }).click();
@@ -77,15 +82,27 @@ test('stop selectors are submitted unchanged and partial failures retain each ta
   await dialog.getByLabel('Agent ID', { exact: true }).fill('');
   await dialog.getByLabel('Agent type', { exact: true }).fill(snapshots.ready.type);
   await dialog.getByLabel('Version', { exact: true }).fill('no-matching-version');
+  await dialog.getByLabel('Hostname', { exact: true }).fill(snapshots.ready.server.hostname);
   await dialog.getByRole('checkbox', { name: 'I confirm stopping the agents selected above.', exact: true }).check();
   await dialog.getByRole('button', { name: 'Request stop', exact: true }).click();
 
   await expect(dialog).not.toBeVisible();
   await expect(results.getByText(/no agents match/i)).toBeVisible();
   expect(responses.submissions).toEqual([
-    { selector: { type: snapshots.ready.type, version: snapshots.ready.version } },
-    { selector: { type: snapshots.ready.type, version: 'no-matching-version' } },
+    { selector: { type: snapshots.ready.type, version: snapshots.ready.version, hostname: snapshots.ready.server.hostname } },
+    { selector: { type: snapshots.ready.type, version: 'no-matching-version', hostname: snapshots.ready.server.hostname } },
   ]);
+
+  await results.getByRole('button', { name: 'Read saved state', exact: true }).click();
+  await results.getByRole('button', { name: 'New stop request', exact: true }).click();
+  await dialog.getByLabel('Hostname', { exact: true }).fill(snapshots.ready.server.hostname);
+  await dialog.getByRole('checkbox', { name: 'I confirm stopping the agents selected above.', exact: true }).check();
+  await dialog.getByRole('button', { name: 'Request stop', exact: true }).click();
+
+  await expect(dialog).not.toBeVisible();
+  await expect(results.getByRole('alert')).toContainText(/uncertain|unknown/i);
+  await expect(results.getByRole('listitem')).toHaveCount(0);
+  expect(responses.submissions).toHaveLength(3);
 });
 
 test('dismissed in-flight stop outcomes survive route changes and refresh without resubmitting', async ({ page, api }) => {
@@ -101,7 +118,7 @@ test('dismissed in-flight stop outcomes survive route changes and refresh withou
 
   await page.getByRole('button', { name: 'Stop agents', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Stop agents', exact: true });
-  await dialog.getByLabel('Agent ID', { exact: true }).fill(snapshots.ready.id);
+  await dialog.getByLabel('Hostname', { exact: true }).fill(snapshots.ready.server.hostname);
   await dialog.getByRole('checkbox', { name: 'I confirm stopping the agents selected above.', exact: true }).check();
   try {
     await dialog.getByRole('button', { name: 'Request stop', exact: true }).click();
@@ -123,11 +140,12 @@ test('dismissed in-flight stop outcomes survive route changes and refresh withou
     await expect(page.getByRole('button', { name: `View agent ${snapshots.ready.id}`, exact: true })).toContainText('Stop requested');
     await expect(page.getByRole('button', { name: 'Stop agents', exact: true })).toBeDisabled();
     await expect(results.getByRole('button', { name: 'New stop request', exact: true })).toHaveCount(0);
-    expect(responses.submissions).toEqual([{ selector: { id: snapshots.ready.id } }]);
+    expect(responses.submissions).toEqual([{ selector: { hostname: snapshots.ready.server.hostname } }]);
 
     await results.getByRole('button', { name: 'Read saved state', exact: true }).click();
 
     await expect(results.getByRole('listitem').getByText(snapshots.ready.id, { exact: true })).toBeVisible();
+    await expect(results.getByRole('listitem').getByText(snapshots.other.id, { exact: true })).toHaveCount(0);
     await expect(results.getByRole('button', { name: 'New stop request', exact: true })).toBeEnabled();
     expect(responses.submissions).toHaveLength(1);
   } finally { release(); }

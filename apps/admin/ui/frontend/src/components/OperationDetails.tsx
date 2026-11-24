@@ -2,7 +2,7 @@ import type {
   Operation, OperationArtifact, OperationContinuation, OperationNextAction,
   OperationPreflight, OperationQuestion, OperationTask, OperationTaskPlacement,
 } from '../api/operation-types';
-import type { ActionRequirement } from '../api/types';
+import type { ActionRequirement, AgentSelector } from '../api/types';
 import { useTranslation } from '../i18n';
 import { Button } from './Button';
 import { QuestionAnswerStatus } from './QuestionAnswerStatus';
@@ -10,6 +10,17 @@ import '../styles/catalog.css';
 import '../styles/operations.css';
 
 export type SessionNavigationTarget = { id?: string; scope_id?: string; owner_agent_id?: string };
+
+export function TaskSelector({ selector }: { selector?: AgentSelector | null }) {
+  const { t } = useTranslation();
+  if (!selector) return null;
+  return <section className="operation-nested" aria-label={t($ => $.operations.executorFilters)}>
+    <h3>{t($ => $.operations.executorFilters)}</h3>
+    <dl className="detail-list">{(['id', 'type', 'version', 'hostname'] as const).map(key => selector[key] && <div key={key}>
+      <dt>{t($ => $.operations.executorFilterFields[key])}</dt><dd><code>{selector[key]}</code></dd>
+    </div>)}</dl>
+  </section>;
+}
 
 function TaskPlacement({ placement }: { placement: OperationTaskPlacement }) {
   const { t } = useTranslation();
@@ -152,6 +163,7 @@ function Task({ task, placement, onOpenSession, onOpenLogs }: {
       {task.finished_at && <div><dt>{t($ => $.operations.finishedAt)}</dt><dd><Timestamp value={task.finished_at} /></dd></div>}
       {task.deadline_at && <div><dt>{t($ => $.operations.deadlineAt)}</dt><dd><Timestamp value={task.deadline_at} /></dd></div>}
     </dl>
+    <TaskSelector selector={task.selector} />
     <TaskSessions task={task} placement={placement} onOpenSession={onOpenSession} />
     {onOpenLogs && <Button variant="secondary" onClick={() => onOpenLogs(task.id)}>{t($ => $.operationLogs.viewTask)}</Button>}
     <OperationData label={t($ => $.operations.input)} value={task.input} />

@@ -67,8 +67,8 @@
   fallback in agent search. Validate the optional string, render it as text, and
   keep it separate from software dependency version guidance and readiness.
 - Agent stop controls submit one authenticated `POST /api/v1/agents/stop` with
-  exact nonempty ID/type/version criteria. Individual stops fix the ID; group
-  stops leave selection to the controller, independent of list search. Confirm
+  exact nonempty ID/type/version/hostname criteria. Individual stops fix the ID;
+  group stops leave selection to the controller, independent of list search. Confirm
   the criteria before submission and validate every returned item/error, even
   for HTTP 200. Show `stop_requested` separately from confirmed `stopped`, retaining
   active work and stop metadata. Stopping does not remove deployment resources
@@ -79,6 +79,8 @@
   only its reported IDs, including failures. For unknown selector outcomes,
   current matching inventory cannot establish the original selected set or
   prove shutdown of absent agents. A new request explicitly captures new matches.
+  Include hostname in receipt validation and unknown-outcome inventory display;
+  never use browser-side matching to choose the submitted stop targets.
 - Agent details show declared software dependencies and optional supported versions
   independently of action readiness. Inline guidance matches only executable
   missing requirements by exact name. Omitted/empty declarations mean none were
@@ -195,6 +197,9 @@
   enable commands or prove agent idleness for cleanup. Keep unanswered questions
   answerable before and after `fallback_at`, while preserving active-only
   secret/command controls.
+  Validate optional saved task selectors through the shared agent-selector guard.
+  Task and graph details show their exact requested criteria separately from the
+  assigned agent ID; filters do not prove dispatch, ownership or host identity.
   `QuestionAnswerStatus` shares countdown and answer-origin rendering between
   question history and the open answer dialog. Countdown ticks stay local and
   stop at the cutoff, after an answer, on terminal status or unmount; do not

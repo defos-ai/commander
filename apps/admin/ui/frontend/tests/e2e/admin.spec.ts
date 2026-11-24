@@ -357,13 +357,32 @@ test('operation questions, automatic work, graph and downloads use the real stac
   await expect(answer).not.toBeVisible();
   expect(await api.get<OperationQuestion>(`${path}/questions/${question.id}`)).toMatchObject({ status: 'answered', answer: 'Current release' });
 
-  const root = await api.post<OperationTask>(`${path}/tasks`, { action_name: 'rank-hn-stories', input: storyBatch() }, 201);
+  const executors = (await api.get<{ items: Agent[] }>('/agents')).items.filter(agent => agent.type === 'example-agent');
+  expect(executors).toHaveLength(2);
+  const executor = executors[0];
+  expect(executor.server.hostname).not.toBe('');
+  const selector = { id: executor.id, type: executor.type, hostname: executor.server.hostname,
+    ...(executor.version ? { version: executor.version } : {}) };
+  const root = await api.post<OperationTask>(`${path}/tasks`, { action_name: 'rank-hn-stories', input: storyBatch(), selector }, 201);
   const finished = await api.operation(operation.id, value => value.tasks?.length === 2 && value.tasks.every(task => !['queued', 'running'].includes(task.status))
     && value.tasks.some(task => task.id === root.id && task.continuation?.status === 'pending'));
   expect(finished.tasks?.map(task => task.status)).toEqual(Array(2).fill('succeeded'));
   for (const task of finished.tasks!) {
     expect(task.agent_id).toMatch(/^example-agent-[0-9a-f]{8}$/);
   }
+  const selectedTask = finished.tasks!.find(task => task.id === root.id)!;
+  expect(selectedTask.selector).toEqual(selector);
+  expect(selectedTask.agent_id).toBe(executor.id);
+  const executorFields = [['Agent ID', executor.id], ['Agent type', executor.type], ['Hostname', executor.server.hostname],
+    ...(executor.version ? [['Version', executor.version]] : [])];
+  await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+  const rootCard = page.locator('details.operation-card').filter({ has: page.locator('summary').filter({ hasText: root.id }) });
+  await rootCard.locator('summary').first().click();
+  const requestedExecutor = rootCard.getByRole('region', { name: 'Executor filters', exact: true });
+  for (const [label, value] of executorFields) {
+    await expect(requestedExecutor.locator('.detail-list > div').filter({ has: page.getByText(label, { exact: true }) }).locator('dd')).toHaveText(value);
+  }
+  await expect(rootCard.locator('.operation-card-body > .detail-list').first().getByText(executor.id, { exact: true })).toBeVisible();
   const artifact = finished.tasks?.flatMap(task => task.result?.artifacts ?? []).find(item => item.action_name === 'write-hn-digest');
   expect(artifact).toBeDefined();
   const file = artifact!.files!.find(item => item.name === 'digest.md')!;
@@ -376,11 +395,19 @@ test('operation questions, automatic work, graph and downloads use the real stac
   await expect(graph.getByRole('button', { name: /^Inspect File / })).toHaveCount(2);
   await page.getByRole('button', { name: 'Zoom in', exact: true }).click({ clickCount: 2 });
   await expect(page.getByLabel('Graph zoom')).toHaveText('150%');
-  await graph.getByRole('button', { name: /^Inspect Task write-hn-digest / }).click();
   const node = page.getByRole('region', { name: 'Node details' });
+  await graph.getByRole('button', { name: /^Inspect Task rank-hn-stories / }).click();
+  const graphExecutor = node.getByRole('region', { name: 'Executor filters', exact: true });
+  for (const [label, value] of executorFields) {
+    await expect(graphExecutor.locator('.detail-list > div').filter({ has: page.getByText(label, { exact: true }) }).locator('dd')).toHaveText(value);
+  }
+  await page.getByRole('dialog', { name: 'Node details', exact: true }).getByRole('button', { name: 'Close dialog' }).click();
+  await graph.getByRole('button', { name: /^Inspect Task write-hn-digest / }).click();
+  await expect(node.getByRole('region', { name: 'Executor filters', exact: true })).toHaveCount(0);
   await expect(node.getByRole('button', { name: 'Parent task rank-hn-stories', exact: true })).toBeVisible();
   await expect(node.getByRole('button', { name: 'Produced artifact Hacker News digest', exact: true })).toBeVisible();
   const digestTask = finished.tasks!.find(task => task.action_name === 'write-hn-digest')!;
+  expect(digestTask.selector).toBeUndefined();
   for (const [label, value] of [['Input', digestTask.input], ['Output', digestTask.result!.output]] as const) {
     const details = node.locator('details').filter({ has: page.locator('summary').filter({ hasText: new RegExp(`^${label}$`) }) });
     const summary = details.locator('summary');

@@ -31,7 +31,10 @@ export function agentDependencySnapshots(agent: Agent, legacy: Agent): AgentDepe
 }
 
 export function stoppingAgentSnapshots(agent: Agent, other: Agent) {
-  const ready = { ...agent, version: 'v8.9.0', status: 'ready', stale: false, work: null };
+  const ready = {
+    ...agent, version: 'v8.9.0', status: 'ready', stale: false, work: null,
+    server: { ...agent.server, hostname: 'selected-host' },
+  };
   const requested = {
     ...ready, status: 'stop_requested',
     stop_command_id: 'a1234567-1234-4123-8123-123456789abc',
@@ -39,8 +42,12 @@ export function stoppingAgentSnapshots(agent: Agent, other: Agent) {
   };
   return {
     ready,
-    other: { ...other, version: ready.version, status: 'ready', stale: false, work: null },
+    other: {
+      ...other, version: ready.version, status: 'ready', stale: false, work: null,
+      server: { ...other.server, hostname: 'other-host' },
+    },
     requested,
+    wrongHostRequested: { ...requested, server: { ...requested.server, hostname: 'other-host' } },
     stopped: { ...requested, status: 'stopped' },
   };
 }

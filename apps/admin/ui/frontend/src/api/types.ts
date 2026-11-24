@@ -60,6 +60,13 @@ export interface AgentDependency {
   version?: string;
 }
 
+export interface AgentSelector {
+  id?: string;
+  type?: string;
+  version?: string;
+  hostname?: string;
+}
+
 export interface Agent {
   id: string;
   type: string;

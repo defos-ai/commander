@@ -1,8 +1,8 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { LoaderCircle, Square } from 'lucide-react';
-import { AgentStopError, listAgents, stopAgents, validAgentSelector, type AgentSelector, type AgentStopResult } from '../api/agents';
+import { AgentStopError, listAgents, matchesAgentSelector, stopAgents, validAgentSelector, type AgentStopResult } from '../api/agents';
 import { ApiError } from '../api/client';
-import type { Agent } from '../api/types';
+import type { Agent, AgentSelector } from '../api/types';
 import type { Connection, Session } from '../connections/types';
 import { useTranslation } from '../i18n';
 import { AgentStatus } from './AgentDetails';
@@ -76,9 +76,7 @@ export function AgentStopControls({ connection, credentials, selectedID, agent, 
     try {
       const inventory = await listAgents(connection.url, credentials, controller.signal);
       const ids = current.result ? new Set([...current.result.items, ...(current.result.errors ?? [])].map(item => item.id)) : undefined;
-      const saved = inventory.filter(item => ids ? ids.has(item.id)
-        : (!current.selector.id || current.selector.id === item.id) && (!current.selector.type || current.selector.type === item.type) &&
-          (!current.selector.version || current.selector.version === item.version));
+      const saved = inventory.filter(item => ids ? ids.has(item.id) : matchesAgentSelector(item, current.selector));
       if (!controller.signal.aborted && read.current === controller) { setAttempt({ ...current, saved }); onRefresh(); }
     } catch (cause) {
       if (!controller.signal.aborted && read.current === controller) setReadError(cause instanceof ApiError ? cause.kind : 'unavailable');
@@ -94,7 +92,7 @@ export function AgentStopControls({ connection, credentials, selectedID, agent, 
     </Button></div>
     {current && <section className="notice agent-stop-results" aria-label={t($ => $.agents.stop.results)}>
       <h2>{t($ => $.agents.stop.results)}</h2>
-      <dl className="agent-stop-selector">{(['id', 'type', 'version'] as const).map(key => current.selector[key] && <div key={key}>
+      <dl className="agent-stop-selector">{(['id', 'type', 'version', 'hostname'] as const).map(key => current.selector[key] && <div key={key}>
         <dt>{t($ => $.agents.stop.filters[key])}</dt><dd><code>{current.selector[key]}</code></dd>
       </div>)}</dl>
       <div role="status">
@@ -134,9 +132,10 @@ function AgentStopDialog({ selectedID, submitting, available, onClose, onSubmit 
   const [id, setID] = useState(selectedID ?? '');
   const [type, setType] = useState('');
   const [version, setVersion] = useState('');
+  const [hostname, setHostname] = useState('');
   const [confirmed, setConfirmed] = useState(false);
   const [invalid, setInvalid] = useState(false);
-  const selector: AgentSelector = { ...(id ? { id } : {}), ...(type ? { type } : {}), ...(version ? { version } : {}) };
+  const selector: AgentSelector = { ...(id ? { id } : {}), ...(type ? { type } : {}), ...(version ? { version } : {}), ...(hostname ? { hostname } : {}) };
   const valid = validAgentSelector(selector);
 
   function submit(event: FormEvent) {
@@ -156,6 +155,9 @@ function AgentStopDialog({ selectedID, submitting, available, onClose, onSubmit 
         </div>
         <div className="form-field"><label htmlFor={`${identity}-version`}>{t($ => $.agents.stop.filters.version)}</label>
           <input id={`${identity}-version`} value={version} disabled={submitting} autoCapitalize="none" spellCheck={false} onChange={event => { setVersion(event.target.value); setConfirmed(false); setInvalid(false); }} />
+        </div>
+        <div className="form-field"><label htmlFor={`${identity}-hostname`}>{t($ => $.agents.stop.filters.hostname)}</label>
+          <input id={`${identity}-hostname`} value={hostname} disabled={submitting} autoCapitalize="none" spellCheck={false} onChange={event => { setHostname(event.target.value); setConfirmed(false); setInvalid(false); }} />
         </div>
         <p className="form-hint">{t($ => $.agents.stop.filterHint)}</p>
       </>}

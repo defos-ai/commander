@@ -68,6 +68,8 @@ export default {
   taskId: 'Task ID',
   parentTaskId: 'Parent task ID',
   agentId: 'Agent ID',
+  executorFilters: 'Executor filters',
+  executorFilterFields: { id: 'Agent ID', type: 'Agent type', version: 'Version', hostname: 'Hostname' },
   commandId: 'Command ID',
   action: 'Action',
   unassigned: 'Not assigned',

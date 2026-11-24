@@ -1,6 +1,7 @@
 import type { Session } from '../connections/types';
 import { ApiError, getJSON, getJSONDocument } from './client';
 import { isActionRequirement } from './actions';
+import { validAgentSelector } from './agents';
 import { isMission } from './missions';
 import type {
   Operation, OperationActionOutput, OperationActionReadiness, OperationAgentReadiness,
@@ -62,6 +63,7 @@ function isTask(value: unknown): value is OperationTask {
     isOptionalString(value.command_id) && isOptionalDate(value.deadline_at) &&
     typeof value.status === 'string' && isOptionalString(value.error) &&
     isDate(value.started_at) && isOptionalDate(value.finished_at) &&
+    (value.selector === undefined || value.selector === null || validAgentSelector(value.selector)) &&
     (value.session_intent === undefined || value.session_intent === null || isSessionIntent(value.session_intent)) &&
     (value.result === undefined || value.result === null || isActionOutput(value.result)) &&
     (value.continuation === undefined || value.continuation === null || isContinuation(value.continuation));

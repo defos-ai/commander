@@ -2,14 +2,8 @@ import { expireSession, proxyURL } from '../connections/client';
 import type { Session } from '../connections/types';
 import { isAction, isActionRequirement } from './actions';
 import { ApiError, getJSON } from './client';
-import type { Agent, AgentDependency, AgentWork } from './types';
+import type { Agent, AgentDependency, AgentSelector, AgentWork } from './types';
 import { encodeIdentifier, isIdentifier, isNullableStringArray, isObject, isOptionalString } from './validation';
-
-export interface AgentSelector {
-  id?: string;
-  type?: string;
-  version?: string;
-}
 
 export type AgentStopErrorKind = 'authentication' | 'forbidden' | 'invalid_input' | 'unavailable' | 'unknown';
 export type AgentStopFailureCode = 'agent_not_found' | 'agent_stop_uncertain' | 'agent_stop_not_requested';
@@ -34,12 +28,15 @@ function isAgentID(value: unknown): value is string {
   return typeof value === 'string' && value.length <= 63 && agentID.test(value);
 }
 
-export function validAgentSelector(selector: AgentSelector): boolean {
-  if (!Object.values(selector).some(value => value !== undefined) || Object.keys(selector).some(name => name !== 'id' && name !== 'type' && name !== 'version')) return false;
+export function validAgentSelector(selector: unknown): selector is AgentSelector {
+  if (!isObject(selector) || !Object.values(selector).some(value => value !== undefined) ||
+    Object.keys(selector).some(name => name !== 'id' && name !== 'type' && name !== 'version' && name !== 'hostname')) return false;
   return (selector.id === undefined || isAgentID(selector.id)) &&
-    (selector.type === undefined || selector.type.length <= 63 && agentType.test(selector.type)) &&
-    (selector.version === undefined || selector.version !== '' && new TextEncoder().encode(selector.version).length <= 128 &&
-      !/[\p{White_Space}\p{Cc}]/u.test(selector.version));
+    (selector.type === undefined || typeof selector.type === 'string' && selector.type.length <= 63 && agentType.test(selector.type)) &&
+    (selector.version === undefined || typeof selector.version === 'string' && selector.version !== '' &&
+      new TextEncoder().encode(selector.version).length <= 128 && !/[\p{White_Space}\p{Cc}]/u.test(selector.version)) &&
+    (selector.hostname === undefined || typeof selector.hostname === 'string' && selector.hostname !== '' &&
+      !/[\p{White_Space}\p{Cc}/\\]/u.test(selector.hostname));
 }
 
 function isWork(value: unknown): value is AgentWork {
@@ -97,15 +94,16 @@ export async function getAgent(url: string, credentials: Session, id: string, si
   return body;
 }
 
-function matchesSelector(agent: Agent, selector: AgentSelector): boolean {
+export function matchesAgentSelector(agent: Agent, selector: AgentSelector): boolean {
   return (selector.id === undefined || agent.id === selector.id) &&
     (selector.type === undefined || agent.type === selector.type) &&
-    (selector.version === undefined || agent.version === selector.version);
+    (selector.version === undefined || agent.version === selector.version) &&
+    (selector.hostname === undefined || agent.server.hostname === selector.hostname);
 }
 
 function readStopResult(value: unknown, selector: AgentSelector, status: number): AgentStopResult {
   if (!isObject(value) || !Array.isArray(value.items) || !value.items.every(item => isAgent(item) && isAgentID(item.id) &&
-    (item.status === 'stop_requested' || item.status === 'stopped') && matchesSelector(item, selector)) ||
+    (item.status === 'stop_requested' || item.status === 'stopped') && matchesAgentSelector(item, selector)) ||
     value.errors !== undefined && !Array.isArray(value.errors)) throw new AgentStopError('unknown');
   const items = value.items as Agent[];
   const errors = (value.errors ?? []) as unknown[];
