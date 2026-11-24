@@ -63,6 +63,10 @@ func createChildren(op *Operation, parentIndex int, actions []actionmodel.NextAc
 	}
 	for _, action := range actions {
 		task := NewTask(op.ID, parent.ID, action)
+		if parent.Selector != nil && action.ActionName == parent.ActionName {
+			selector := *parent.Selector
+			task.Selector = &selector
+		}
 		task.BatchID = batchID
 		c.CreatedTaskIDs = append(c.CreatedTaskIDs, task.ID)
 		op.Tasks = append(op.Tasks, task)

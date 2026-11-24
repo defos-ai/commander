@@ -100,6 +100,11 @@ applies to all domain packages below this directory.
   without bypassing readiness, capacity or exact session ownership. The session
   worker rechecks the chosen candidate before dispatch. Dispatched recovery
   retains the saved agent even when its advertised properties change.
+  Child creation copies the direct parent's selector only when the child repeats
+  its action name, for automatic and model-resolved continuations alike. Copy
+  each child independently; different-action children remain unconstrained.
+  Inherit criteria, never the parent's assigned `AgentID`. Agent proposals cannot
+  supply or override controller-owned selectors.
   Terminal operation status and [settlement](operations/progress.go) differ:
   interrupted outcomes remain unknown, and late results can still be accepted.
 - [Checkpoints](executions/checkpoint.go) are immutable execution facts;
