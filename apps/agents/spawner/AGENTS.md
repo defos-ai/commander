@@ -104,6 +104,9 @@ Read the [agent guide](../AGENTS.md), [root guide](../../../AGENTS.md) and
   `Agent.Work` cannot run `spawn-agent`; it has no controller execution.
   Never accept a spawn key, agent ID, environment,
   command arguments or deployment privileges in model-provided action input.
+  Executor targeting belongs to the controller's assignment selector, not spawn
+  input. `SERVER_HOSTNAME` names this spawner's advertised host; exclude it from
+  child bootstrap so children report their own host or container/Pod namespace.
 - Source lookup belongs to the Commander client. Package actions accept the
   `package` URL/reference and optional `visibility` (`public` by default). Never load
   source definitions in the spawner or add source configuration to its host. Private input

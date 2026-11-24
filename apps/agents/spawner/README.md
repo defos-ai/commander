@@ -70,6 +70,9 @@ is disabled. The official Builder package is not supported in Kubernetes yet.
 
 ### During a mission
 
+With multiple spawners, [choose the executor](../../../docs/features/agents.md#choose-a-spawner)
+through the task's selector. Keep host filters outside the action input.
+
 Use `inspect-agent` through the controller before launching when you need to
 prepare host software or check declared platforms. It accepts the same `package`
 and `visibility` fields as a single spawn, and returns an exact package reference,

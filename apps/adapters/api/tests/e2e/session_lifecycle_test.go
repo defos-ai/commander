@@ -404,6 +404,32 @@ func TestE2ESessionIndependentOwners(t *testing.T) {
 	if finished := s.Finished(op, stateless.ID); finished.SessionIntent != nil {
 		t.Fatalf("stateless continuation inherited a session: %+v", finished)
 	}
+	var blocked operations.Task
+	s.Request("POST", "/api/v1/operations/"+op+"/tasks", map[string]any{
+		"action_name": "use-resource", "session_task_id": firstUse.ID, "input": map[string]any{},
+		"selector": map[string]any{"id": second.OwnerAgentID},
+	}, http.StatusCreated, &blocked)
+
+	s.Restart()
+	mcp := s.MCP()
+	var matching operations.Task
+	mcp.Call("assign_task", map[string]any{
+		"operation_id": op, "action_name": "use-resource", "session_task_id": firstUse.ID, "input": map[string]any{},
+		"selector": map[string]any{"id": first.OwnerAgentID},
+	}, &matching)
+	matching = s.Finished(op, matching.ID)
+
+	assertIndependentSessionReuse(t, matching, first)
+	if matching.Selector == nil || matching.Selector.ID != first.OwnerAgentID {
+		t.Fatalf("matching selector was not retained with the original owner: %+v", matching)
+	}
+	retained := s.Task(op, blocked.ID)
+	if retained.Status != operations.TaskQueued || retained.AgentID != "" || retained.Selector == nil ||
+		retained.Selector.ID != second.OwnerAgentID || retained.SessionIntent == nil ||
+		retained.SessionIntent.ID != first.ID || retained.SessionIntent.ScopeID != first.ScopeID {
+		t.Fatalf("selector changed session ownership or was lost across restart: %+v", retained)
+	}
+	s.Request("POST", "/api/v1/operations/"+op+"/cancel", map[string]any{}, http.StatusOK, nil)
 }
 
 func TestE2ESessionReuseBeforeVerification(t *testing.T) {

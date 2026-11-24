@@ -19,6 +19,10 @@ assignment) and `session_task_id` set to a finished session task in the same
 operation. This creates independent work using the same resource and owner;
 it does not reopen the earlier continuation. Keep action input free of session IDs.
 
+An assignment's [executor filter](operations.md#choose-an-executor) also applies
+to session work. Excluding the saved owner leaves the task queued; a selector
+cannot move the resource to another agent.
+
 ```json
 {"operation_id":"<operation-id>","action_name":"<use-action>","session_task_id":"<finished-task-id>","input":{}}
 ```

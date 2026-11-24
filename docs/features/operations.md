@@ -28,6 +28,21 @@ In MCP, read the latest task and use `resolve_continuation` to choose follow-ups
 Submit `actions: []` to close that branch. Refresh saved state before retrying a
 stale decision. Proposal order alone does not establish dependencies.
 
+## Choose an executor
+
+Pass an optional `selector` beside `action_name` and `input` in MCP `assign_task`
+or `POST /api/v1/operations/{operation_id}/tasks`. Exact `id`, `type`, `version`
+and `hostname` filters intersect: every supplied criterion must match. Omitted
+or null means normal selection. The controller still checks readiness, capacity
+and session ownership; no match leaves the task queued without fallback.
+
+Task reads retain the requested `selector` separately from the assigned `agent_id`.
+Admin shows these as **Executor filters**. Same-action direct follow-ups inherit
+the filter; different-action children select normally. Already dispatched work
+keeps its saved agent during recovery.
+
+For installation on a particular runtime, [choose the spawner](agents.md#choose-a-spawner).
+
 ## Follow progress and evidence
 
 | In Admin | What to inspect |

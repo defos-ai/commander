@@ -208,8 +208,25 @@ func TestSpawnerBatchCreatesIndependentAgentTasks(t *testing.T) {
 	if op.Preflight == nil || !op.Preflight.Ready {
 		t.Fatalf("installation is unavailable: %+v", op.Preflight)
 	}
+	var spawner models.AgentResponse
+	for _, readiness := range op.Preflight.Actions {
+		if readiness.ActionName == "spawn-agent" && len(readiness.ReadyAgentIDs) != 0 {
+			spawner = fixtures.Read[models.AgentResponse](a, "/api/v1/agents/"+readiness.ReadyAgentIDs[0])
+			break
+		}
+	}
+	if spawner.ID == "" || spawner.Type != "spawner-agent" || spawner.Server.Hostname == "" {
+		t.Fatalf("ready spawner did not advertise its identity and execution hostname: %+v", spawner)
+	}
+	selector := models.AgentSelectorRequest{ID: spawner.ID, Type: spawner.Type, Hostname: spawner.Server.Hostname}
+	wantSelector := models.AgentSelectorResponse{ID: selector.ID, Type: selector.Type, Hostname: selector.Hostname}
 
-	assigned := fixtures.Post[models.TaskResponse](a, fixtures.OperationPath(op.ID)+"/tasks", fixtures.Object{"action_name": "spawn-agent", "input": input}, http.StatusCreated)
+	assigned := fixtures.Post[models.TaskResponse](a, fixtures.OperationPath(op.ID)+"/tasks", fixtures.Object{
+		"action_name": "spawn-agent", "input": input, "selector": selector,
+	}, http.StatusCreated)
+	if assigned.Selector == nil || *assigned.Selector != wantSelector {
+		t.Fatalf("accepted batch lost its requested spawner filter: %+v", assigned)
+	}
 	finished := a.Wait(op.ID, fixtures.TasksSettled)
 
 	if len(finished.Tasks) != 4 {
@@ -220,6 +237,9 @@ func TestSpawnerBatchCreatesIndependentAgentTasks(t *testing.T) {
 	agentIDs := make([]string, 0, 3)
 	childTaskIDs := make([]string, 0, 3)
 	for _, task := range finished.Tasks {
+		if task.Selector == nil || *task.Selector != wantSelector || task.AgentID != spawner.ID {
+			t.Fatalf("batch continuation lost its filter or ran on another spawner: %+v", task)
+		}
 		if task.Status != "succeeded" || task.Result == nil || !id.Valid(task.CommandID) || commands[task.CommandID] {
 			t.Fatalf("batch task failed or reused another execution identity: %+v", task)
 		}
