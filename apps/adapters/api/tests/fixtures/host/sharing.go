@@ -116,19 +116,19 @@ func NewSharingStack(t *testing.T) *SharingStack {
 	require(err)
 	s.server = httptest.NewServer(handler)
 	s.Producer = fakes.NewSharingProducer()
-	s.startAgent(t, "producer", "producer-agent-00000001", "v1.0.0", s.Producer, config.ArtifactFileStore)
+	s.startAgent(t, "producer", "producer-agent-00000001", "v1.0.0", "sharing-fixture", s.Producer, config.ArtifactFileStore)
 	for _, entry := range []struct{ id, name, version string }{
 		{"analyzer-agent-00000001", fakes.AnalysisAction, "v1.0.0"}, {"analyzer-agent-00000002", fakes.AnalysisAction, "v2.0.0"},
 		{"analyzer-agent-00000003", fakes.EvidenceAction, "v1.0.0"},
 	} {
 		executor := fakes.NewSharingAnalyzer(entry.name, config.ArtifactFileStore)
 		s.analyzers[entry.id] = executor
-		s.startAgent(t, "analyzer", entry.id, entry.version, executor, config.ArtifactFileStore)
+		s.startAgent(t, "analyzer", entry.id, entry.version, "sharing-fixture", executor, config.ArtifactFileStore)
 	}
 	return s
 }
 
-func (s *SharingStack) startAgent(t *testing.T, kind, id, version string, executor action.Executor, files artifacts.ArtifactFileStore) {
+func (s *SharingStack) startAgent(t *testing.T, kind, id, version, hostname string, executor action.Executor, files artifacts.ArtifactFileStore) {
 	t.Helper()
 	bus, err := fscomms.NewFsBus(s.busPath)
 	if err != nil {
@@ -139,7 +139,7 @@ func (s *SharingStack) startAgent(t *testing.T, kind, id, version string, execut
 	s.agents = append(s.agents, running)
 	interval := time.Second
 	runtime, err := agent.NewAgent(agent.AgentConfig{ID: id, Type: agents.AgentType(kind), Version: version, Actions: []action.Executor{executor},
-		ArtifactFileStore: files, HeartbeatInterval: &interval, Server: agent.ServerInfo{Hostname: "sharing-fixture", IPAddress: "127.0.0.1"}})
+		ArtifactFileStore: files, HeartbeatInterval: &interval, Server: agent.ServerInfo{Hostname: hostname, IPAddress: "127.0.0.1"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -235,11 +235,18 @@ func (s *SharingStack) AwaitWorking(t *testing.T, operationID, taskID string) mo
 
 func (s *SharingStack) Analyzer(agentID string) *fakes.SharingAnalyzer { return s.analyzers[agentID] }
 
+func (s *SharingStack) StartAnalyzerOnHost(t *testing.T, id, hostname string) {
+	t.Helper()
+	executor := fakes.NewSharingAnalyzer(fakes.AnalysisAction, s.files)
+	s.analyzers[id] = executor
+	s.startAgent(t, "analyzer", id, "v1.0.0", hostname, executor, s.files)
+}
+
 func (s *SharingStack) StartBatchPlanner(t *testing.T) *fakes.SharingBatchPlanner {
 	t.Helper()
 	planner := fakes.NewSharingBatchPlanner()
 	t.Cleanup(planner.Gate().Release)
-	s.startAgent(t, "planner", "planner-agent-00000001", "v1.0.0", planner, s.files)
+	s.startAgent(t, "planner", "planner-agent-00000001", "v1.0.0", "sharing-fixture", planner, s.files)
 	return planner
 }
 

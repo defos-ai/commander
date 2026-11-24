@@ -67,6 +67,12 @@ Follow the [operation workflow](../README.md#operation-workflow): start an
 operation, inspect preflight, assign actions, resolve questions and decisions,
 then complete it with output matching the mission schema.
 
+Task assignments may include `"selector":{"hostname":"worker-host"}` alongside
+`action_name` and `input`. Exact `id`, `type`, `version` and `hostname` filters
+intersect; the controller selects a matching ready agent with capacity. No match
+stays queued. Omit the selector for normal selection. Same-action follow-ups keep
+the filter; other actions select normally.
+
 `POST /api/v1/operations/{operation_id}/complete` accepts `{"output": ...}` and
 records `completed_by: operator`. The adapter assigns this origin; do not send it
 in the body. It identifies the submission channel, not a verified human identity.
@@ -90,7 +96,7 @@ curl --user "$API_USERNAME" \
   http://127.0.0.1:4274/api/v1/agents/stop
 ```
 
-Supply at least one of `id`, `type` or `version`; filters intersect and versions
+Supply at least one of `id`, `type`, `version` or `hostname`; filters intersect and versions
 match reported values exactly. The controller captures the matching agents once.
 The response contains `items` and optional per-agent `errors`; always inspect both.
 `202` means at least one item is `stop_requested`, while `200` also covers no

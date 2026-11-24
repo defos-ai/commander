@@ -68,6 +68,7 @@ type continuationSummary struct {
 }
 
 type taskSummary struct {
+	Selector            *agents.Selector      `json:"selector,omitempty"`
 	ID                  string                `json:"id"`
 	ParentTaskID        string                `json:"parent_task_id,omitempty"`
 	BatchID             string                `json:"batch_id,omitempty"`
@@ -87,6 +88,10 @@ func summarizeTask(task queries.TaskView) taskSummary {
 	summary := taskSummary{
 		ID: task.ID, ParentTaskID: task.ParentTaskID, BatchID: task.BatchID, AgentID: task.AgentID, ActionName: task.ActionName, Status: task.Status,
 		Error: task.Error, StartedAt: task.StartedAt, FinishedAt: task.FinishedAt,
+	}
+	if task.Selector != nil {
+		selector := *task.Selector
+		summary.Selector = &selector
 	}
 	if len(task.MissingRequirements) != 0 {
 		summary.AgentType = task.AgentType

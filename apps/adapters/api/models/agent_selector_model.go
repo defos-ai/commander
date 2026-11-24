@@ -10,9 +10,10 @@ type StopAgentsRequest struct {
 }
 
 type AgentSelectorRequest struct {
-	ID      string `json:"id,omitempty"`
-	Type    string `json:"type,omitempty"`
-	Version string `json:"version,omitempty"`
+	ID       string `json:"id,omitempty"`
+	Type     string `json:"type,omitempty"`
+	Version  string `json:"version,omitempty"`
+	Hostname string `json:"hostname,omitempty"`
 }
 
 func (selector *AgentSelectorRequest) UnmarshalJSON(data []byte) error {
@@ -33,12 +34,21 @@ func (selector *AgentSelectorRequest) UnmarshalJSON(data []byte) error {
 			decoded.Type = value
 		case "version":
 			decoded.Version = value
+		case "hostname":
+			decoded.Hostname = value
 		default:
 			return errors.New("unknown agent selector filter")
 		}
 	}
 	*selector = decoded
 	return nil
+}
+
+type AgentSelectorResponse struct {
+	ID       string `json:"id,omitempty"`
+	Type     string `json:"type,omitempty"`
+	Version  string `json:"version,omitempty"`
+	Hostname string `json:"hostname,omitempty"`
 }
 
 type StopAgentsResponse struct {

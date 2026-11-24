@@ -6,9 +6,10 @@ import (
 )
 
 type AssignTaskRequest struct {
-	ActionName    string          `json:"action_name"`
-	SessionTaskID string          `json:"session_task_id,omitempty"`
-	Input         json.RawMessage `json:"input,omitempty"`
+	ActionName    string                `json:"action_name"`
+	SessionTaskID string                `json:"session_task_id,omitempty"`
+	Selector      *AgentSelectorRequest `json:"selector,omitempty"`
+	Input         json.RawMessage       `json:"input,omitempty"`
 }
 
 type SessionIntentResponse struct {
@@ -19,6 +20,7 @@ type SessionIntentResponse struct {
 }
 type TaskResponse struct {
 	SessionIntent       *SessionIntentResponse      `json:"session_intent,omitempty"`
+	Selector            *AgentSelectorResponse      `json:"selector,omitempty"`
 	ID                  string                      `json:"id"`
 	OperationID         string                      `json:"operation_id"`
 	ParentTaskID        string                      `json:"parent_task_id,omitempty"`

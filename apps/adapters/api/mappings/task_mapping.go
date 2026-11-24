@@ -11,12 +11,17 @@ import (
 )
 
 func ToAssignTaskCommand(operationID string, request models.AssignTaskRequest) controllercommands.AssignTaskCommand {
-	return controllercommands.AssignTaskCommand{
+	command := controllercommands.AssignTaskCommand{
 		OperationID:   operationID,
 		ActionName:    request.ActionName,
 		SessionTaskID: request.SessionTaskID,
 		Input:         bytes.Clone(request.Input),
 	}
+	if request.Selector != nil {
+		selector := ToAgentSelector(*request.Selector)
+		command.Selector = &selector
+	}
+	return command
 }
 
 func ToTaskResponse(task operations.Task) models.TaskResponse {
@@ -38,6 +43,10 @@ func ToTaskResponse(task operations.Task) models.TaskResponse {
 	if task.SessionIntent != nil {
 		i := task.SessionIntent
 		response.SessionIntent = &models.SessionIntentResponse{Mode: string(i.Mode), ScopeID: i.ScopeID, ID: i.ID, Error: i.Error}
+	}
+	if task.Selector != nil {
+		selector := task.Selector
+		response.Selector = &models.AgentSelectorResponse{ID: selector.ID, Type: string(selector.Type), Version: selector.Version, Hostname: selector.Hostname}
 	}
 	if task.Result != nil {
 		result := ToActionOutputResponse(*task.Result)

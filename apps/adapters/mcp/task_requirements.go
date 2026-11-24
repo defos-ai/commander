@@ -13,5 +13,5 @@ type taskDetail struct {
 }
 
 func describeTask(task queries.TaskView) taskDetail {
-	return taskDetail{Task: task.Task, AgentType: task.AgentType, MissingRequirements: task.MissingRequirements}
+	return taskDetail{Task: task.Task.Clone(), AgentType: task.AgentType, MissingRequirements: task.MissingRequirements}
 }

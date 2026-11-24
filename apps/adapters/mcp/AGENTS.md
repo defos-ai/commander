@@ -36,7 +36,7 @@ saved inventory. It identifies the agent package/build, independently of the
 Commander framework and software dependency versions. Omit unreported versions;
 never infer them from tags, framework versions or dependency guidance.
 
-`stop_agent` accepts `selector` with at least one exact `id`, `type` or `version`;
+`stop_agent` accepts `selector` with at least one exact `id`, `type`, `version` or `hostname`;
 supplied fields intersect. Reject supplied null/empty/unknown selector fields
 through the shared contract, including mixtures with valid fields. Pass it to
 the separately injected `AgentCommands.StopAgents`; only the controller captures
@@ -50,6 +50,16 @@ drains; only `stopped` confirms shutdown. Partial errors must not become a claim
 that every target succeeded. Sanitize outer uncertainty, directing readback
 through `list_agents`/`describe_agent` without backend details. Deployment resources
 and restart policies remain host responsibilities.
+
+`assign_task.selector` is optional; omitted/null means unconstrained. A present
+object uses the same exact AND filters and strict validation as stopping. Forward
+criteria without adapter-side selection; the controller retains the filter with
+the task and still enforces readiness, capacity and exact session ownership.
+No match stays queued without fallback. Same-action direct children inherit the
+saved filter, while different-action children do not. Task details and summaries
+expose independent selector copies. Hostname is the agent's advertised
+`server.hostname`, including its container/Pod namespace, not a Kubernetes node
+or the hostname of a parent spawner. Keep placement out of action input.
 
 `describe_agent` preserves optional dependency declarations from saved inventory;
 `list_agents` omits them to keep discovery compact. Match only executable

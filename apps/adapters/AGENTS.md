@@ -40,9 +40,17 @@
 - A client disconnect or adapter shutdown does not cancel accepted controller
   work. Do not add automatic command retries; query saved state after an uncertain
   response because repeating an assignment can create another task.
+- Task assignments may carry optional `selector` criteria separately from action
+  input. Omission/null leaves selection unconstrained; a present object requires
+  at least one exact `id`, `type`, `version` or advertised `hostname` filter.
+  Supplied criteria intersect and never bypass readiness, capacity or session
+  ownership. Forward them to the controller without matching inventory in adapters.
+  Preserve the retained selector in task reads independently of assigned `agent_id`.
+  Same-action continuation children inherit the filter, not the assigned instance;
+  different-action children use normal selection. Unmatched work remains queued.
 - Agent stop controls use the separately injected `AgentCommands` capability and
   `StopAgents` command. API `/api/v1/agents/stop` and MCP `stop_agent` accept a
-  `selector` with exact `id`, `type` and/or reported `version`; supplied criteria
+  `selector` with exact `id`, `type`, reported `version` and/or `hostname`; supplied criteria
   intersect. Reject missing/empty selectors, empty/null supplied values and
   unknown fields. Adapters validate and forward criteria; only the controller
   captures the matching inventory once and requests stops. Do not list, match

@@ -15,11 +15,16 @@ operation ID, status and progress. Use `get_operation` for saved state and quest
 
 Call `stop_agent` with a selector, for example
 `{"selector":{"type":"browser-agent","version":"v1.2.3"}}`.
-Supply at least one exact `id`, `type` or `version`; supplied fields intersect.
+Supply at least one exact `id`, `type`, `version` or `hostname`; supplied fields intersect.
 The controller captures matches once. Inspect per-agent errors and use
 `describe_agent` to confirm `stopped`; `stop_requested` lets accepted work drain.
 Read saved state after uncertainty before submitting again. Deployment resources
 and restart policies remain host-managed.
+
+To target a spawner or another executor, pass an optional `selector` to
+`assign_task`, such as `{"type":"spawner-agent","hostname":"native-host"}`.
+Read advertised `server.hostname` values with `list_agents`. The controller
+chooses among matching ready agents; no match leaves the task queued.
 
 See [Operations](../../../docs/features/operations.md) and
 [Questions](../../../docs/features/questions.md) for the operator workflows.

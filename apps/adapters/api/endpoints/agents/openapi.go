@@ -65,6 +65,7 @@ func registerStopSchemas(components map[string]any, options *jsonschema.ForOptio
 				property.Description = "Exact agent " + name + " filter; supplied filters intersect."
 			}
 			schema.Properties["version"].Description = "Exact reported agent version; values such as stable/latest are compared literally without release alias resolution."
+			schema.Properties["hostname"].Description = "Exact advertised server.hostname, without DNS resolution or case folding. For containers and Kubernetes this is the agent's container/Pod hostname, not its parent spawner or node."
 		case "AgentStopError":
 			schema.Properties["error"].Enum = []any{"agent_not_found", "agent_stop_uncertain", "agent_stop_not_requested"}
 		case "StopAgentsResponse":
@@ -91,7 +92,7 @@ func registerAgentPaths(paths map[string]any) {
 	detail["responses"].(map[string]any)["404"] = endpoints.OpenAPIResponse("agent_not_found", endpoints.OpenAPIRef("Error"))
 	paths["/api/v1/agents/{agent_id}"] = map[string]any{"get": detail}
 	stop := endpoints.OpenAPIQueryOperation("stopAgents", "Request graceful agent stops", "Agent", endpoints.OpenAPIRef("StopAgentsResponse"))
-	stop["description"] = "The controller captures agents matching the exact selector filters and requests graceful stop. At least one filter is required; id, type and version intersect. New assignments are fenced while accepted work drains. 202 means at least one item is stop_requested, not confirmed shutdown. 200 also covers no matches or per-agent failures: always inspect errors. Read each agent by ID for confirmation or after uncertainty; do not retry automatically. Does not change host restart policies."
+	stop["description"] = "The controller captures agents matching the exact selector filters and requests graceful stop. At least one filter is required; id, type, version and hostname intersect. New assignments are fenced while accepted work drains. 202 means at least one item is stop_requested, not confirmed shutdown. 200 also covers no matches or per-agent failures: always inspect errors. Read each agent by ID for confirmation or after uncertainty; do not retry automatically. Does not change host restart policies."
 	stop["requestBody"] = map[string]any{
 		"required": true,
 		"content": map[string]any{"application/json": map[string]any{

@@ -94,7 +94,9 @@ func TestStopAgentSelectorPreservesPartialErrorsAndEmptyMatches(t *testing.T) {
 	second.ID = "browser-agent-00000002"
 	other := first.Clone()
 	other.ID, other.Type = "worker-agent-00000001", "worker-agent"
-	for _, record := range []agents.Agent{first, second, other} {
+	otherHost := first.Clone()
+	otherHost.ID, otherHost.Server.Hostname = "browser-agent-00000003", "remote-browser-host"
+	for _, record := range []agents.Agent{first, second, other, otherHost} {
 		if err := inventory.Upsert(a.Context, record); err != nil {
 			t.Fatal(err)
 		}
@@ -106,7 +108,7 @@ func TestStopAgentSelectorPreservesPartialErrorsAndEmptyMatches(t *testing.T) {
 		Message string             `json:"message"`
 	}
 
-	a.Call("stop_agent", fixtures.Object{"selector": fixtures.Object{"type": string(first.Type), "version": first.Version}}, &receipt)
+	a.Call("stop_agent", fixtures.Object{"selector": fixtures.Object{"type": string(first.Type), "version": first.Version, "hostname": first.Server.Hostname}}, &receipt)
 
 	if len(receipt.Agents) != 1 || receipt.Agents[0].ID != first.ID || receipt.Agents[0].Status != agents.AgentStopRequested || len(receipt.Errors) != 1 || receipt.Errors[0].ID != second.ID || receipt.Errors[0].Error != "agent_stop_uncertain" || !strings.Contains(receipt.Message, "errors") || strings.Contains(receipt.Message, "Shutdown is confirmed") {
 		t.Fatalf("selector result discarded partial uncertainty or claimed all stopped: %+v", receipt)
@@ -116,6 +118,11 @@ func TestStopAgentSelectorPreservesPartialErrorsAndEmptyMatches(t *testing.T) {
 	a.Call("describe_agent", fixtures.Object{"agent_id": other.ID}, &excluded)
 	if uncertain.Status != agents.AgentStopRequested || uncertain.StopCommandID == "" || excluded.Status != agents.AgentReady || commands.Calls() != 1 {
 		t.Fatalf("partial result was retried, discarded or ignored selector intersection: uncertain=%+v excluded=%+v calls=%d", uncertain, excluded, commands.Calls())
+	}
+	var excludedHost agents.Agent
+	a.Call("describe_agent", fixtures.Object{"agent_id": otherHost.ID}, &excludedHost)
+	if excludedHost.Status != agents.AgentReady || excludedHost.StopCommandID != "" {
+		t.Fatalf("hostname stop filter affected another execution host: %+v", excludedHost)
 	}
 	var empty struct {
 		Agents  json.RawMessage    `json:"agents"`
@@ -148,6 +155,9 @@ func TestStopAgentRejectsInvalidSelectorsAndKeepsUncertainOutcomesReadable(t *te
 		{"selector": fixtures.Object{"id": announced.ID, "version": nil}},
 		{"selector": fixtures.Object{"id": announced.ID, "type": ""}},
 		{"selector": fixtures.Object{"type": string(announced.Type), "version": " "}},
+		{"selector": fixtures.Object{"hostname": nil}},
+		{"selector": fixtures.Object{"hostname": ""}},
+		{"selector": fixtures.Object{"hostname": "https://remote-host"}},
 		{"selector": fixtures.Object{"id": announced.ID, "owner": "someone"}},
 		{"selector": fixtures.Object{"id": announced.ID}, "version": announced.Version},
 		{"agent_id": announced.ID},
