@@ -209,7 +209,7 @@
   Unconfirmed stops retain inventory records and status with stale lease metadata;
   confirmed stops expire normally. Agent-reported snapshots cannot request a stop.
   `StopAgents` applies a nonempty exact `agents.Selector` to one sorted inventory
-  snapshot inside coordination. Supplied ID/type/version criteria intersect;
+  snapshot inside coordination. Supplied ID/type/version/hostname criteria intersect;
   versions are reported package strings, not tag selectors. The captured IDs are
   fixed for that submission, so later registrations are not enrolled. Save all
   selected stop intents before periodic publication; expose successful agents and

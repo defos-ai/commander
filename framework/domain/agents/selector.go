@@ -8,14 +8,15 @@ import (
 )
 
 type Selector struct {
-	ID      string    `json:"id,omitempty"`
-	Type    AgentType `json:"type,omitempty"`
-	Version string    `json:"version,omitempty"`
+	ID       string    `json:"id,omitempty"`
+	Type     AgentType `json:"type,omitempty"`
+	Version  string    `json:"version,omitempty"`
+	Hostname string    `json:"hostname,omitempty"`
 }
 
 func (selector Selector) Validate() error {
-	if selector.ID == "" && selector.Type == "" && selector.Version == "" {
-		return errors.New("agent selector requires id, type or version")
+	if selector.ID == "" && selector.Type == "" && selector.Version == "" && selector.Hostname == "" {
+		return errors.New("agent selector requires id, type, version or hostname")
 	}
 	if selector.ID != "" && !id.ValidAgent(selector.ID) {
 		return errors.New("invalid agent selector id")
@@ -23,13 +24,17 @@ func (selector Selector) Validate() error {
 	if selector.Type != "" && !id.ValidType(string(selector.Type)) {
 		return errors.New("invalid agent selector type")
 	}
+	if err := (ServerInfo{Hostname: selector.Hostname}).Validate(); err != nil {
+		return err
+	}
 	return ValidateVersion(selector.Version)
 }
 
 func (selector Selector) Matches(agent Agent) bool {
 	return (selector.ID == "" || selector.ID == agent.ID) &&
 		(selector.Type == "" || selector.Type == agent.Type) &&
-		(selector.Version == "" || selector.Version == agent.Version)
+		(selector.Version == "" || selector.Version == agent.Version) &&
+		(selector.Hostname == "" || selector.Hostname == agent.Server.Hostname)
 }
 
 func (selector *Selector) UnmarshalJSON(data []byte) error {
@@ -50,6 +55,8 @@ func (selector *Selector) UnmarshalJSON(data []byte) error {
 			next.Type = AgentType(*value)
 		case "version":
 			next.Version = *value
+		case "hostname":
+			next.Hostname = *value
 		default:
 			return errors.New("unknown agent selector field")
 		}

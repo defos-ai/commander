@@ -20,11 +20,11 @@ func NewStoppingController(t *testing.T) OwnedOperations {
 	return fixture
 }
 
-func StopSelectionRecord(agentID, kind, version string) agents.Agent {
+func StopSelectionRecord(agentID, kind, version, hostname string) agents.Agent {
 	now := time.Now().UTC()
 	return agents.Agent{AgentSnapshot: agents.AgentSnapshot{
 		ID: agentID, Type: agents.AgentType(kind), Version: version, Status: agents.AgentReady,
-		Server: agents.ServerInfo{IPAddress: "127.0.0.1", Hostname: "stop-selection"},
+		Server: agents.ServerInfo{IPAddress: "127.0.0.1", Hostname: hostname},
 	}, ObservedAt: now, LastSeen: now, LastHeartbeat: now, LeaseExpiresAt: now.Add(time.Hour)}
 }
 

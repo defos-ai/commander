@@ -36,9 +36,13 @@ applies to all domain packages below this directory.
   not proof that external work stopped. `AgentStopRequested` is controller-owned
   status; observations cannot clear it. Flat stop command ID/time retain the
   original identity through retries and inventory expiry until confirmation.
-  `agents.Selector` holds nonempty exact ID/type/version criteria combined with
-  AND; controller coordination owns inventory matching. `StopResult` distinguishes
-  accepted/confirmed agents from safe per-ID failures; it is not proof of global
+  `agents.Selector` holds nonempty exact ID/type/version/hostname criteria combined
+  with AND; controller coordination owns inventory matching. Hostname matches the
+  agent's advertised `Server.Hostname` without case folding or DNS resolution;
+  use the same validation as `ServerInfo`. It identifies the agent's own host or
+  container/Pod namespace, not its parent spawner or Kubernetes node, and is not
+  proof of machine identity. `StopResult` distinguishes accepted/confirmed agents
+  from safe per-ID failures; it is not proof of global
   atomicity or a persistent selection rule.
 - [Missions](missions/mission.go) are reusable definitions saved into each
   [operation](operations/operation.go). Action coverage does not automatically

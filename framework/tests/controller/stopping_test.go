@@ -24,16 +24,17 @@ import (
 func TestControllerStopSelectorUsesOneExactMatchingInventorySnapshot(t *testing.T) {
 	fixture := fixtures.NewStoppingController(t)
 	fixture.Config.LeaseSweepInterval = time.Hour
-	first := fixtures.StopSelectionRecord("example-agent-00000001", "example-agent", "v1.0.0")
-	second := fixtures.StopSelectionRecord("example-agent-00000002", "example-agent", "v1.0.0")
-	newer := fixtures.StopSelectionRecord("example-agent-00000003", "example-agent", "v2.0.0")
-	other := fixtures.StopSelectionRecord("analyzer-agent-00000001", "analyzer-agent", "v1.0.0")
-	inventory := fakes.NewStopSelectionInventory(second, other, newer, first)
+	first := fixtures.StopSelectionRecord("example-agent-00000001", "example-agent", "v1.0.0", "k8s-prod")
+	second := fixtures.StopSelectionRecord("example-agent-00000002", "example-agent", "v1.0.0", "k8s-prod")
+	newer := fixtures.StopSelectionRecord("example-agent-00000003", "example-agent", "v2.0.0", "k8s-prod")
+	other := fixtures.StopSelectionRecord("analyzer-agent-00000001", "analyzer-agent", "v1.0.0", "k8s-prod")
+	native := fixtures.StopSelectionRecord("example-agent-00000004", "example-agent", "v1.0.0", "native-host")
+	inventory := fakes.NewStopSelectionInventory(second, other, newer, native, first)
 	fixture.Config.AgentStore = inventory
 	c := fixture.Start(t)
 	client := fixture.CommandClient(t)
 
-	selected, err := client.StopAgents(fixture.Context, agents.Selector{Type: "example-agent", Version: "v1.0.0"})
+	selected, err := client.StopAgents(fixture.Context, agents.Selector{Type: "example-agent", Version: "v1.0.0", Hostname: "k8s-prod"})
 
 	if err != nil || selected.Validate() != nil || len(selected.Agents) != 2 || len(selected.Errors) != 0 ||
 		selected.Agents[0].ID != first.ID || selected.Agents[1].ID != second.ID {
@@ -44,17 +45,24 @@ func TestControllerStopSelectorUsesOneExactMatchingInventorySnapshot(t *testing.
 			t.Fatalf("batch acceptance claimed shutdown: %+v", stopped)
 		}
 	}
-	for _, untouched := range []agents.Agent{newer, other} {
+	for _, untouched := range []agents.Agent{newer, other, native} {
 		saved, err := inventory.Get(fixture.Context, untouched.ID)
 		if err != nil || saved.Status != agents.AgentReady || saved.StopCommandID != "" {
 			t.Fatalf("selector stopped a nonmatching agent: %+v, %v", saved, err)
 		}
 	}
-	empty, err := c.StopAgents(fixture.Context, agents.Selector{ID: first.ID, Version: "v2.0.0"})
-	if err != nil || empty.Validate() != nil || len(empty.Agents) != 0 || len(empty.Errors) != 0 {
-		t.Fatalf("nonmatching selector was not an explicit empty result: %+v, %v", empty, err)
+	for _, selector := range []agents.Selector{
+		{ID: first.ID, Version: "v2.0.0", Hostname: first.Server.Hostname},
+		{ID: first.ID, Hostname: native.Server.Hostname},
+		{Hostname: "K8S-prod"},
+		{Hostname: "k8s-prod."},
+	} {
+		empty, err := c.StopAgents(fixture.Context, selector)
+		if err != nil || empty.Validate() != nil || len(empty.Agents) != 0 || len(empty.Errors) != 0 {
+			t.Fatalf("nonmatching selector was not an explicit empty result: selector=%+v result=%+v, %v", selector, empty, err)
+		}
 	}
-	repeated, err := c.StopAgents(fixture.Context, agents.Selector{ID: first.ID, Type: first.Type, Version: first.Version})
+	repeated, err := c.StopAgents(fixture.Context, agents.Selector{ID: first.ID, Type: first.Type, Version: first.Version, Hostname: first.Server.Hostname})
 	if err != nil || len(repeated.Agents) != 1 || !sameStopIdentity(repeated.Agents[0], selected.Agents[0]) {
 		t.Fatalf("exact selector changed a retained stop identity: %+v, %v", repeated, err)
 	}
@@ -67,10 +75,30 @@ func TestControllerStopSelectorUsesOneExactMatchingInventorySnapshot(t *testing.
 		`{}`, `{"selector":null}`, `{"selector":{}}`, `{"selector":{"id":"invalid"}}`,
 		`{"selector":{"type":"example-agent","version":""}}`, `{"selector":{"type":"example-agent","id":null}}`,
 		`{"selector":{"version":"v1.0.0","all":true}}`, `{"selector":{"type":7}}`,
+		`{"selector":{"hostname":null}}`, `{"selector":{"hostname":""}}`, `{"selector":{"hostname":7}}`,
+		`{"selector":{"hostname":"k8s-prod "}}`, `{"selector":{"hostname":"k8s/prod"}}`,
+		`{"selector":{"hostname":"k8s\\prod"}}`, `{"selector":{"hostname":"k8s\u0000prod"}}`,
+		`{"selector":{"hostname":"k8s-prod","all":true}}`,
 	} {
 		var command controllercommands.StopAgentsCommand
 		if err := domain.Decode(json.RawMessage(raw), &command); err == nil {
 			t.Fatalf("malformed selector was accepted: %s", raw)
+		}
+	}
+	for _, hostname := range []string{" k8s-prod", "k8s prod", "k8s/prod", `k8s\prod`, "k8s\nprod", string([]byte{0xff})} {
+		if _, err := client.StopAgents(fixture.Context, agents.Selector{Type: "example-agent", Hostname: hostname}); err == nil {
+			t.Fatalf("invalid hostname was accepted by the command client: %q", hostname)
+		}
+	}
+	selectedNative, err := client.StopAgents(fixture.Context, agents.Selector{Hostname: native.Server.Hostname})
+	if err != nil || selectedNative.Validate() != nil || len(selectedNative.Agents) != 1 || len(selectedNative.Errors) != 0 ||
+		selectedNative.Agents[0].ID != native.ID || selectedNative.Agents[0].Status != agents.AgentStopRequested {
+		t.Fatalf("hostname-only selector did not stop its exact target: %+v, %v", selectedNative, err)
+	}
+	for _, untouched := range []agents.Agent{newer, other} {
+		saved, err := inventory.Get(fixture.Context, untouched.ID)
+		if err != nil || saved.Status != agents.AgentReady || saved.StopCommandID != "" {
+			t.Fatalf("invalid or hostname-only criteria stopped another agent: %+v, %v", saved, err)
 		}
 	}
 }
@@ -78,9 +106,9 @@ func TestControllerStopSelectorUsesOneExactMatchingInventorySnapshot(t *testing.
 func TestControllerStopSelectorReportsPartialFailureWithoutEnrollingReplacement(t *testing.T) {
 	fixture := fixtures.NewStoppingController(t)
 	fixture.Config.LeaseSweepInterval = time.Hour
-	first := fixtures.StopSelectionRecord("example-agent-00000001", "example-agent", "v1.0.0")
-	disappeared := fixtures.StopSelectionRecord("example-agent-00000002", "example-agent", "v1.0.0")
-	replacement := fixtures.StopSelectionRecord("example-agent-00000003", "example-agent", "v1.0.0")
+	first := fixtures.StopSelectionRecord("example-agent-00000001", "example-agent", "v1.0.0", "native-host")
+	disappeared := fixtures.StopSelectionRecord("example-agent-00000002", "example-agent", "v1.0.0", "native-host")
+	replacement := fixtures.StopSelectionRecord("example-agent-00000003", "example-agent", "v1.0.0", "native-host")
 	inventory := fakes.NewStopSelectionInventory(first, disappeared)
 	inventory.ConfigureStopRace(disappeared.ID, replacement)
 	fixture.Config.AgentStore = inventory
