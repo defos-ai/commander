@@ -12,7 +12,6 @@ at `missions/inspect.json`:
 package example_test
 
 import (
-	"encoding/json"
 	"os"
 	"testing"
 
@@ -32,10 +31,11 @@ func TestInspectMission(t *testing.T) {
 	definitions := driver.LoadMissions("../missions/inspect.json")
 	driver.WaitForActions("inspect")
 
-	op := driver.Start(definitions[0].Name, map[string]any{"target": "fixture"})
+	input := map[string]any{"target": "fixture"}
+	op := driver.Start(definitions[0].Name, input)
 	task := driver.Assign(op.ID, missiontest.Assignment{
 		ActionName: "inspect",
-		Input:      json.RawMessage(`{"target":"fixture"}`),
+		Input:      input,
 	})
 	finished := driver.WaitForTask(op.ID, task.ID)
 	if finished.Status != operations.TaskSucceeded || finished.Result == nil {
@@ -54,17 +54,27 @@ func TestInspectMission(t *testing.T) {
 
 `LoadMissions` accepts a JSON object or array. Import each definition once per
 test stack, or use unique names; existing definitions are never overwritten.
-Adjust the action input and add assertions for your mission's actual results.
+`Start`, `Assignment.Input` and `Complete` accept Go values or raw JSON. Adjust
+the action input and add assertions for your mission's actual results.
+See the [example-agent operation test](../../../apps/adapters/api/tests/operations_test.go)
+for a real-stack scenario with proposed actions, aggregation and digest downloads.
 
 Use `Resolve` with explicit next actions for reviews that should continue. The
-empty call above deliberately finishes that review. Use `WaitFor` for custom
-conditions, `Answer` for scripted question answers, and `Download` to retrieve
-artifact files with size and SHA-256 verification. Unknown decisions remain
-pending until your scenario handles them; waits fail with saved-state details.
+empty call above deliberately finishes that review. Keep `WaitFor` predicates
+short and observational, then call `Resolve` or `Answer` after the wait. Use
+`Download` to retrieve artifact files with size and SHA-256 verification. Unknown
+decisions remain pending until your scenario handles them; waits fail with
+saved-state details.
 
 Waits default to two minutes and downloads to 32 MiB; adjust `Timeout` or
-`MaxArtifactBytes` when needed. Cleanup cancels unfinished operations created by
-the driver and preserves saved evidence and mission definitions.
+`MaxArtifactBytes` when needed. HTTP requests default to ten seconds; a supplied
+client's positive timeout is respected. Cleanup cancels unfinished operations
+created by the driver and waits up to five seconds for their saved tasks and
+matching live agent work to settle, reporting anything unfinished. It preserves
+saved evidence and mission definitions.
+Inspect saved state after an uncertain write before submitting again. API error
+codes distinguish rejected requests from uncertain outcomes.
+
 API answers and completion represent operator input; test model permissions
 through MCP separately. Agents that call a model internally still need a local
 fake model or tool client to make their tests deterministic.

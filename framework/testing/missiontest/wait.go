@@ -13,7 +13,7 @@ import (
 )
 
 // WaitFor observes saved work without answering questions or resolving reviews.
-// The predicate may recognize expected failures or make explicit decisions.
+// Predicates must be nonblocking observations; make decisions after the wait.
 func (d *Driver) WaitFor(operationID string, ready func(operations.Operation) bool) operations.Operation {
 	d.t.Helper()
 	path := d.operationPath(operationID)
@@ -32,7 +32,11 @@ func (d *Driver) WaitFor(operationID string, ready func(operations.Operation) bo
 			d.t.Fatal("missiontest: observed response does not identify the requested operation")
 		}
 		current = snapshot
-		if ready(snapshot.Clone()) {
+		accepted := ready(snapshot.Clone())
+		if ctx.Err() != nil {
+			d.t.Fatalf("missiontest: waiting for operation %s: %v; %s", operationID, ctx.Err(), summary(current))
+		}
+		if accepted {
 			return current
 		}
 		if !pause(ctx, d.poll) {
@@ -97,7 +101,7 @@ func (d *Driver) WaitForActions(names ...string) {
 		if err != nil {
 			d.t.Fatalf("missiontest: reading readiness: %v", err)
 		}
-		if ready && len(missing) == 0 {
+		if ready && len(missing) == 0 && ctx.Err() == nil {
 			return
 		}
 		if !pause(ctx, d.poll) {

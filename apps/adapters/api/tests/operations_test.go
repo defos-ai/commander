@@ -13,30 +13,38 @@ import (
 
 	"github.com/defos-ai/commander/apps/adapters/api/models"
 	"github.com/defos-ai/commander/apps/adapters/api/tests/fixtures"
+	"github.com/defos-ai/commander/framework/domain/artifacts"
+	"github.com/defos-ai/commander/framework/domain/operations"
+	"github.com/defos-ai/commander/framework/testing/missiontest"
 )
 
 func TestOperationExecutesProposedWorkAndKeepsResults(t *testing.T) {
 	a := fixtures.Connect(t)
+	driver := a.MissionDriver()
+	driver.WaitForActions("rank-hn-stories", "write-hn-digest")
 	initialAgents := fixtures.Read[models.ListResponse[models.AgentResponse]](a, "/api/v1/agents")
 	initialActions := fixtures.Read[models.ListResponse[models.ActionResponse]](a, "/api/v1/actions")
-	created := a.Request(http.MethodPost, "/api/v1/operations", fixtures.Object{"mission_name": "hacker-news-test", "input": fixtures.StoryBatch(fixtures.FixtureTitle)})
-	op := fixtures.Decode[models.OperationResponse](t, created, http.StatusCreated)
-	base := fixtures.OperationPath(op.ID)
-	if created.Header.Get("Location") != base || op.Status != "planning" || op.Preflight == nil || !op.Preflight.Ready || len(op.Tasks) != 0 {
-		t.Fatalf("new operation lacks identity, readiness or empty tasks: %+v headers=%v", op, created.Header)
+	input := fixtures.StoryBatch(fixtures.FixtureTitle)
+	started := driver.Start("hacker-news-test", input)
+	base := fixtures.OperationPath(started.ID)
+	created := a.Request(http.MethodGet, base, nil)
+	op := fixtures.Decode[models.OperationResponse](t, created, http.StatusOK)
+	if started.Status != operations.Planning || started.Preflight == nil || !started.Preflight.Ready || len(started.Tasks) != 0 {
+		t.Fatalf("creation response lacks readiness or empty tasks: %+v", started)
+	}
+	if op.Status != "planning" || op.Preflight == nil || !op.Preflight.Ready || len(op.Tasks) != 0 {
+		t.Fatalf("new operation lacks readiness or empty tasks: %+v", op)
 	}
 	assertSchema(t, a, "Operation", created)
 	if op.Progress.TotalTasks != 0 || op.Progress.FinishedTasks != 0 || op.Progress.Settled || op.Progress.TaskCounts == nil {
 		t.Fatalf("new operation progress: %+v", op.Progress)
 	}
-	assigned := a.Request(http.MethodPost, base+"/tasks", fixtures.Object{"action_name": "rank-hn-stories", "input": fixtures.StoryBatch(fixtures.FixtureTitle)})
-	root := fixtures.Decode[models.TaskResponse](t, assigned, http.StatusCreated)
-	if assigned.Header.Get("Location") != base+"/tasks/"+root.ID || root.OperationID != op.ID || root.CommandID == "" {
+	root := driver.Assign(op.ID, missiontest.Assignment{ActionName: "rank-hn-stories", Input: input})
+	if root.OperationID != op.ID || root.CommandID == "" {
 		t.Fatalf("assignment lost task identity: %+v", root)
 	}
-	settled := a.Wait(op.ID, func(op models.OperationResponse) bool {
-		return fixtures.TasksSettled(op) && fixtures.ModelDecision(op) != nil
-	})
+	review := driver.WaitForContinuation(op.ID, root.ID)
+	settled := fixtures.Read[models.OperationResponse](a, base)
 	if len(settled.Tasks) != 2 || settled.Tasks[0].ActionName != "rank-hn-stories" || settled.Tasks[1].ActionName != "write-hn-digest" {
 		t.Fatalf("controller did not execute the proposed digest action: %+v", settled.Tasks)
 	}
@@ -57,18 +65,23 @@ func TestOperationExecutesProposedWorkAndKeepsResults(t *testing.T) {
 	}
 	assertTaskAndEventPages(t, a, settled)
 	decision := fixtures.ModelDecision(settled)
-	if decision.ID != root.ID || len(decision.Continuation.CreatedTaskIDs) != 1 || decision.Continuation.CreatedTaskIDs[0] != settled.Tasks[1].ID {
-		t.Fatalf("grouped decision belongs to %s, want root %s", decision.ID, root.ID)
+	if decision == nil || decision.ID != root.ID || decision.ID != review.ID || decision.Continuation.Version != review.Continuation.Version ||
+		len(decision.Continuation.CreatedTaskIDs) != 1 || decision.Continuation.CreatedTaskIDs[0] != settled.Tasks[1].ID {
+		t.Fatalf("grouped decision differs from root review %s: %+v", root.ID, decision)
 	}
-	a.Resolve(op.ID, *decision, []fixtures.Object{})
+	driver.Resolve(op.ID, review)
 	fixtures.AssertError(t, a.Request(http.MethodPost, base+"/complete", fixtures.Object{"output": fixtures.Object{}}), http.StatusUnprocessableEntity, "invalid_output")
-	completed := a.Complete(op.ID, "Story digest completed")
-	if completed.Status != "completed" || completed.ReportID == "" || !completed.Progress.Settled || completed.Progress.FinishedTasks != len(completed.Tasks) || completed.Progress.TotalTasks != len(completed.Tasks) {
+	result := driver.Complete(op.ID, fixtures.Object{"summary": "Story digest completed"})
+	completed := fixtures.Read[models.OperationResponse](a, base)
+	if result.Status != operations.Completed || result.CompletedBy != operations.CompletionOperator || result.ReportID != completed.ReportID ||
+		completed.Status != "completed" || completed.ReportID == "" || !completed.Progress.Settled || completed.Progress.FinishedTasks != len(completed.Tasks) || completed.Progress.TotalTasks != len(completed.Tasks) {
 		t.Fatalf("completion: %+v", completed)
 	}
 	byID := fixtures.Read[models.ReportResponse](a, "/api/v1/reports/"+completed.ReportID)
-	byOperation := fixtures.Read[models.ReportResponse](a, base+"/report")
-	if !reflect.DeepEqual(byID, byOperation) || byID.OperationID != op.ID || byID.Mission != "hacker-news-test" || !strings.Contains(string(byID.Output), "Story digest completed") {
+	byOperation := driver.Report(op.ID)
+	if byID.ID != byOperation.ID || byID.OperationID != byOperation.OperationID || byID.Mission != byOperation.Mission ||
+		!byID.CreatedAt.Equal(byOperation.CreatedAt) || !reflect.DeepEqual(byID.Output, byOperation.Output) ||
+		byID.OperationID != op.ID || byID.Mission != "hacker-news-test" || !strings.Contains(string(byID.Output), "Story digest completed") {
 		t.Fatalf("report identity/output changed across routes: %+v %+v", byID, byOperation)
 	}
 	assertSchema(t, a, "Report", a.Request(http.MethodGet, base+"/report", nil))
@@ -88,10 +101,15 @@ func TestOperationExecutesProposedWorkAndKeepsResults(t *testing.T) {
 	artifact := completed.Tasks[1].Result.Artifacts[0]
 	artifactPath := "/api/v1/artifacts/" + artifact.ID
 	filePath := artifactPath + "/files/" + artifact.Files[0].ID
-	for _, path := range []string{artifactPath, filePath} {
-		if result := a.Request(http.MethodGet, path, nil); result.Status != http.StatusOK {
-			t.Fatalf("evidence was unavailable before cleanup: %s: %+v", path, result)
-		}
+	if result := a.Request(http.MethodGet, artifactPath, nil); result.Status != http.StatusOK {
+		t.Fatalf("evidence was unavailable before cleanup: %+v", result)
+	}
+	file := artifact.Files[0]
+	data := driver.Download(artifact.ID, artifacts.ArtifactFile{
+		ID: file.ID, Name: file.Name, MediaType: file.MediaType, Size: file.Size, SHA256: file.SHA256,
+	})
+	if !strings.Contains(string(data), fixtures.FixtureTitle) {
+		t.Fatal("verified artifact lost the supplied story")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -127,9 +145,14 @@ func TestOperationStartReplayCancelAndFail(t *testing.T) {
 		t.Run(command, func(t *testing.T) {
 			id := fmt.Sprintf("00000000-0000-4000-8000-%012d", i+1)
 			body := fixtures.Object{"operation_id": id, "mission_name": "hacker-news-test", "input": fixtures.StoryBatch(fixtures.FixtureTitle)}
-			op := fixtures.Post[models.OperationResponse](a, "/api/v1/operations", body, http.StatusCreated)
-			if op.ID != id {
-				t.Fatalf("explicit operation ID changed: %s", op.ID)
+			created := a.Request(http.MethodPost, "/api/v1/operations", body)
+			op := fixtures.Decode[models.OperationResponse](t, created, http.StatusCreated)
+			if op.ID != id || created.Header.Get("Location") != fixtures.OperationPath(id) {
+				t.Fatalf("explicit operation identity or creation location changed: %s", op.ID)
+			}
+			assertSchema(t, a, "Operation", created)
+			if op.Progress.TotalTasks != 0 || op.Progress.FinishedTasks != 0 || op.Progress.Settled || op.Progress.TaskCounts == nil {
+				t.Fatalf("creation response has incorrect progress: %+v", op.Progress)
 			}
 			fixtures.AssertError(t, a.Request(http.MethodPost, "/api/v1/operations", body), http.StatusConflict, "operation_conflict")
 			task := a.Task(op.ID, "unavailable-test-action", fixtures.Object{})

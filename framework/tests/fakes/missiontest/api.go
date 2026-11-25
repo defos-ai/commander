@@ -29,8 +29,13 @@ var evidence = []byte(`{"finding":9007199254740993}`)
 type Snapshot struct {
 	Starts       int
 	Downloads    int
+	Resolutions  int
 	Unauthorized int
 	Canceled     []string
+	Drained      []string
+	Work         []string
+	Operations   map[string]operations.Operation
+	Reads        map[string]int
 	Assigned     operations.Task
 	Resolved     []actions.NextAction
 	Answer       map[string]json.RawMessage
@@ -43,13 +48,14 @@ type API struct {
 	redirect   string
 	operations map[string]operations.Operation
 	reads      map[string]int
+	work       map[string]int
 	snapshot   Snapshot
 }
 
 func NewAPI(mode, redirect string) *API {
 	return &API{mode: mode, redirect: redirect, operations: map[string]operations.Operation{
 		ForeignOperationID: {ID: ForeignOperationID, Status: operations.Running},
-	}, reads: make(map[string]int)}
+	}, reads: make(map[string]int), work: map[string]int{ForeignOperationID: 0}}
 }
 
 func Evidence() []byte { return append([]byte(nil), evidence...) }
@@ -67,6 +73,18 @@ func (a *API) Snapshot() Snapshot {
 	defer a.mu.Unlock()
 	copy := a.snapshot
 	copy.Canceled = append([]string(nil), copy.Canceled...)
+	copy.Drained = append([]string(nil), copy.Drained...)
+	copy.Operations = make(map[string]operations.Operation, len(a.operations))
+	copy.Reads = make(map[string]int, len(a.reads))
+	for operationID, operation := range a.operations {
+		copy.Operations[operationID] = operation.Clone()
+	}
+	for operationID, count := range a.reads {
+		copy.Reads[operationID] = count
+	}
+	for operationID := range a.work {
+		copy.Work = append(copy.Work, operationID)
+	}
 	copy.Assigned = copy.Assigned.Clone()
 	copy.Resolved = actions.CloneNextActions(copy.Resolved)
 	copy.Answer = cloneFields(copy.Answer)
@@ -107,8 +125,7 @@ func (a *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "controllers":
 		write(w, http.StatusOK, map[string]any{"items": []any{map[string]any{"id": "default-controller-00000001", "status": "ready", "stale": false}}})
 	case "agents":
-		write(w, http.StatusOK, map[string]any{"items": []any{map[string]any{"id": "fixture-agent-00000001", "status": "ready", "stale": false,
-			"actions": []any{map[string]any{"name": "inspect", "status": "ready"}, map[string]any{"name": "report", "status": "ready"}}}}})
+		a.agents(w)
 	case "artifacts":
 		a.snapshot.Downloads++
 		if a.mode == "redirect" {
@@ -143,7 +160,14 @@ func (a *API) serveOperation(w http.ResponseWriter, r *http.Request, parts []str
 	}
 	if len(parts) == 4 && r.Method == http.MethodGet {
 		a.reads[op.ID]++
-		if len(op.Tasks) == 1 && a.reads[op.ID] >= 2 && op.Tasks[0].Status == operations.TaskRunning {
+		if op.Status.Terminal() && len(op.Tasks) == 1 && op.Tasks[0].Status == operations.TaskRunning {
+			if a.mode == "unsettled" {
+				op.Tasks[0].Status = operations.TaskInterrupted
+			} else if a.reads[op.ID] >= 3 {
+				op.Tasks[0].Status = operations.TaskSucceeded
+				op.Tasks[0].Result = &actions.ActionOutput{ActionName: "inspect", Output: json.RawMessage(`{"observed":true}`)}
+			}
+		} else if !op.Status.Terminal() && len(op.Tasks) == 1 && a.reads[op.ID] >= 2 && op.Tasks[0].Status == operations.TaskRunning {
 			op.Tasks[0].Status = operations.TaskSucceeded
 			op.Tasks[0].Result = &actions.ActionOutput{ActionName: "inspect", Output: json.RawMessage(`{"observed":true}`)}
 			op.Tasks[0].Continuation = &operations.Continuation{Version: 3, Status: operations.ContinuationWaiting, DecisionBy: operations.DecisionUser}
@@ -237,10 +261,12 @@ func (a *API) assign(w http.ResponseWriter, r *http.Request, op operations.Opera
 	task := operations.Task{ID: id.New(), OperationID: op.ID, ActionName: request.ActionName, Input: request.Input, Selector: request.Selector, Status: operations.TaskRunning}
 	op.Status, op.Tasks = operations.Running, append(op.Tasks, task)
 	a.operations[op.ID], a.snapshot.Assigned = op, task.Clone()
+	a.work[op.ID] = 0
 	write(w, http.StatusCreated, task)
 }
 
 func (a *API) resolve(w http.ResponseWriter, r *http.Request, op operations.Operation, taskID string) {
+	a.snapshot.Resolutions++
 	var request struct {
 		Version uint64               `json:"version"`
 		Actions []actions.NextAction `json:"actions"`
@@ -254,7 +280,7 @@ func (a *API) resolve(w http.ResponseWriter, r *http.Request, op operations.Oper
 			continue
 		}
 		if op.Tasks[i].Continuation == nil || op.Tasks[i].Continuation.Version != request.Version {
-			w.WriteHeader(http.StatusConflict)
+			write(w, http.StatusConflict, map[string]string{"error": "continuation_conflict", "details": BodySecret})
 			return
 		}
 		op.Tasks[i].Continuation.Status = operations.ContinuationResolved
@@ -272,6 +298,30 @@ func (a *API) resolve(w http.ResponseWriter, r *http.Request, op operations.Oper
 		return
 	}
 	http.NotFound(w, r)
+}
+
+func (a *API) agents(w http.ResponseWriter) {
+	items := []any{map[string]any{"id": "fixture-agent-00000001", "status": "ready", "stale": false,
+		"actions": []any{map[string]any{"name": "inspect", "status": "ready"}, map[string]any{"name": "report", "status": "ready"}}}}
+	for operationID, observations := range a.work {
+		operation := a.operations[operationID]
+		if operation.AssessProgress(time.Now()).Settled {
+			observations++
+			if observations >= 2 {
+				delete(a.work, operationID)
+				a.snapshot.Drained = append(a.snapshot.Drained, operationID)
+				continue
+			}
+			a.work[operationID] = observations
+		}
+		taskID := operationID
+		if len(operation.Tasks) > 0 {
+			taskID = operation.Tasks[0].ID
+		}
+		items = append(items, map[string]any{"id": "fixture-agent-" + operationID[:8], "status": "working", "stale": false,
+			"work": map[string]any{"operation_id": operationID, "task_id": taskID, "action_name": "inspect"}})
+	}
+	write(w, http.StatusOK, map[string]any{"items": items})
 }
 
 func write(w http.ResponseWriter, status int, value any) {

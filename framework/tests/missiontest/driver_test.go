@@ -3,6 +3,7 @@ package missiontest_test
 import (
 	"bytes"
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -16,7 +17,7 @@ import (
 
 func TestMissionDriverUsesExplicitDecisionsAndKeepsUnrelatedWork(t *testing.T) {
 	stack := fixtures.NewStack(t, "flow")
-	var unfinishedID string
+	var unfinishedID, cancelledID string
 
 	t.Run("scripted mission", func(t *testing.T) {
 		driver := missiontest.Connect(t, stack.Config)
@@ -24,7 +25,7 @@ func TestMissionDriverUsesExplicitDecisionsAndKeepsUnrelatedWork(t *testing.T) {
 		driver.WaitForActions("inspect", "report")
 
 		op := driver.Start(definitions[0].Name, json.RawMessage(`{"source":"fixture"}`))
-		assigned := driver.Assign(op.ID, missiontest.Assignment{ActionName: "inspect", Input: json.RawMessage(`{"source":"fixture"}`),
+		assigned := driver.Assign(op.ID, missiontest.Assignment{ActionName: "inspect", Input: map[string]any{"source": "fixture"},
 			Selector: &operations.TaskSelector{Hostname: "fixture-host"}})
 		waiting := driver.WaitFor(op.ID, func(current operations.Operation) bool {
 			return len(current.Questions) == 1 && current.Questions[0].Pending()
@@ -52,8 +53,6 @@ func TestMissionDriverUsesExplicitDecisionsAndKeepsUnrelatedWork(t *testing.T) {
 		data := driver.Download(artifact.ID, artifact.Files[0])
 		completed := driver.Complete(op.ID, reportTask.Result.Output)
 		report := driver.Report(op.ID)
-		unfinishedID = driver.Start(definitions[0].Name, json.RawMessage(`{}`)).ID
-
 		if completed.Status != operations.Completed || completed.CompletedBy != operations.CompletionOperator || completed.ReportID != report.ID {
 			t.Fatalf("explicit operator completion was not retained: operation=%+v report=%+v", completed, report)
 		}
@@ -63,19 +62,51 @@ func TestMissionDriverUsesExplicitDecisionsAndKeepsUnrelatedWork(t *testing.T) {
 		if snapshot := stack.API.Snapshot(); snapshot.Assigned.Selector == nil || snapshot.Assigned.Selector.Hostname != "fixture-host" || len(snapshot.Resolved) != 1 || snapshot.Resolved[0].ActionName != "report" {
 			t.Fatalf("driver changed the supplied executor filter or continuation: %+v", snapshot)
 		}
+		if !bytes.Equal(assigned.Input, json.RawMessage(`{"source":"fixture"}`)) {
+			t.Fatalf("structured assignment input changed: %s", assigned.Input)
+		}
+		unfinishedID = driver.Start(definitions[0].Name, json.RawMessage(`{}`)).ID
+		driver.Assign(unfinishedID, missiontest.Assignment{ActionName: "inspect", Input: struct {
+			Source string `json:"source"`
+		}{Source: "cleanup"}})
+	})
+
+	t.Run("already cancelled work", func(t *testing.T) {
+		driver := missiontest.Connect(t, stack.Config)
+		op := driver.Start("missiontest-inspection", map[string]any{})
+		driver.Assign(op.ID, missiontest.Assignment{ActionName: "inspect", Input: map[string]any{"source": "cleanup"}})
+
+		driver.Cancel(op.ID)
+		cancelledID = op.ID
 	})
 
 	snapshot := stack.API.Snapshot()
-	if snapshot.Starts != 2 || len(snapshot.Canceled) != 1 || snapshot.Canceled[0] != unfinishedID || snapshot.Unauthorized != 0 {
+	if snapshot.Starts != 3 || len(snapshot.Canceled) != 2 || !slices.Contains(snapshot.Canceled, unfinishedID) || !slices.Contains(snapshot.Canceled, cancelledID) || snapshot.Unauthorized != 0 {
 		t.Fatalf("cleanup changed completed or unrelated work: %+v", snapshot)
+	}
+	for _, operationID := range []string{unfinishedID, cancelledID} {
+		operation := snapshot.Operations[operationID]
+		if operation.Status != operations.Cancelled || len(operation.Tasks) != 1 || operation.Tasks[0].Status != operations.TaskSucceeded ||
+			snapshot.Reads[operationID] < 3 || !slices.Contains(snapshot.Drained, operationID) || slices.Contains(snapshot.Work, operationID) {
+			t.Fatalf("cleanup returned before owned execution settled: %+v", operation)
+		}
+		if !bytes.Equal(operation.Tasks[0].Input, json.RawMessage(`{"source":"cleanup"}`)) {
+			t.Fatalf("cleanup assignment input changed: %s", operation.Tasks[0].Input)
+		}
+	}
+	if snapshot.Operations[fakes.ForeignOperationID].Status != operations.Running || !slices.Contains(snapshot.Work, fakes.ForeignOperationID) {
+		t.Fatal("cleanup changed another operation's work")
 	}
 	if len(snapshot.Answer) != 1 || len(snapshot.Completion) != 1 {
 		t.Fatalf("API submissions must leave answer/completion authority to the server: answer=%v complete=%v", snapshot.Answer, snapshot.Completion)
 	}
+	if deadline := stack.Transport.MaxRemaining(); deadline <= 10*time.Second {
+		t.Fatalf("driver shortened the supplied fifteen-second HTTP timeout: %s", deadline)
+	}
 }
 
 func TestMissionDriverRejectsUncertainWritesAndUnverifiedEvidence(t *testing.T) {
-	for _, mode := range []string{"uncertain", "corrupt", "redirect", "waiting"} {
+	for _, mode := range []string{"uncertain", "corrupt", "redirect", "waiting", "conflict", "unsettled", "late_predicate"} {
 		t.Run(mode, func(t *testing.T) {
 			stack := fixtures.NewStack(t, mode)
 
@@ -92,15 +123,30 @@ func TestMissionDriverRejectsUncertainWritesAndUnverifiedEvidence(t *testing.T) 
 			snapshot := stack.API.Snapshot()
 			switch mode {
 			case "uncertain":
+				if !strings.Contains(string(output), "operation_write_uncertain") || !strings.Contains(string(output), "outcome may be unknown") {
+					t.Fatalf("uncertain start lost its error code or readback guidance: %s", output)
+				}
 				if snapshot.Starts != 1 || len(snapshot.Canceled) != 1 || snapshot.Canceled[0] == "" || snapshot.Canceled[0] == fakes.ForeignOperationID {
 					t.Fatalf("uncertain start was retried or its accepted identity was lost: %+v; child: %s", snapshot, output)
 				}
-			case "waiting":
+			case "waiting", "late_predicate":
 				if !strings.Contains(string(output), "pending question=") || !strings.Contains(string(output), "review task=") {
 					t.Fatalf("timeout lost the pending question or continuation: %s", output)
 				}
 				if snapshot.Starts != 1 || len(snapshot.Canceled) != 1 || len(snapshot.Answer) != 0 || len(snapshot.Completion) != 0 || len(snapshot.Resolved) != 0 {
 					t.Fatalf("waiting changed unresolved decisions or lost owned cleanup: %+v", snapshot)
+				}
+				if mode == "late_predicate" && !strings.Contains(string(output), "context deadline exceeded") {
+					t.Fatalf("predicate reported success after its deadline: %s", output)
+				}
+			case "conflict":
+				if !strings.Contains(string(output), "continuation_conflict") || strings.Contains(string(output), "outcome may be unknown") ||
+					snapshot.Resolutions != 1 || len(snapshot.Resolved) != 0 || len(snapshot.Canceled) != 1 {
+					t.Fatalf("confirmed conflict was retried or misreported: %+v; child: %s", snapshot, output)
+				}
+			case "unsettled":
+				if !strings.Contains(string(output), "interrupted") || snapshot.Starts != 1 || len(snapshot.Canceled) != 1 || len(snapshot.Drained) != 0 {
+					t.Fatalf("cleanup accepted unknown execution outcomes: %+v; child: %s", snapshot, output)
 				}
 			default:
 				if snapshot.Downloads != 1 {
@@ -120,18 +166,43 @@ func TestMissiontestFailureProcess(t *testing.T) {
 		return
 	}
 	settings := fixtures.FailureConfig(t)
-	if mode == "waiting" {
+	if mode == "waiting" || mode == "late_predicate" {
 		settings.Timeout = 200 * time.Millisecond
+	}
+	if mode == "unsettled" {
+		settings.PollInterval = 50 * time.Millisecond
 	}
 	driver := missiontest.Connect(t, settings)
 	if mode == "uncertain" {
 		driver.Start("missiontest-inspection", json.RawMessage(`{}`))
 		return
 	}
-	if mode == "waiting" {
+	if mode == "waiting" || mode == "late_predicate" {
 		op := driver.Start("missiontest-inspection", json.RawMessage(`{}`))
 		driver.Assign(op.ID, missiontest.Assignment{ActionName: "inspect", Input: json.RawMessage(`{}`)})
-		driver.WaitFor(op.ID, func(operations.Operation) bool { return false })
+		driver.WaitFor(op.ID, func(current operations.Operation) bool {
+			if mode == "late_predicate" && len(current.Questions) > 0 {
+				time.Sleep(2 * settings.Timeout)
+				return true
+			}
+			return false
+		})
+		return
+	}
+	if mode == "conflict" {
+		op := driver.Start("missiontest-inspection", map[string]any{})
+		driver.Assign(op.ID, missiontest.Assignment{ActionName: "inspect", Input: map[string]any{}})
+		waiting := driver.WaitFor(op.ID, func(current operations.Operation) bool { return len(current.Questions) > 0 })
+		driver.Answer(op.ID, waiting.Questions[0].ID, "Publish")
+		review := driver.WaitForContinuation(op.ID, waiting.Tasks[0].ID)
+		review.Continuation.Version--
+		driver.Resolve(op.ID, review)
+		return
+	}
+	if mode == "unsettled" {
+		op := driver.Start("missiontest-inspection", map[string]any{})
+		driver.Assign(op.ID, missiontest.Assignment{ActionName: "inspect", Input: map[string]any{}})
+		driver.Cancel(op.ID)
 		return
 	}
 	artifact := fakes.Artifact()

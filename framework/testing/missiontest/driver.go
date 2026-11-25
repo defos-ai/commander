@@ -65,7 +65,7 @@ func Connect(t testing.TB, config Config) *Driver {
 	if config.HTTPClient != nil {
 		client = *config.HTTPClient
 	}
-	if client.Timeout <= 0 || client.Timeout > 10*time.Second {
+	if client.Timeout <= 0 {
 		client.Timeout = 10 * time.Second
 	}
 	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }

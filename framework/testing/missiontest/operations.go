@@ -2,7 +2,7 @@ package missiontest
 
 import (
 	"context"
-	"encoding/json"
+	"errors"
 	"net/http"
 	"net/url"
 	"time"
@@ -15,7 +15,7 @@ import (
 
 type Assignment struct {
 	ActionName    string                   `json:"action_name"`
-	Input         json.RawMessage          `json:"input,omitempty"`
+	Input         any                      `json:"input,omitempty"`
 	SessionTaskID string                   `json:"session_task_id,omitempty"`
 	Selector      *operations.TaskSelector `json:"selector,omitempty"`
 }
@@ -136,22 +136,76 @@ func (d *Driver) cleanup(operationID string) {
 	if hasStatus(err, http.StatusNotFound) {
 		return
 	}
-	if err != nil || operation.ID != operationID {
-		d.t.Errorf("missiontest: could not read owned operation %s during cleanup", operationID)
+	if err != nil {
+		d.t.Errorf("missiontest: could not read owned operation %s during cleanup: %v", operationID, err)
 		return
 	}
-	if operation.Status.Terminal() {
+	if operation.ID != operationID {
+		d.t.Errorf("missiontest: cleanup response does not identify owned operation %s", operationID)
 		return
 	}
-	operation = operations.Operation{}
-	err = d.call(ctx, http.MethodPost, path+"/cancel", nil, http.StatusOK, &operation)
-	if err == nil && operation.ID == operationID && operation.Status.Terminal() {
-		return
+	if !operation.Status.Terminal() {
+		var cancelled operations.Operation
+		// Cancellation may commit before an error. Subsequent reads reconcile it;
+		// no second submission may cancel work against a newer state.
+		if d.call(ctx, http.MethodPost, path+"/cancel", nil, http.StatusOK, &cancelled) == nil && cancelled.ID == operationID {
+			operation = cancelled
+		}
 	}
-	// Cancellation may have committed before an error. Read back, never resubmit.
-	operation = operations.Operation{}
-	if d.call(ctx, http.MethodGet, path, nil, http.StatusOK, &operation) == nil && operation.ID == operationID && operation.Status.Terminal() {
-		return
+	for {
+		active := false
+		if ctx.Err() == nil && operation.AssessProgress(time.Now()).Settled {
+			active, err = d.ownedWork(ctx, operation)
+			if err != nil {
+				d.t.Errorf("missiontest: could not observe owned agent work during cleanup: %v; %s", err, summary(operation))
+				return
+			}
+			if !active && ctx.Err() == nil {
+				return
+			}
+		}
+		if !pause(ctx, d.poll) {
+			d.t.Errorf("missiontest: owned work did not settle during cleanup: %v; agent work active=%t; %s", ctx.Err(), active, summary(operation))
+			return
+		}
+		var snapshot operations.Operation
+		err = d.call(ctx, http.MethodGet, path, nil, http.StatusOK, &snapshot)
+		if hasStatus(err, http.StatusNotFound) {
+			return
+		}
+		if err != nil {
+			d.t.Errorf("missiontest: could not observe owned operation during cleanup: %v; %s", err, summary(operation))
+			return
+		}
+		if snapshot.ID != operationID {
+			d.t.Errorf("missiontest: cleanup response does not identify owned operation %s", operationID)
+			return
+		}
+		operation = snapshot
 	}
-	d.t.Errorf("missiontest: cancellation of owned operation %s could not be confirmed", operationID)
+}
+
+func (d *Driver) ownedWork(ctx context.Context, operation operations.Operation) (bool, error) {
+	if len(operation.Tasks) == 0 {
+		return false, nil
+	}
+	var agents struct {
+		Items []struct {
+			Work *struct {
+				OperationID string `json:"operation_id"`
+			} `json:"work"`
+		} `json:"items"`
+	}
+	if err := d.call(ctx, http.MethodGet, "/api/v1/agents", nil, http.StatusOK, &agents); err != nil {
+		return false, err
+	}
+	if agents.Items == nil {
+		return false, errors.New("API returned invalid agent inventory")
+	}
+	for _, agent := range agents.Items {
+		if agent.Work != nil && agent.Work.OperationID == operation.ID {
+			return true, nil
+		}
+	}
+	return false, nil
 }

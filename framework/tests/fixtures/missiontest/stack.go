@@ -3,6 +3,7 @@ package missiontest
 import (
 	"context"
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"os/exec"
@@ -17,9 +18,10 @@ import (
 )
 
 type Stack struct {
-	API    *fakes.API
-	Config missiontest.Config
-	Target *fakes.Target
+	API       *fakes.API
+	Config    missiontest.Config
+	Target    *fakes.Target
+	Transport *fakes.DeadlineTransport
 }
 
 func NewStack(t *testing.T, mode string) *Stack {
@@ -36,6 +38,10 @@ func NewStack(t *testing.T, mode string) *Stack {
 	server := httptest.NewServer(s.API)
 	t.Cleanup(server.Close)
 	s.Config = config(server.URL)
+	base := http.DefaultTransport.(*http.Transport).Clone()
+	s.Transport = fakes.NewDeadlineTransport(base)
+	s.Config.HTTPClient = &http.Client{Timeout: 15 * time.Second, Transport: s.Transport}
+	t.Cleanup(s.Config.HTTPClient.CloseIdleConnections)
 	return s
 }
 
@@ -66,7 +72,7 @@ func FailureProcess(t *testing.T, mode string, settings missiontest.Config) ([]b
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
 	defer cancel()
 	command := exec.CommandContext(ctx, executable, "-test.run=^TestMissiontestFailureProcess$", "-test.count=1")
 	command.Env = append(os.Environ(), "COMMANDER_MISSIONTEST_FAILURE="+mode, "COMMANDER_MISSIONTEST_URL="+settings.URL)
