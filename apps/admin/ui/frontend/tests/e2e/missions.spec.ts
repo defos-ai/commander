@@ -179,7 +179,7 @@ test('create, edit and delete a reusable mission through Admin without installin
   await expect(deletion.getByText(mission.name, { exact: true })).toBeVisible();
   await expect(deletion).toContainText('Existing operations keep their saved mission, work, results and reports.');
   await deletion.getByRole('button', { name: 'Cancel', exact: true }).click();
-  expect(await api.get<Mission>(`/missions/${encodeURIComponent(mission.name)}`)).toMatchObject(updated);
+  expect(await api.get<Mission>(`/missions/${encodeURIComponent(mission.name)}`)).toEqual(updated);
   await page.getByRole('button', { name: 'Delete mission', exact: true }).click();
   const deleted = page.waitForResponse(response => response.request().method() === 'DELETE'
     && new URL(response.url()).searchParams.get('path') === `/api/v1/missions/${encodeURIComponent(mission.name)}`);

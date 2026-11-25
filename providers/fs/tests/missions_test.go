@@ -3,7 +3,6 @@ package providers_test
 import (
 	"context"
 	"errors"
-	"reflect"
 	"testing"
 
 	"github.com/defos-ai/commander/framework/domain/missions"
@@ -24,9 +23,11 @@ func TestMissionDeletionSerializesWithOtherCatalogWrites(t *testing.T) {
 	if err := first.Delete(cancelled, original.Name); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancelled delete = %v", err)
 	}
-	if saved, err := second.Get(t.Context(), original.Name); err != nil || !reflect.DeepEqual(saved, original) {
-		t.Fatalf("cancelled deletion changed the mission: %#v, %v", saved, err)
+	saved, err := second.Get(t.Context(), original.Name)
+	if err != nil {
+		t.Fatal(err)
 	}
+	assertResultJSONEqual(t, saved, original)
 	start, deletions, creation := make(chan struct{}), make(chan error, 2), make(chan error, 1)
 	for _, store := range []missions.MissionStore{first, second} {
 		go func() {
@@ -50,9 +51,10 @@ func TestMissionDeletionSerializesWithOtherCatalogWrites(t *testing.T) {
 	}
 	reopened := fixtures.OpenMissionStore(t, root)
 	items, err := reopened.List(t.Context())
-	if err != nil || !reflect.DeepEqual(items, []missions.Mission{other, added}) {
-		t.Fatalf("deletion lost an unrelated catalog write: %#v, %v", items, err)
+	if err != nil {
+		t.Fatal(err)
 	}
+	assertResultJSONEqual(t, items, []missions.Mission{other, added})
 	if _, err := reopened.Get(t.Context(), original.Name); !errors.Is(err, missions.ErrUnknownMission) {
 		t.Fatalf("deleted mission remained after reopen: %v", err)
 	}
@@ -67,9 +69,11 @@ func TestMissionDeletionSerializesWithOtherCatalogWrites(t *testing.T) {
 	if err := reopened.Update(cancelled, updated); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancelled update = %v", err)
 	}
-	if saved, err := first.Get(t.Context(), original.Name); err != nil || !reflect.DeepEqual(saved, original) {
-		t.Fatalf("cancelled update changed the mission: %#v, %v", saved, err)
+	saved, err = first.Get(t.Context(), original.Name)
+	if err != nil {
+		t.Fatal(err)
 	}
+	assertResultJSONEqual(t, saved, original)
 	start, deletion, update := make(chan struct{}), make(chan error, 1), make(chan error, 1)
 	go func() {
 		<-start
