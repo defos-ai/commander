@@ -44,6 +44,7 @@ image digest; see the [package guide](../docs/agent-packages.md#source-template)
 | Ask a decision from a running action | [Execution questions](comms/messages/README.md#execution-questions) |
 | Receive shared results and evidence in a running action | [Shared data](agent/action/sharing.go) |
 | Encrypt and manage secrets | [Cryptography](crypto/README.md) · [Secrets](secrets/README.md) |
+| Test an agent mission without a model | [Mission test driver](testing/missiontest/README.md) |
 | Run checks | [Testing](tests/README.md) |
 | Change framework code | [AGENTS.md](AGENTS.md) |
 
