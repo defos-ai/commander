@@ -38,6 +38,9 @@ Read the [root guide](../AGENTS.md) and
   entries use `@stable`; this means the repository's promoted root GitHub Latest
   stable semantic version, mapped to a module tag when applicable. Do not guess
   a tag, search for an older package or claim an unpublished release is available.
+- Recon packages use application-prefixed releases in `defos-ai/recon-agents`:
+  `passive-recon-agent`, `active-recon-agent` and `inspector-agent`. These release
+  selectors differ from their `agents/<role>` source directories.
 - This source list supports discovery; it does not enforce an installation allowlist.
   Spawner enforces its own trusted-owner policy independently; adding an entry
   here cannot authorize a different owner. External sources prompt an

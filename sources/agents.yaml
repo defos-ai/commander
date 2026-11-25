@@ -24,6 +24,18 @@ agents:
     description: Comprehensive security agent for red and blue teaming, vulnerability discovery, exploitability validation, and remediation prioritization.
     source: github.com/defos-ai/cybersec-agent@stable
     visibility: private
+  passive-recon:
+    description: Validates reconnaissance targets and budgets, resolves DNS names to IPv4, and prepares scoped plans for active reconnaissance.
+    source: github.com/defos-ai/recon-agents/passive-recon-agent@stable
+    visibility: private
+  active-recon:
+    description: Plans bounded port-scan batches and observes TCP, HTTP, and TLS services within the requested scope and budgets.
+    source: github.com/defos-ai/recon-agents/active-recon-agent@stable
+    visibility: private
+  inspector:
+    description: Verifies accepted evidence and coverage, assembles host and service reports, and publishes downloadable findings.
+    source: github.com/defos-ai/recon-agents/inspector-agent@stable
+    visibility: private
   fixer:
     description: Fixes vulnerabilities in source code and prepares remediation patches.
     source: github.com/defos-ai/fixer-agent@stable
