@@ -3,12 +3,12 @@ import { randomUUID } from 'node:crypto';
 import type { Mission } from '../../src/api/types';
 import { connect, test } from '../fixtures/e2e';
 
-test('create and edit a reusable mission through Admin without installing actions or starting work', async ({ page, api }) => {
+test('create, edit and delete a reusable mission through Admin without installing actions or starting work', async ({ page, api }) => {
   const actionInputSchema = String.raw`{"type":"object","properties":{"exact":{"const":9007199254740993},"escaped":{"const":"\u0061\\path"}}}`;
   const missionInputSchema = String.raw`{"type":"object","properties":{"exact":{"const":9007199254740993},"escaped":{"const":"\u0061\\path"}}}`;
   const missionPolicies = String.raw`{"completion":{"decision_by":"model"},"continuation":{"aggregate_results":["future-mission-\u0061ction"],"model_review":["future-mission-\u0061ction","rank-hn-stories"]},"sharing":[{"from_actions":["future-mission-action"],"to_actions":["rank-hn-stories"],"include":["results","artifacts"]}]}`;
   const mission = {
-    name: `ui-mission-${randomUUID()}`,
+    name: `ui-mission-${randomUUID()} / #1?`,
     objectives: ['Review using an action that has not been installed yet.', 'Save findings for a later review.'],
     required_actions: ['future-mission-action'],
     starting_actions: ['future-mission-action'],
@@ -112,7 +112,7 @@ test('create and edit a reusable mission through Admin without installing action
   await page.reload();
   await expect(page).toHaveURL(missionURL);
   await expect(page.getByRole('heading', { name: mission.name, exact: true })).toBeVisible();
-  expect(await api.get<Mission>(`/missions/${mission.name}`)).toMatchObject(expectedMission);
+  expect(await api.get<Mission>(`/missions/${encodeURIComponent(mission.name)}`)).toMatchObject(expectedMission);
   await page.getByRole('group', { name: 'Mission view', exact: true }).getByRole('button', { name: 'JSON', exact: true }).click();
   const jsonURL = `${missionURL}/json`;
   await expect(page).toHaveURL(jsonURL);
@@ -145,7 +145,7 @@ test('create and edit a reusable mission through Admin without installing action
   await expect(create.getByRole('textbox', { name: 'Mission definition (JSON)', exact: true })).toHaveCount(0);
   await expect(page).toHaveURL(missionURL);
   await expect(page.getByRole('heading', { name: mission.name, exact: true })).toBeVisible();
-  expect(await api.get<Mission>(`/missions/${mission.name}`)).toMatchObject(expectedMission);
+  expect(await api.get<Mission>(`/missions/${encodeURIComponent(mission.name)}`)).toMatchObject(expectedMission);
   await page.getByRole('button', { name: 'Edit mission', exact: true }).click();
   await expect(page).toHaveURL(`${missionURL}/edit`);
   await expect(create.getByRole('textbox', { name: 'Mission name', exact: true })).toHaveValue(mission.name);
@@ -161,7 +161,7 @@ test('create and edit a reusable mission through Admin without installing action
   await create.getByRole('button', { name: 'Save changes', exact: true }).click();
   await expect(page).toHaveURL(missionURL);
   await expect(page.getByRole('heading', { name: mission.name, exact: true })).toBeVisible();
-  const updated = await api.get<Mission>(`/missions/${mission.name}`);
+  const updated = await api.get<Mission>(`/missions/${encodeURIComponent(mission.name)}`);
   const updatedPolicies = { ...expectedMission.policies, completion: { decision_by: 'model' } };
   expect(updated).toMatchObject({ ...mission, objectives: [expectedMission.objectives[0], 'Report release findings.'],
     policies: updatedPolicies,
@@ -173,6 +173,23 @@ test('create and edit a reusable mission through Admin without installing action
   expect(updatedJSON).toContain(String.raw`"\u0061\\path"`);
   expect(JSON.parse(updatedJSON).policies).toEqual(updatedPolicies);
   expect(JSON.parse(updatedJSON)).not.toHaveProperty('completion');
+
+  await page.getByRole('button', { name: 'Delete mission', exact: true }).click();
+  const deletion = page.getByRole('dialog', { name: 'Delete mission', exact: true });
+  await expect(deletion.getByText(mission.name, { exact: true })).toBeVisible();
+  await expect(deletion).toContainText('Existing operations keep their saved mission, work, results and reports.');
+  await deletion.getByRole('button', { name: 'Cancel', exact: true }).click();
+  expect(await api.get<Mission>(`/missions/${encodeURIComponent(mission.name)}`)).toMatchObject(updated);
+  await page.getByRole('button', { name: 'Delete mission', exact: true }).click();
+  const deleted = page.waitForResponse(response => response.request().method() === 'DELETE'
+    && new URL(response.url()).searchParams.get('path') === `/api/v1/missions/${encodeURIComponent(mission.name)}`);
+  await deletion.getByRole('button', { name: 'Delete mission', exact: true }).click();
+  expect((await deleted).status()).toBe(204);
+  await expect(page).toHaveURL(missionsURL);
+  await expect(page.getByRole('button', { name: `View mission ${mission.name}`, exact: true })).toHaveCount(0);
+  expect((await api.get<{ items: Mission[] }>('/missions')).items.some(item => item.name === mission.name)).toBe(false);
+  await page.goto(missionURL);
+  await expect(page.getByRole('alert')).toContainText('This mission is no longer available.');
   expect(await operationIDs()).toEqual(before);
   expect(await actionNames()).toEqual(actionsBefore);
 });

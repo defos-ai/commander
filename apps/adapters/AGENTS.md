@@ -157,8 +157,9 @@
   identical output repeatedly. Re-read after ambiguous writes, without automatic retry.
 - `update_mission` accepts that same complete flat definition. Read
   `describe_mission` first and keep its unique name unchanged. Require the target
-  through `MissionStore.Get` before `Upsert`; unknown names must not create a
-  mission. Updates apply to future operations only. Bound the read/write to one
+  through atomic `MissionStore.Update`; unknown names must not create a mission,
+  including when deletion wins a concurrent edit. Updates apply to future
+  operations only. Bound the write to one
   10-second context, return a cloned definition and sanitize failures with
   read-back guidance. Never retry uncertain updates or dispatch work from editing.
 - Preserve `missions://artifacts/{id}` and its `/files/{file_id}` resource shape.

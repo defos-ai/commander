@@ -56,6 +56,12 @@ the JSON `name` unchanged. Objectives, action lists/contracts, policies and sche
 can change; existing operations keep their original mission snapshot. Read the
 saved definition after an uncertain update before retrying.
 
+To delete a reusable definition, send
+`DELETE /api/v1/missions/{mission_name}` without a body. Success returns `204`;
+an absent name returns `404 mission_not_found`. Existing operations and their
+history remain available and can continue. Read the mission by name after an
+uncertain deletion before retrying.
+
 Optional `policies.completion.decision_by` accepts `model` or `operator` and records the
 mission-wide policy in future operation snapshots. `operator` requires completion
 through an operator channel, such as the authenticated HTTP API, with no model

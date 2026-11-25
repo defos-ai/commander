@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, ArrowUpRight, Compass, LoaderCircle, Pencil, Plus, RefreshCw, Search } from 'lucide-react';
 import { Button } from '../components/Button';
+import { DeleteMissionDialog } from '../components/DeleteMissionDialog';
 import { MissionDetails } from '../components/MissionDetails';
 import { MissionJSON } from '../components/MissionJSON';
 import type { Connection, Session } from '../connections/types';
@@ -70,6 +71,9 @@ export function MissionsPage({ connection, credentials, onSignIn, selectedID: ro
         {mission && <Button onClick={() => changeView('edit')}>
           <Pencil size={15} aria-hidden="true" />{t($ => $.missions.editTitle)}
         </Button>}
+        {name !== undefined && <DeleteMissionDialog key={`${connection.id}:${connection.url}:${name}`}
+          url={connection.url} credentials={credentials} name={name} disabled={!mission || query.loading}
+          onDeleted={() => select()} />}
       </div>}
     </div>
     {error ? <div className="notice" role="alert">

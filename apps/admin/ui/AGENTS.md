@@ -159,6 +159,12 @@
   the whitespace-only formatter. Preserve numbers, escapes, unknown fields and
   omitted optional fields; never reformat during typing or parse/stringify raw
   JSON for display. Formatting alone must not turn an untouched field into a write.
+- Mission **Delete** confirms the exact name, then sends one authenticated DELETE
+  through the existing proxy. Success requires HTTP 204; deletion affects only the
+  reusable definition, preserving saved operation snapshots and their history.
+  An uncertain outcome or dismissed pending request stays guarded across dialog
+  reopening. Explicitly read a validated mission catalog before another attempt;
+  an unrelated proxy 404 is not proof of deletion. Discard controls on source changes.
 - Mission forms and details expose **Completion decision** as Model/Operator.
   Omitted/null policy displays Model; untouched form edits retain its exact
   representation. Only a changed decision patches `policies.completion.decision_by`,

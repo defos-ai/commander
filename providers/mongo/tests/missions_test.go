@@ -125,12 +125,12 @@ func TestMissionMongoStore(t *testing.T) {
 	updated.OptionalActions = nil
 	updated.ActionDefinitions = nil
 	updated.Policies = nil
-	if err := catalog.Upsert(ctx, updated); err != nil {
+	if err := catalog.Update(ctx, updated); err != nil {
 		t.Fatal(err)
 	}
 	stored, err = catalog.Get(ctx, updated.Name)
 	if err != nil || !reflect.DeepEqual(stored, updated) {
-		t.Fatalf("upsert retained old fields: %#v, error = %v", stored, err)
+		t.Fatalf("update retained old fields: %#v, error = %v", stored, err)
 	}
 	if err := database.GetByID(ctx, "missions", original.Name, &document); err != nil {
 		t.Fatal(err)
@@ -160,6 +160,9 @@ func TestMissionMongoStore(t *testing.T) {
 	cancel()
 	if err := catalog.Upsert(cancelled, original); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancelled upsert: %v", err)
+	}
+	if err := catalog.Update(cancelled, original); !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancelled update: %v", err)
 	}
 	newMission := original.Clone()
 	newMission.Name = "cancelled"
@@ -237,6 +240,34 @@ func TestMissionMongoStore(t *testing.T) {
 	stored, err = catalog.Get(ctx, updated.Name)
 	if err != nil || !reflect.DeepEqual(stored, updated) {
 		t.Fatalf("rejecting unsupported policies changed the saved mission: %#v, error = %v", stored, err)
+	}
+	if err := catalog.Delete(cancelled, updated.Name); !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancelled delete: %v", err)
+	}
+	stored, err = catalog.Get(ctx, updated.Name)
+	if err != nil || !reflect.DeepEqual(stored, updated) {
+		t.Fatalf("cancelled deletion changed the saved mission: %#v, error = %v", stored, err)
+	}
+
+	if err := catalog.Delete(ctx, updated.Name); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := catalog.Get(ctx, updated.Name); !errors.Is(err, missions.ErrUnknownMission) {
+		t.Fatalf("deleted mission is still readable: %v", err)
+	}
+	if err := catalog.Delete(ctx, updated.Name); !errors.Is(err, missions.ErrUnknownMission) {
+		t.Fatalf("repeated delete = %v, want ErrUnknownMission", err)
+	}
+	if err := catalog.Update(ctx, original); !errors.Is(err, missions.ErrUnknownMission) {
+		t.Fatalf("update recreated a deleted mission: %v", err)
+	}
+	items, err = catalog.List(ctx)
+	if err != nil || !reflect.DeepEqual(items, []missions.Mission{other}) {
+		t.Fatalf("deletion changed another mission: %#v, error = %v", items, err)
+	}
+	if err := catalog.Create(ctx, original); err != nil {
+		t.Fatalf("deleted name could not be reused: %v", err)
 	}
 }
 

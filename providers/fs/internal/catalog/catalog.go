@@ -66,17 +66,21 @@ func (s *Store[T]) decode(data []byte) ([]T, error) {
 }
 
 func (s *Store[T]) Upsert(ctx context.Context, record T) error {
-	return s.save(ctx, record, nil)
+	return s.save(ctx, record, nil, false)
+}
+
+func (s *Store[T]) Update(ctx context.Context, record T) error {
+	return s.save(ctx, record, nil, true)
 }
 
 func (s *Store[T]) Create(ctx context.Context, record T, conflict error) error {
 	if conflict == nil {
 		return errors.New("catalog creation requires a conflict error")
 	}
-	return s.save(ctx, record, conflict)
+	return s.save(ctx, record, conflict, false)
 }
 
-func (s *Store[T]) save(ctx context.Context, record T, conflict error) error {
+func (s *Store[T]) save(ctx context.Context, record T, conflict error, existingOnly bool) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -99,6 +103,9 @@ func (s *Store[T]) save(ctx context.Context, record T, conflict error) error {
 			}
 		}
 		if !found {
+			if existingOnly {
+				return nil, s.unknown
+			}
 			records = append(records, record)
 		}
 		sort.Slice(records, func(i, j int) bool { return s.name(records[i]) < s.name(records[j]) })
@@ -122,6 +129,21 @@ func (s *Store[T]) Get(ctx context.Context, name string) (T, error) {
 		return s.unknown
 	})
 	return result, err
+}
+
+func (s *Store[T]) Delete(ctx context.Context, name string) error {
+	return s.file.Update(ctx, func(data []byte) ([]byte, error) {
+		records, err := s.decode(data)
+		if err != nil {
+			return nil, err
+		}
+		for i, record := range records {
+			if s.name(record) == name {
+				return json.MarshalIndent(append(records[:i], records[i+1:]...), "", "  ")
+			}
+		}
+		return nil, s.unknown
+	})
 }
 
 func (s *Store[T]) List(ctx context.Context) ([]T, error) {

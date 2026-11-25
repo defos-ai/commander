@@ -1,12 +1,81 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { EditMissionPage } from '../src/pages/EditMissionPage';
 import { MissionsPage } from '../src/pages/MissionsPage';
 import { upstreamURL } from './fakes/proxy';
 import { deferredResponse } from './fixtures/deferred';
-import { connection, credentials, mission, mockAPI, mockEditableMission } from './fixtures/missions';
+import { connection, credentials, mission, mockAPI, mockEditableMission, mockDeletableMission } from './fixtures/missions';
 
 describe('mission editing', () => {
+  it.each(['accepted_without_receipt', 'not_applied', 'proxy_not_found', 'unexpected_success'] as const)(
+    'requires saved-state inspection after uncertain deletion (%s), including after dismissing and reopening confirmation', async outcome => {
+    const fetch = mockDeletableMission(outcome);
+    const onSelect = vi.fn();
+    render(<MissionsPage connection={connection} credentials={credentials} onSignIn={vi.fn()} selectedID={mission.name} onSelect={onSelect} />);
+    const remove = await screen.findByRole('button', { name: 'Delete mission' });
+    await waitFor(() => expect(remove).toBeEnabled());
+
+    fireEvent.click(remove);
+    let dialog = screen.getByRole('dialog', { name: 'Delete mission' });
+    expect(within(dialog).getByText(mission.name)).toBeVisible();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete mission' }));
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('The deletion result is unknown.');
+    expect(screen.queryByText('private-delete-response-failed')).not.toBeInTheDocument();
+    expect(onSelect).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(remove);
+    dialog = screen.getByRole('dialog', { name: 'Delete mission' });
+    expect(within(dialog).queryByRole('button', { name: 'Delete mission' })).not.toBeInTheDocument();
+    expect(fetch.mock.calls.filter(([, init]) => init?.method === 'DELETE')).toHaveLength(1);
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Check saved mission' }));
+
+    if (outcome === 'not_applied' || outcome === 'proxy_not_found') {
+      expect(await within(dialog).findByRole('status')).toHaveTextContent('The saved mission is still present.');
+      expect(onSelect).not.toHaveBeenCalled();
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Delete mission' }));
+      await waitFor(() => expect(onSelect).toHaveBeenCalledWith(undefined));
+      expect(fetch.mock.calls.filter(([, init]) => init?.method === 'DELETE')).toHaveLength(2);
+    } else {
+      await waitFor(() => expect(onSelect).toHaveBeenCalledWith(undefined));
+      expect(fetch.mock.calls.filter(([, init]) => init?.method === 'DELETE')).toHaveLength(1);
+    }
+    const deletion = fetch.mock.calls.find(([, init]) => init?.method === 'DELETE')!;
+    expect(upstreamURL(deletion[0])).toBe(`${connection.url}/api/v1/missions/${encodeURIComponent(mission.name)}`);
+    expect(deletion[1]?.body).toBeUndefined();
+  });
+
+  it('aborts dismissed deletion and ignores its late receipt until explicit saved-state inspection', async () => {
+    const pending = deferredResponse();
+    let signal: AbortSignal | undefined;
+    const fetch = mockAPI((_url, init) => {
+      if (init.method === 'DELETE') { signal = init.signal ?? undefined; return pending.promise; }
+      return _url.endsWith('/api/v1/missions') ? Response.json({ items: [mission] }) : Response.json(mission);
+    });
+    const onSelect = vi.fn();
+    render(<MissionsPage connection={connection} credentials={credentials} onSignIn={vi.fn()} selectedID={mission.name} onSelect={onSelect} />);
+    const remove = await screen.findByRole('button', { name: 'Delete mission' });
+    await waitFor(() => expect(remove).toBeEnabled());
+    fireEvent.click(remove);
+    let dialog = screen.getByRole('dialog', { name: 'Delete mission' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete mission' }));
+    await waitFor(() => expect(signal).toBeDefined());
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    await act(async () => pending.resolve(new Response(null, { status: 204 })));
+
+    expect(signal?.aborted).toBe(true);
+    expect(onSelect).not.toHaveBeenCalled();
+    fireEvent.click(remove);
+    dialog = screen.getByRole('dialog', { name: 'Delete mission' });
+    expect(within(dialog).queryByRole('button', { name: 'Delete mission' })).not.toBeInTheDocument();
+    expect(fetch.mock.calls.filter(([, init]) => init?.method === 'DELETE')).toHaveLength(1);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Check saved mission' }));
+    expect(await within(dialog).findByRole('status')).toHaveTextContent('The saved mission is still present.');
+    expect(within(dialog).getByRole('button', { name: 'Delete mission' })).toBeEnabled();
+  });
+
   it('edits objectives, action roles and details while preserving policies and untouched JSON tokens', async () => {
     const name = 'Review / #1?';
     const definition = String.raw`{"name":"Review / #1?","objectives":["Review the service."],"policies":{"completion":{"\u0064ecision_by":"operator"},"continuation":{"aggregate_results":["disco\u0076er-pages"],"model_review":["disco\u0076er-pages","capture-\u0070age"]},"sharing":[{"from_actions":["\u0064iscover-pages"],"to_actions":["capture-page"],"include":["results","artifacts"]}]},"required_actions":["discover-pages"],"optional_actions":["capture-page"],"starting_actions":["discover-pages"],"input_schema":{"type":"object","properties":{"id":{"const":9007199254740993},"path":{"const":"\u0061\\path"}}},"output_schema":{}}`;

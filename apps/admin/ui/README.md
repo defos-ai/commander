@@ -86,6 +86,10 @@ formatted for reading while preserving numeric precision and string escapes.
 Update objectives, actions, completion decision or advanced settings in Form or
 JSON, then save. After an uncertain update, inspect the saved mission before trying again.
 
+Choose **Delete mission** on its detail page to remove the reusable definition.
+Existing operations retain their saved mission and history. After an uncertain
+deletion, use **Check saved mission** before trying again.
+
 ## Secrets
 
 Open **Secrets** in the sidebar to provide, replace or delete shared secrets.

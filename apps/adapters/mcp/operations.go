@@ -34,6 +34,11 @@ type missionListItem struct {
 	Objectives []string `json:"objectives"`
 }
 
+type missionDeletionResult struct {
+	Name    string `json:"name"`
+	Deleted bool   `json:"deleted"`
+}
+
 type OperationRequest struct {
 	OperationID string `json:"operation_id"`
 }
@@ -125,14 +130,11 @@ func addOperationTools(server *mcp.Server, config Config) {
 				return missions.Mission{}, errors.New("mission creation failed; read describe_mission before retrying")
 			}
 		})
-	addTool(server, "update_mission", "Update an existing reusable mission using its complete definition. First read describe_mission; preserve its exact name and all fields that should remain. The name identifies the existing mission and cannot be renamed; unknown names return a tool error without creating anything. Objectives, required/optional/starting actions, action_definitions, policies and schemas can change. Uses the same shared validation as creation. Returns the updated definition. Existing operations retain their original mission snapshot; future operations use the update. Concurrent edits are last-write-wins. Requires no running controller, does not start work or install agents, has a 10-second deadline and is never retried automatically. After an uncertain failure, read describe_mission before retrying. Never include secret values in the definition.", missionDefinitionSchema(),
+	addTool(server, "update_mission", "Update an existing reusable mission using its complete definition. First read describe_mission; preserve its exact name and all fields that should remain. The name identifies the existing mission and cannot be renamed; unknown or concurrently deleted names return a tool error without creating anything. Objectives, required/optional/starting actions, action_definitions, policies and schemas can change. Uses the same shared validation as creation. Returns the updated definition. Existing operations retain their original mission snapshot; future operations use the update. Concurrent edits are last-write-wins. Requires no running controller, does not start work or install agents, has a 10-second deadline and is never retried automatically. After an uncertain failure, read describe_mission before retrying. Never include secret values in the definition.", missionDefinitionSchema(),
 		func(ctx context.Context, request missions.Mission) (missions.Mission, error) {
 			ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 			defer cancel()
-			_, err := config.MissionStore.Get(ctx, request.Name)
-			if err == nil {
-				err = config.MissionStore.Upsert(ctx, request)
-			}
+			err := config.MissionStore.Update(ctx, request)
 			switch {
 			case err == nil:
 				return request.Clone(), nil
@@ -144,6 +146,24 @@ func addOperationTools(server *mcp.Server, config Config) {
 				return missions.Mission{}, errors.New("mission update canceled; read describe_mission before retrying")
 			default:
 				return missions.Mission{}, errors.New("mission update failed; read describe_mission before retrying")
+			}
+		})
+	addTool(server, "delete_mission", "Delete a reusable mission by its exact mission_name. Existing operations keep their saved mission definitions, work, reports and artifacts; deletion does not cancel them. Future operations cannot use the deleted definition. Requires no running controller. Unknown names return a tool error. Deletion has a 10-second deadline and is never retried automatically; after an uncertain failure, read describe_mission before retrying. A missing mission on readback means the definition is absent.", objectSchema(map[string]any{"mission_name": stringProperty}, "mission_name"),
+		func(ctx context.Context, request MissionRequest) (missionDeletionResult, error) {
+			ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			defer cancel()
+			err := config.MissionStore.Delete(ctx, request.MissionName)
+			switch {
+			case err == nil:
+				return missionDeletionResult{Name: request.MissionName, Deleted: true}, nil
+			case errors.Is(err, missions.ErrUnknownMission):
+				return missionDeletionResult{}, missions.ErrUnknownMission
+			case errors.Is(err, context.DeadlineExceeded):
+				return missionDeletionResult{}, errors.New("mission deletion timed out; read describe_mission before retrying")
+			case errors.Is(err, context.Canceled):
+				return missionDeletionResult{}, errors.New("mission deletion canceled; read describe_mission before retrying")
+			default:
+				return missionDeletionResult{}, errors.New("mission deletion failed; read describe_mission before retrying")
 			}
 		})
 	addTool(server, "start_operation", "Start a tracked operation from a registered mission when the user asks to run it and the scope and required input are clear. Do not ask for redundant confirmation; operator completion policy does not require approval to start. Honor explicit approval requirements for the requested work. Optionally supply operation_id as a canonical lowercase UUID to track it before the response arrives; otherwise one is generated. Existing IDs return a conflict; use get_operation to inspect them. Returns a compact confirmation with id, status, progress and preflight coverage: planning when ready, waiting when requirements are missing. Read get_operation for the full saved operation. Missing capabilities or readiness do not prevent creating a waiting operation. Preflight blocks every queued task until the mission's required_actions and queued optional actions are ready. If a required capability is not installed, use a separate installation operation following the registered mission and installer guidance; queuing installer actions here cannot unblock it. Keep this operation open and resume its existing ID after registration and a ready preflight. Queued work resumes automatically; inspect saved tasks before assigning more. Unscheduled optional actions do not block mission preflight.", objectSchema(map[string]any{"operation_id": map[string]any{"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"}, "mission_name": stringProperty, "input": map[string]any{}}, "mission_name", "input"),

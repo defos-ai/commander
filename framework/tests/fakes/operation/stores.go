@@ -221,6 +221,12 @@ func NewMissionStore(mission missions.Mission) *MissionStore {
 func (*MissionStore) Create(context.Context, missions.Mission) error {
 	return errors.New("operation worker must not create missions")
 }
+func (*MissionStore) Delete(context.Context, string) error {
+	return errors.New("operation worker must not delete missions")
+}
+func (*MissionStore) Update(context.Context, missions.Mission) error {
+	return errors.New("operation worker must not update missions")
+}
 func (s *MissionStore) Set(mission missions.Mission) { copy := mission.Clone(); s.mission.Store(&copy) }
 func (s *MissionStore) Change(change func(*missions.Mission)) {
 	snapshot := s.Snapshot()

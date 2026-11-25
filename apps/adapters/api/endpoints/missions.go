@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"net/url"
 	"slices"
@@ -65,14 +66,31 @@ func RegisterMissions(mux *http.ServeMux, store missions.MissionStore) {
 			WriteError(w, http.StatusBadRequest, "invalid_request")
 			return
 		}
-		_, err := store.Get(r.Context(), mission.Name)
-		if err == nil {
-			err = store.Upsert(r.Context(), mission)
-		}
+		err := store.Update(r.Context(), mission)
 		if errors.Is(err, context.Canceled) {
 			WriteError(w, http.StatusServiceUnavailable, "request_canceled")
 			return
 		}
 		WriteQueryResult(w, mappings.ToMissionResponse(mission), err)
+	}))
+	mux.HandleFunc("DELETE /api/v1/missions/{mission_name}", RequestHandler(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.RawQuery != "" {
+			WriteError(w, http.StatusBadRequest, "invalid_request")
+			return
+		}
+		body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1))
+		if err != nil || len(body) != 0 {
+			WriteError(w, http.StatusBadRequest, "invalid_request")
+			return
+		}
+		if err := store.Delete(r.Context(), r.PathValue("mission_name")); err != nil {
+			if errors.Is(err, context.Canceled) {
+				WriteError(w, http.StatusServiceUnavailable, "request_canceled")
+			} else {
+				WriteQueryResult(w, nil, err)
+			}
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	}))
 }

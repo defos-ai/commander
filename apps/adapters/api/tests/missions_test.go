@@ -2,6 +2,7 @@ package api_test
 
 import (
 	"net/http"
+	"net/url"
 	"reflect"
 	"slices"
 	"testing"
@@ -65,7 +66,8 @@ func TestMissionCatalogAndRepeatedCleanup(t *testing.T) {
 func TestMissionSharingPolicy(t *testing.T) {
 	a := fixtures.Connect(t)
 	definition := fixtures.SharingMission()
-	path := "/api/v1/missions/" + definition.Name
+	definition.Name += "/../draft?#%"
+	path := "/api/v1/missions/" + url.PathEscape(definition.Name)
 
 	created := fixtures.Post[models.MissionResponse](a, "/api/v1/missions", definition, http.StatusCreated)
 	assertMissionPolicies(t, created.Policies, definition.Policies)
@@ -154,9 +156,37 @@ func TestMissionSharingPolicy(t *testing.T) {
 	if disabled.Policies != nil || fixtures.Read[models.MissionResponse](a, path).Policies != nil {
 		t.Fatal("omitted policies were not removed")
 	}
-	for _, operation := range []models.OperationResponse{first, second} {
-		fixtures.Decode[models.OperationResponse](t, a.Request(http.MethodPost, fixtures.OperationPath(operation.ID)+"/cancel", nil), http.StatusOK)
+	fixtures.AssertError(t, a.Request(http.MethodDelete, path+"?unexpected=true", nil), http.StatusBadRequest, "invalid_request")
+	fixtures.AssertError(t, a.Request(http.MethodDelete, path, fixtures.Object{}), http.StatusBadRequest, "invalid_request")
+	fixtures.AssertError(t, a.Request(http.MethodDelete, path, nil, func(r *http.Request) { r.Header.Del("Authorization") }), http.StatusUnauthorized, "authentication_required")
+	if current := fixtures.Read[models.MissionResponse](a, path); !reflect.DeepEqual(current, disabled) {
+		t.Fatal("rejected deletion changed the mission")
 	}
+
+	deleted := a.Request(http.MethodDelete, path, nil)
+	if deleted.Status != http.StatusNoContent || deleted.Body != "" {
+		t.Fatalf("delete mission: %+v", deleted)
+	}
+	fixtures.AssertError(t, a.Request(http.MethodGet, path, nil), http.StatusNotFound, "mission_not_found")
+	fixtures.AssertError(t, a.Request(http.MethodDelete, path, nil), http.StatusNotFound, "mission_not_found")
+	fixtures.AssertError(t, a.Request(http.MethodPut, path, definition), http.StatusNotFound, "mission_not_found")
+	fixtures.AssertError(t, a.Request(http.MethodPost, "/api/v1/operations", fixtures.Object{"mission_name": definition.Name, "input": fixtures.Object{}}), http.StatusNotFound, "mission_not_found")
+	catalog = fixtures.Read[models.ListResponse[models.MissionResponse]](a, "/api/v1/missions")
+	if slices.Contains(fixtures.MissionNames(catalog.Items), definition.Name) || !fixtures.HasExpectedMissions(catalog.Items) {
+		t.Fatal("deletion retained its mission or removed another definition")
+	}
+	for _, operation := range []models.OperationResponse{first, second} {
+		retained := fixtures.Read[models.OperationResponse](a, fixtures.OperationPath(operation.ID))
+		if !reflect.DeepEqual(retained.Mission, operation.Mission) {
+			t.Fatal("deletion changed an existing operation's mission snapshot")
+		}
+	}
+	completed := fixtures.Post[models.OperationResponse](a, fixtures.OperationPath(first.ID)+"/complete", fixtures.Object{"output": fixtures.Object{}}, http.StatusOK)
+	if completed.Status != "completed" || completed.ReportID == "" {
+		t.Fatalf("operation could not complete after mission deletion: %+v", completed)
+	}
+	fixtures.Read[models.ReportResponse](a, fixtures.OperationPath(first.ID)+"/report")
+	fixtures.Decode[models.OperationResponse](t, a.Request(http.MethodPost, fixtures.OperationPath(second.ID)+"/cancel", nil), http.StatusOK)
 }
 
 func assertMissionPolicies(t *testing.T, got *models.MissionPoliciesResponse, want *models.MissionPoliciesRequest) {

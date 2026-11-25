@@ -26,3 +26,20 @@ export function mockEditableMission(defaults: { registeredActions: Action[]; mis
     return new Response(saved, { headers: { 'Content-Type': 'application/json' } });
   });
 }
+
+export function mockDeletableMission(defaults: { registeredActions: Action[]; mission: Mission; otherMission: Mission }, outcome: 'accepted_without_receipt' | 'not_applied' | 'proxy_not_found' | 'unexpected_success') {
+  let saved = true;
+  let attempted = false;
+  return mockAPI(defaults, (url, init) => {
+    if (init.method === 'DELETE') {
+      if (attempted) { saved = false; return new Response(null, { status: 204 }); }
+      attempted = true;
+      if (outcome === 'proxy_not_found') return Response.json({ error: 'unknown_proxy_path' }, { status: 404 });
+      saved = outcome === 'not_applied';
+      if (outcome === 'unexpected_success') return Response.json({});
+      throw new TypeError('private-delete-response-failed');
+    }
+    return url.endsWith('/api/v1/missions') ? Response.json({ items: saved ? [defaults.mission] : [] })
+      : saved ? Response.json(defaults.mission) : Response.json({ error: 'mission_not_found' }, { status: 404 });
+  });
+}

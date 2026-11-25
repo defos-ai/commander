@@ -44,6 +44,11 @@ complete definition and unchanged name. Edit objectives, actions, policies and
 schemas; existing operations keep their original mission snapshot. After an
 uncertain update, read the saved definition before retrying.
 
+To remove a reusable definition, call `delete_mission` with its `mission_name`.
+Existing operations and their history remain available; new operations cannot
+start from the deleted definition. Read `describe_mission` after an uncertain
+deletion before retrying.
+
 Call `complete_operation` with output matching the saved mission schema. With
 omitted/model completion policy, it saves the final report and completes
 immediately. With `policies.completion.decision_by: operator`, it saves `completion_draft`

@@ -71,14 +71,28 @@ func duplicateMissionID(err error) bool {
 }
 
 func (s *MissionMongoStore) Upsert(ctx context.Context, mission missions.Mission) error {
+	return s.save(ctx, mission, true)
+}
+
+func (s *MissionMongoStore) Update(ctx context.Context, mission missions.Mission) error {
+	return s.save(ctx, mission, false)
+}
+
+func (s *MissionMongoStore) save(ctx context.Context, mission missions.Mission, upsert bool) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 	if err := mission.Validate(); err != nil {
 		return err
 	}
-	_, err := s.database.Replace(ctx, collection, bson.M{"_id": mission.Name}, missionDocument{ID: mission.Name, Mission: mission}, true)
-	return err
+	result, err := s.database.Replace(ctx, collection, bson.M{"_id": mission.Name}, missionDocument{ID: mission.Name, Mission: mission}, upsert)
+	if err != nil {
+		return err
+	}
+	if !upsert && result.MatchedCount == 0 {
+		return missions.ErrUnknownMission
+	}
+	return nil
 }
 
 func (s *MissionMongoStore) Get(ctx context.Context, name string) (missions.Mission, error) {
@@ -90,6 +104,18 @@ func (s *MissionMongoStore) Get(ctx context.Context, name string) (missions.Miss
 		return missions.Mission{}, err
 	}
 	return decodeMission(document)
+}
+
+func (s *MissionMongoStore) Delete(ctx context.Context, name string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	var deleted bson.Raw
+	err := s.database.FindOneAndDelete(ctx, collection, bson.M{"_id": name}, &deleted)
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return missions.ErrUnknownMission
+	}
+	return err
 }
 
 func (s *MissionMongoStore) List(ctx context.Context) ([]missions.Mission, error) {

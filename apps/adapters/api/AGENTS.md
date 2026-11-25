@@ -65,10 +65,17 @@
   Keep startup imports separate and reconcile uncertain writes by name before retrying.
 - `PUT /api/v1/missions/{mission_name}` replaces an existing definition using the
   same request model and validator. Names are immutable: the body name must exactly
-  match the path. Read the target before `Upsert`; absent missions return
-  `404 mission_not_found`. Concurrent edits are last-write-wins. Updates affect
+  match the path. Use atomic `MissionStore.Update`; absent missions return
+  `404 mission_not_found`, including when deletion wins a concurrent edit.
+  Concurrent edits are last-write-wins. Updates affect
   future operations only, never their retained mission snapshots. Read the saved
   definition after uncertain writes; never retry an update automatically.
+- `DELETE /api/v1/missions/{mission_name}` removes only the reusable definition
+  through `MissionStore.Delete`, without a controller or operation mutations.
+  Reject request bodies and query parameters. Return an empty `204` on success
+  or `404 mission_not_found` when absent. Saved operations continue using their
+  snapshots, including completion and report creation. Read back by exact name
+  after uncertain failures; never retry deletion automatically.
 - Optional mission `policies.continuation` maps through independent continuation
   request/response DTOs. Clone its pointer, `aggregate_results` and `model_review`
   lists separately. Each optional list permits null or empty values, requires

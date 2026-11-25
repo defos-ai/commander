@@ -3,6 +3,16 @@
 Follow the [shared adapter guide](../AGENTS.md) for implementation contracts and
 validation.
 
+`delete_mission` removes only the reusable definition through `MissionStore.Delete`.
+Use the exact `mission_name`, a ten-second context and no automatic retry. Return
+the deleted name and confirmation on success; unknown names are tool errors.
+Sanitize other storage failures and direct readback through `describe_mission`.
+Keep operation snapshots, work, reports and artifacts independent of deletion.
+
+`update_mission` calls the atomic existing-only `MissionStore.Update` directly.
+Never use a `Get`/`Upsert` sequence: an edit racing with deletion must not recreate
+the definition. Preserve the ten-second deadline and sanitized readback guidance.
+
 Start in [adapter.go](adapter.go) for tool registration and input decoding.
 [cli/factory.go](cli/factory.go) selects providers;
 [cli/http.go](cli/http.go) configures the HTTP host.

@@ -224,6 +224,31 @@ func TestMissionSharingPolicy(t *testing.T) {
 	if updated.Policies != nil || described.Policies != nil {
 		t.Fatal("null policies were not removed")
 	}
+	secondDetail := a.Get(second.ID)
+	var deleted struct {
+		Name    string `json:"name"`
+		Deleted bool   `json:"deleted"`
+	}
+
+	a.Call("delete_mission", fixtures.Object{"mission_name": definition.Name}, &deleted)
+
+	if deleted.Name != definition.Name || !deleted.Deleted {
+		t.Fatalf("mission deletion did not identify the removed definition: %+v", deleted)
+	}
+	var catalog struct {
+		Missions []missions.Mission `json:"missions"`
+	}
+	a.Call("list_missions", fixtures.Object{}, &catalog)
+	if slices.ContainsFunc(catalog.Missions, func(mission missions.Mission) bool { return mission.Name == definition.Name }) {
+		t.Fatal("deleted mission remains in the mission list")
+	}
+	a.Fails("describe_mission", fixtures.Object{"mission_name": definition.Name}, "unknown")
+	a.Fails("delete_mission", fixtures.Object{"mission_name": definition.Name}, "unknown")
+	a.Fails("update_mission", fixtures.MissionDefinition(definition), "unknown")
+	a.Fails("start_operation", fixtures.Object{"mission_name": definition.Name, "input": fixtures.Object{}}, "unknown")
+	if !reflect.DeepEqual(a.Get(first.ID).Mission, firstDetail.Mission) || !reflect.DeepEqual(a.Get(second.ID).Mission, secondDetail.Mission) {
+		t.Fatal("mission deletion changed saved operation definitions")
+	}
 	for _, operation := range []operations.Operation{first, second} {
 		a.CancelActiveOperation(operation.ID)
 	}

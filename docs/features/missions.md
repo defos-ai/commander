@@ -105,3 +105,15 @@ CLI uses `missions update`.
 Every operation keeps an independent snapshot of its mission. Updates affect
 future operations only. After an uncertain save, read the saved definition
 before submitting again.
+
+## Delete a mission
+
+In **Admin → Missions**, open the mission and choose **Delete mission**, then
+confirm deletion. MCP uses `delete_mission` with `mission_name`; the HTTP API uses
+`DELETE /api/v1/missions/{mission_name}`.
+
+Deletion removes the reusable definition. Existing operations keep running with
+their saved mission snapshots; their results, artifacts and reports remain.
+New operations need a saved definition. After an uncertain deletion, read the
+mission by name before retrying.
+Bundled definitions can be recreated when default-mission seeding runs again.

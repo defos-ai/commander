@@ -79,6 +79,56 @@ export function updateMission(url: string, credentials: Session, name: string, d
   return writeMission(url, credentials, definition, name, signal);
 }
 
+export class MissionDeleteError extends Error {
+  constructor(readonly kind: 'authentication' | 'forbidden' | 'not_found' | 'unknown') {
+    super(kind);
+    this.name = 'MissionDeleteError';
+  }
+}
+
+export async function deleteMission(url: string, credentials: Session, name: string, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) throw new DOMException('Request aborted', 'AbortError');
+  if (!isMissionName(name)) throw new MissionDeleteError('unknown');
+  const endpoint = proxyURL(url, `/api/v1/missions/${encodeURIComponent(name)}`, credentials);
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  let rejectAborted = () => {};
+  const aborted = new Promise<never>((_, reject) => {
+    rejectAborted = () => reject(new MissionDeleteError('unknown'));
+    controller.signal.addEventListener('abort', rejectAborted, { once: true });
+  });
+  signal?.addEventListener('abort', abort, { once: true });
+  const timeout = setTimeout(abort, 30_000);
+
+  async function send() {
+    const response = await fetch(endpoint, {
+      method: 'DELETE', headers: { Accept: 'application/json', 'X-Commander-UI': '1' },
+      credentials: 'same-origin', redirect: 'error', cache: 'no-store', signal: controller.signal,
+    });
+    controller.signal.throwIfAborted();
+    if (response.status === 204) return;
+    if (response.status === 401) { expireSession(url); throw new MissionDeleteError('authentication'); }
+    if (response.status === 403) throw new MissionDeleteError('forbidden');
+    if (response.status === 404) {
+      const body: unknown = await response.json();
+      controller.signal.throwIfAborted();
+      if (isObject(body) && body.error === 'mission_not_found') throw new MissionDeleteError('not_found');
+    }
+    throw new MissionDeleteError('unknown');
+  }
+
+  try {
+    await Promise.race([send(), aborted]);
+  } catch (error) {
+    if (error instanceof MissionDeleteError) throw error;
+    throw new MissionDeleteError('unknown');
+  } finally {
+    clearTimeout(timeout);
+    signal?.removeEventListener('abort', abort);
+    controller.signal.removeEventListener('abort', rejectAborted);
+  }
+}
+
 async function writeMission(url: string, credentials: Session, definition: string, existingName?: string, signal?: AbortSignal): Promise<Mission> {
   const failure = (kind: MissionCreateErrorKind | 'not_found' | 'name_changed') => existingName === undefined
     ? new MissionCreateError(kind === 'not_found' || kind === 'name_changed' ? 'invalid_input' : kind)

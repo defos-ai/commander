@@ -195,6 +195,7 @@ func openAPIDocument() ([]byte, error) {
 	openAPISessionPaths(paths)
 	openAPICreateMissionPath(paths)
 	openAPIUpdateMissionPath(paths)
+	openAPIDeleteMissionPath(paths)
 	report := endpoints.OpenAPIQueryOperation("getReport", "Get a report", "Reports", endpoints.OpenAPIRef("Report"))
 	report["description"] = "Returns the full immutable saved report directly from the report store. Reads do not execute work or change saved state."
 	report["parameters"] = []any{openAPIUUIDParameter("report_id")}
@@ -215,7 +216,7 @@ func openAPIDocument() ([]byte, error) {
 		"openapi": "3.1.0",
 		"info": map[string]any{
 			"title": "Commander API", "version": "0.8.0",
-			"description": "Create or update reusable missions, read Commander catalogs, saved operation state, reports and artifacts, manage encrypted secrets when enabled, or send operation commands to the controller over the bus. Health probes and deployment metadata are public; all resource requests require Basic authentication. Reads do not execute work or mutate saved records.",
+			"description": "Create, update or delete reusable missions, read Commander catalogs, saved operation state, reports and artifacts, manage encrypted secrets when enabled, or send operation commands to the controller over the bus. Health probes and deployment metadata are public; all resource requests require Basic authentication. Reads do not execute work or mutate saved records.",
 		},
 		"servers":  []any{map[string]any{"url": "/"}},
 		"security": []any{map[string]any{"basicAuth": []string{}}},
@@ -313,6 +314,23 @@ func openAPIUpdateMissionPath(paths map[string]any) {
 	responses["503"] = endpoints.OpenAPIResponse("request_canceled. The update may have succeeded; read the mission before retrying.", endpoints.OpenAPIRef("Error"))
 	responses["504"] = endpoints.OpenAPIResponse("request_timeout after at most 10 seconds. The update may have succeeded; read the mission before retrying. Requests are never retried automatically.", endpoints.OpenAPIRef("Error"))
 	paths["/api/v1/missions/{mission_name}"].(map[string]any)["put"] = update
+}
+
+func openAPIDeleteMissionPath(paths map[string]any) {
+	remove := endpoints.OpenAPIQueryOperation("deleteMission", "Delete a mission", "Mission", nil)
+	remove["description"] = "Deletes only the reusable mission definition. Existing operations keep their mission snapshots, tasks, results, artifacts and reports and may continue running. Future operations cannot start from the deleted name unless it is created again. Requires no controller. No request body or query parameters are accepted."
+	remove["parameters"] = []any{map[string]any{
+		"name": "mission_name", "in": "path", "required": true, "schema": map[string]any{"type": "string", "minLength": 1},
+	}}
+	responses := remove["responses"].(map[string]any)
+	delete(responses, "200")
+	responses["204"] = map[string]any{"description": "Mission definition deleted. No response body."}
+	responses["400"] = endpoints.OpenAPIResponse("invalid_request or invalid_request_origin", endpoints.OpenAPIRef("Error"))
+	responses["404"] = endpoints.OpenAPIResponse("mission_not_found. The mission is already absent.", endpoints.OpenAPIRef("Error"))
+	responses["500"] = endpoints.OpenAPIResponse("internal_error. Deletion may have succeeded; read the mission by name before retrying.", endpoints.OpenAPIRef("Error"))
+	responses["503"] = endpoints.OpenAPIResponse("request_canceled. Deletion may have succeeded; read the mission by name before retrying.", endpoints.OpenAPIRef("Error"))
+	responses["504"] = endpoints.OpenAPIResponse("request_timeout after at most 10 seconds. Deletion may have succeeded; read the mission by name before retrying. Requests are never retried automatically.", endpoints.OpenAPIRef("Error"))
+	paths["/api/v1/missions/{mission_name}"].(map[string]any)["delete"] = remove
 }
 
 func openAPIUUIDParameter(name string) map[string]any {

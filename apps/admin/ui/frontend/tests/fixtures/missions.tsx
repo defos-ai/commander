@@ -1,5 +1,5 @@
 import type { Action, Mission } from '../../src/api/types';
-import { mockAPI as fakeAPI, mockEditableMission as editableAPI } from '../fakes/missions';
+import { mockAPI as fakeAPI, mockEditableMission as editableAPI, mockDeletableMission as deletableAPI } from '../fakes/missions';
 
 export const connection = { id: 'local', name: 'Local Commander', url: 'https://commander.example.test' };
 
@@ -36,4 +36,8 @@ export function mockAPI(respond?: Parameters<typeof fakeAPI>[1]) {
 
 export function mockEditableMission(definition = JSON.stringify(mission), failUpdate = false) {
   return editableAPI({ registeredActions, mission, otherMission }, definition, failUpdate);
+}
+
+export function mockDeletableMission(outcome: Parameters<typeof deletableAPI>[1]) {
+  return deletableAPI({ registeredActions, mission, otherMission }, outcome);
 }
